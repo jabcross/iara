@@ -11,7 +11,6 @@ configure_lit_site_cfg(
 
 set(IARA_TEST_DEPENDS
         FileCheck count not
-        iara-capi-test
         iara-opt
         iara-translate
         IaraPlugin
@@ -27,5 +26,3 @@ add_lit_testsuite(check-iara "Running the iara regression tests"
 set_target_properties(check-iara PROPERTIES FOLDER "Tests")
 
 add_lit_testsuites(IARA ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${IARA_TEST_DEPENDS})
-
-add_subdirectory(CAPI)

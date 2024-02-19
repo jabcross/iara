@@ -30,23 +30,6 @@ declare_mlir_python_extension(IaraPythonSources.Extension
 )
 
 ################################################################################
-# Common CAPI
-################################################################################
-
-add_mlir_python_common_capi_library(IaraPythonCAPI
-  INSTALL_COMPONENT IaraPythonModules
-  INSTALL_DESTINATION python_packages/iara/mlir_iara/_mlir_libs
-  OUTPUT_DIRECTORY "${MLIR_BINARY_DIR}/python_packages/iara/mlir_iara/_mlir_libs"
-  RELATIVE_INSTALL_ROOT "../../../.."
-  DECLARED_SOURCES
-    IaraPythonSources
-    # TODO: Remove this in favor of showing fine grained registration once
-    # available.
-    MLIRPythonExtension.RegisterEverything
-    MLIRPythonSources.Core
-)
-
-################################################################################
 # Instantiation of all Python modules
 ################################################################################
 
