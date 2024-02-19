@@ -9,5 +9,5 @@ fi
 
 cd build
 
-cmake -G Ninja .. -DMLIR_DIR=$LLVM_BUILD/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_BUILD/bin/llvm-lit
-cmake --build . --target check-standalone
+cmake -G Ninja .. -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_DIR/build/bin/llvm-lit
+cmake --build . --target check-iara

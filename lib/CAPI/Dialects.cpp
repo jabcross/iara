@@ -6,10 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Standalone-c/Dialects.h"
+#include "Iara-c/Dialects.h"
 
-#include "Standalone/StandaloneDialect.h"
+#include "Iara/IaraDialect.h"
 #include "mlir/CAPI/Registration.h"
 
-MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Standalone, standalone,
-                                      mlir::standalone::StandaloneDialect)
+MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Iara, iara, mlir::iara::IaraDialect)

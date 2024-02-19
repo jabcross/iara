@@ -1,6 +1,8 @@
-PROJECTS_DIR=$(dirname "$(readlink -f "$0")")/../..
+cd "$(dirname "$(readlink -f "$0")")/../.."
+pwd
+PROJECTS_DIR=$(pwd)
 
-cat <<EOF >.env
+cat <<EOF >$PROJECTS_DIR/iara/.env
 export IARA_DIR="$PROJECTS_DIR/iara"
 export POLYGEIST_DIR="$PROJECTS_DIR/Polygeist"
 export POLYGEIST_BUILD="$POLYGEIST_DIR/build"
