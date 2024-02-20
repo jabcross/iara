@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/../Polygeist/llvm-project/llvm/include",
+        "${workspaceFolder}/../Polygeist/llvm-project/mlir/include",
+        "${workspaceFolder}/../Polygeist/llvm-project/build/include",
+        "${workspaceFolder}/../Polygeist/llvm-project/build/tools/mlir/include",
+        "${workspaceFolder}/../Polygeist/include",
+        "${workspaceFolder}/../Polygeist/build/include",
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/build/include",
+        "/usr/include/SDL2",
+        "/usr/include/SDL"
+      ],
+      "defines": [],
+      "compilerPath": "${workspaceFolder}/../llvm-project/build/bin/clang",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "linux-clang-x64",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      // "configurationProvider": "ms-vscode.cmake-tools"
+      "configurationProvider": "ms-vscode.cmake-tools"
+    }
+  ],
+  "version": 4
+}

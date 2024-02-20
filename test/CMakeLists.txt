@@ -12,8 +12,6 @@ configure_lit_site_cfg(
 set(IARA_TEST_DEPENDS
         FileCheck count not
         iara-opt
-        iara-translate
-        IaraPlugin
         )
 if(MLIR_ENABLE_BINDINGS_PYTHON)
   list(APPEND IARA_TEST_DEPENDS IaraPythonModules)

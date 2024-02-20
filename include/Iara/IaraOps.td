@@ -12,6 +12,8 @@
 include "Iara/IaraTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Bytecode/BytecodeOpInterface.td"
 
 def Iara_FooOp : Iara_Op<"foo", [Pure,
                                              SameOperandsAndResultType]> {
@@ -38,6 +40,26 @@ def Iara_FooOp : Iara_Op<"foo", [Pure,
     let assemblyFormat = [{
         $input attr-dict `:` type($input)
     }];
+}
+
+def Iara_GraphOp : Iara_Op<"graph", [Symbol]> {
+    let summary = "A dataflow graph. Contains nodes.";
+    let description = [{
+        The `iara.graph` operation is a container for nodes. It has the same
+        interface as a kernel operation (in/out nodes, parameters).
+
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+
+    let arguments = (ins SymbolNameAttr:$sym_name);
+    let regions = (region AnyRegion:$body);
+
+    // ActorInterface Methods
+
 }
 
 #endif // IARA_OPS

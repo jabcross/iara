@@ -28,4 +28,11 @@ def Iara_CustomType : Iara_Type<"Custom", "custom"> {
     let assemblyFormat = "`<` $value `>`";
 }
 
+def Fifo : Iara_Type<"Fifo", "fifo"> {
+  let summary = "Fifo type";
+  let description = "Fifo type in iara dialect";
+  let parameters = (ins TypeParameter<"the datatype">:$datatype);
+  let assemblyFormat = "`fifo<` $datatype `>`";
+}
+
 #endif // IARA_TYPES
