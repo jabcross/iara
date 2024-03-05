@@ -16,11 +16,10 @@
       ],
       "defines": [],
       "compilerPath": "${workspaceFolder}/../llvm-project/build/bin/clang",
-      "cStandard": "c17",
-      "cppStandard": "c++17",
+      "cStandard": "c23",
+      "cppStandard": "c++23",
       "intelliSenseMode": "linux-clang-x64",
       "compileCommands": "${workspaceFolder}/build/compile_commands.json",
-      // "configurationProvider": "ms-vscode.cmake-tools"
       "configurationProvider": "ms-vscode.cmake-tools"
     }
   ],

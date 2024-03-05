@@ -5,42 +5,68 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+#include "Iara/IaraPasses.h"
+#include "Iara/IaraOps.h"
+#include "Iara/Schedule/OpenMPScheduler.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-
-#include "Iara/IaraPasses.h"
+#include "llvm/Support/Casting.h"
 
 namespace mlir::iara {
 #define GEN_PASS_DEF_IARASWITCHBARFOO
+#define GEN_PASS_DEF_IARASCHEDULE
 #include "Iara/IaraPasses.h.inc"
 
 namespace {
-class IaraSwitchBarFooRewriter : public OpRewritePattern<func::FuncOp> {
+
+class IaraSchedule : public impl::IaraScheduleBase<iara::IaraSchedule> {
 public:
-  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(func::FuncOp op,
-                                PatternRewriter &rewriter) const final {
-    if (op.getSymName() == "bar") {
-      rewriter.updateRootInPlace(op, [&op]() { op.setSymName("foo"); });
-      return success();
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<iara::IaraDialect, memref::MemRefDialect,
+                    mlir::func::FuncDialect, arith::ArithDialect,
+                    func::FuncDialect, LLVM::LLVMDialect,
+                    mlir::math::MathDialect, mlir::linalg::LinalgDialect,
+                    mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect>();
+  }
+
+  using impl::IaraScheduleBase<IaraSchedule>::IaraScheduleBase;
+  void runOnOperation() final {
+    auto module = getOperation();
+    auto graph = llvm::cast<GraphOp>(module.lookupSymbol("main"));
+
+    if (!graph) {
+      module.emitError("main graph not found");
+      signalPassFailure();
+      return;
     }
-    return failure();
+
+    if (!graph->hasAttr("flat")) {
+      module.emitError(
+          "Graph has not been flattened. Run --iara-flatten first.");
+      signalPassFailure();
+      return;
+    }
+
+    // Delete all graphs other than Main.
+
+    llvm::SmallVector<Operation *> to_delete;
+    for (Operation &op : *module.getBody()) {
+      if (llvm::isa<GraphOp>(op) && &op != graph)
+        to_delete.push_back(&op);
+    }
+
+    for (auto op : to_delete) {
+      op->erase();
+    }
+
+    auto scheduler = OpenMPScheduler::create(graph);
+    scheduler->emit(module);
+    graph->erase();
   }
 };
 
-class IaraSwitchBarFoo : public impl::IaraSwitchBarFooBase<IaraSwitchBarFoo> {
-public:
-  using impl::IaraSwitchBarFooBase<IaraSwitchBarFoo>::IaraSwitchBarFooBase;
-  void runOnOperation() final {
-    RewritePatternSet patterns(&getContext());
-    patterns.add<IaraSwitchBarFooRewriter>(&getContext());
-    FrozenRewritePatternSet patternSet(std::move(patterns));
-    if (failed(applyPatternsAndFoldGreedily(getOperation(), patternSet)))
-      signalPassFailure();
-  }
-};
 } // namespace
 } // namespace mlir::iara

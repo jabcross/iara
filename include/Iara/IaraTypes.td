@@ -16,23 +16,23 @@ include "Iara/IaraDialect.td"
 // Iara type definitions
 //===----------------------------------------------------------------------===//
 
-class Iara_Type<string name, string typeMnemonic, list<Trait> traits = []>
-    : TypeDef<Iara_Dialect, name, traits> {
+class IaraType<string name, string typeMnemonic, list<Trait> traits = []>
+    : TypeDef<IaraDialect, name, traits> {
   let mnemonic = typeMnemonic;
 }
 
-def Iara_CustomType : Iara_Type<"Custom", "custom"> {
+def IaraCustomType : IaraType<"Custom", "custom"> {
     let summary = "Iara custom type";
     let description = "Custom type in iara dialect";
     let parameters = (ins StringRefParameter<"the custom value">:$value);
     let assemblyFormat = "`<` $value `>`";
 }
 
-def Fifo : Iara_Type<"Fifo", "fifo"> {
+def Fifo : IaraType<"Fifo", "fifo"> {
   let summary = "Fifo type";
   let description = "Fifo type in iara dialect";
-  let parameters = (ins TypeParameter<"the datatype">:$datatype);
-  let assemblyFormat = "`fifo<` $datatype `>`";
+  let parameters = (ins TypeParameter<"::mlir::Type","the datatype">:$datatype);
+  let assemblyFormat = "`<` $datatype `>`";
 }
 
 #endif // IARA_TYPES

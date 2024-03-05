@@ -15,7 +15,7 @@ include "mlir/IR/OpBase.td"
 // Iara dialect definition.
 //===----------------------------------------------------------------------===//
 
-def Iara_Dialect : Dialect {
+def IaraDialect : Dialect {
     let name = "iara";
     let summary = "A dataflow dialect fot MLIR.";
     let description = [{
@@ -35,7 +35,7 @@ def Iara_Dialect : Dialect {
 // Base iara operation definition.
 //===----------------------------------------------------------------------===//
 
-class Iara_Op<string mnemonic, list<Trait> traits = []> :
-        Op<Iara_Dialect, mnemonic, traits>;
+class IaraOp<string mnemonic, list<Trait> traits = []> :
+        Op<IaraDialect, mnemonic, traits>;
 
 #endif // IARA_DIALECT

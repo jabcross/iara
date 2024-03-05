@@ -10,12 +10,14 @@
 #define IARA_OPS
 
 include "Iara/IaraTypes.td"
+include "Iara/IaraInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Bytecode/BytecodeOpInterface.td"
+include "mlir/IR/RegionKindInterface.td"
 
-def Iara_FooOp : Iara_Op<"foo", [Pure,
+def IaraFooOp : IaraOp<"foo", [Pure,
                                              SameOperandsAndResultType]> {
     let summary = "Illustrates how to define an operation.";
     let description = [{
@@ -42,7 +44,7 @@ def Iara_FooOp : Iara_Op<"foo", [Pure,
     }];
 }
 
-def Iara_GraphOp : Iara_Op<"graph", [Symbol]> {
+def GraphOp : IaraOp<"graph", [ActorInterface, Symbol, SingleBlock, NoTerminator, DeclareOpInterfaceMethods<ActorInterface>]> {
     let summary = "A dataflow graph. Contains nodes.";
     let description = [{
         The `iara.graph` operation is a container for nodes. It has the same
@@ -58,8 +60,51 @@ def Iara_GraphOp : Iara_Op<"graph", [Symbol]> {
     let arguments = (ins SymbolNameAttr:$sym_name);
     let regions = (region AnyRegion:$body);
 
+    let assemblyFormat = [{ $sym_name $body attr-dict }];
     // ActorInterface Methods
 
+    let extraClassDeclaration = [{
+        bool isFlat();
+    }];
 }
+
+def NodeOp : IaraOp<"node", [AttrSizedOperandSegments]> {
+    let summary = "A node in a dataflow graph.";
+    let description = [{
+        The `iara.node` operation is a node in a dataflow graph. It has a
+        reference to an implementation, takes in parameters, in and inout edges,
+        and returns out and inout edges.
+
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+  let arguments = (ins FlatSymbolRefAttr:$impl,
+                       Variadic<AnyType>:$params,
+                       Variadic<AnyType>:$in,
+                       Variadic<AnyType>:$i_inout);
+  let assemblyFormat = [{
+    oilist( `keyword` `(` $params `:` type($params) `)`
+          | `otherKeyword` `(` $in `:` type($in) `)`
+          | `thirdKeyword` `(` $i_inout `:` type($i_inout) `)`) attr-dict
+  }];
+
+    let extraClassDeclaration = [{
+        bool isFlat();
+    }];
+
+}
+
+// def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>] > {
+
+
+//     let arguments = (ins FlatSymbolRefAttr:$impl, Variadic<AnyType>:$params, Variadic<AnyType> :$in, Variadic<AnyType> :$i_inout);
+//     let results = (outs Variadic<AnyType>:$out, Variadic<AnyType> :$o_inout);
+
+//     let assemblyFormat = [{ $impl oilist( `params` $params | `in`  $in | `inout`  $inout ) attr-dict }];
+
+// }
 
 #endif // IARA_OPS

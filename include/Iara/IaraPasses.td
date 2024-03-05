@@ -1,29 +1,12 @@
-//===- IaraPsss.td - Iara dialect passes -------*- tablegen -*-===//
-//
-// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
-
 #ifndef IARA_PASS
 #define IARA_PASS
 
 include "mlir/Pass/PassBase.td"
 
-def IaraSwitchBarFoo: Pass<"iara-switch-bar-foo", "::mlir::ModuleOp"> {
-  let summary = "Switches the name of a FuncOp named `bar` to `foo` and folds.";
+def IaraSchedule: Pass<"iara-schedule", "::mlir::ModuleOp"> {
+  let summary = "Schedule the dataflow operations in the module.";
   let description = [{
-    Switches the name of a FuncOp named `bar` to `foo` and folds.
-    ```
-    func.func @bar() {
-      return
-    }
-    // Gets transformed to:
-    func.func @foo() {
-      return
-    }
-    ```
+    Schedule the dataflow operations in the module. Outputs standard MLIR.
   }];
 }
 

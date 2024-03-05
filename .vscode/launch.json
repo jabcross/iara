@@ -1,0 +1,50 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "test",
+      "type": "pickString",
+      "options": ["test/Iara/iara-opt.mlir"],
+      "description": "Which test to run"
+    }
+  ],
+  "configurations": [
+    {
+      "name": "GDB generic test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": ["--iara-schedule", "${input:test}"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "POLYGEIST_MLIR_CLANG_BIN",
+          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
+        },
+        {
+          "name": "LLVM_PROJECT",
+          "value": "${workspaceFolder}/../Polygeist/llvm-project"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "CMake: build",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}
