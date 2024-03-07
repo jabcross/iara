@@ -7,7 +7,7 @@
     {
       "id": "test",
       "type": "pickString",
-      "options": ["test/Iara/iara-opt.mlir"],
+      "options": ["test/Iara/03-two-nodes.mlir"],
       "description": "Which test to run"
     }
   ],

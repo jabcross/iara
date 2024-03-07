@@ -16,6 +16,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Bytecode/BytecodeOpInterface.td"
 include "mlir/IR/RegionKindInterface.td"
+include "mlir/IR/BuiltinTypes.td"
 
 def IaraFooOp : IaraOp<"foo", [Pure,
                                              SameOperandsAndResultType]> {
@@ -68,7 +69,31 @@ def GraphOp : IaraOp<"graph", [ActorInterface, Symbol, SingleBlock, NoTerminator
     }];
 }
 
-def NodeOp : IaraOp<"node", [AttrSizedOperandSegments]> {
+def KernelOp : IaraOp<"kernel", [ActorInterface, Symbol, SingleBlock , NoTerminator, DeclareOpInterfaceMethods<ActorInterface>] > {
+    let summary = "A kernel for a dataflow node.";
+    let description = [{
+        The `iara.kernel` operation is a kernel for a dataflow node. It has
+        the same interface as a graph operation (in/out nodes, parameters).
+
+        The name should match a C function that implements the kernel,
+        whose parameters are, in order, the kernel's parameters, the inputs, the inouts, and the outputs.
+
+        The body should contain the kernel's ports.
+
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins SymbolNameAttr:$sym_name, Variadic
+    <AnyType>: $params);
+    let regions = (region AnyRegion:$body);
+    let assemblyFormat = [{ $sym_name ($params^ `:` type($params))? $body attr-dict }];
+
+}
+
+def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
     let summary = "A node in a dataflow graph.";
     let description = [{
         The `iara.node` operation is a node in a dataflow graph. It has a
@@ -84,11 +109,15 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments]> {
   let arguments = (ins FlatSymbolRefAttr:$impl,
                        Variadic<AnyType>:$params,
                        Variadic<AnyType>:$in,
-                       Variadic<AnyType>:$i_inout);
+                       Variadic<AnyType>:$inout);
+    let results = (outs Variadic<AnyType>:$out);
   let assemblyFormat = [{
-    oilist( `keyword` `(` $params `:` type($params) `)`
-          | `otherKeyword` `(` $in `:` type($in) `)`
-          | `thirdKeyword` `(` $i_inout `:` type($i_inout) `)`) attr-dict
+    $impl
+    (`params` $params^ `:` type($params) )?
+    (`in` $in^ `:` type($in))?
+    (`inout` $inout^ `:` type($inout) )?
+    `out` type($out)
+    attr-dict
   }];
 
     let extraClassDeclaration = [{
@@ -96,6 +125,35 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments]> {
     }];
 
 }
+
+def InPortOp: IaraOp<"in", [] > {
+    let summary = "An input port for a dataflow node.";
+    let description = [{
+        The `iara.in` operation declares an input port for a dataflow actor. It takes in a (possibly dynamic) tensor type and a list of dynamic sizes.
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type);
+    let assemblyFormat = [{ ($dyn_sizes^)? $type attr-dict }];
+}
+
+def OutPortOp: IaraOp<"out", [] > {
+    let summary = "An output port for a dataflow node.";
+    let description = [{
+        The `iara.out` operation declares an output port for a dataflow actor. It takes in a (possibly dynamic) tensor type and a list of dynamic sizes.
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type);
+    let assemblyFormat = [{ ($dyn_sizes^)? $type attr-dict }];
+}
+
 
 // def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>] > {
 

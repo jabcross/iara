@@ -1,7 +1,9 @@
 #include "Iara/Schedule/OpenMPScheduler.h"
 #include "Iara/Schedule/Schedule.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/ExecutionEngine/CRunnerUtils.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LogicalResult.h"
@@ -24,7 +26,6 @@ func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
 LogicalResult OpenMPScheduler::emit(ModuleOp module) {
   OpBuilder builder{module};
   builder = builder.atBlockEnd(m_graph->getBlock());
-
   m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
                                                m_graph->getLoc());
   m_init_func = createEmptyVoidFunctionWithBody(builder, "__iara_init__",

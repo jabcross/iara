@@ -10,6 +10,7 @@
 #include "Iara/IaraDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpImplementation.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/Support/Casting.h"
 
 #define GET_OP_CLASSES
@@ -30,4 +31,11 @@ bool GraphOp::isFlat() {
   });
   return interfaced_nodes == 0;
 }
+
+::mlir::LogicalResult
+NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
+  // Todo: better verification
+  return success();
+}
+
 } // namespace mlir::iara

@@ -35,7 +35,8 @@ public:
   using impl::IaraScheduleBase<IaraSchedule>::IaraScheduleBase;
   void runOnOperation() final {
     auto module = getOperation();
-    auto graph = llvm::cast<GraphOp>(module.lookupSymbol("main"));
+    auto graph =
+        llvm::dyn_cast_if_present<GraphOp>(module.lookupSymbol("main"));
 
     if (!graph) {
       module.emitError("main graph not found");
