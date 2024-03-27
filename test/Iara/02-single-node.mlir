@@ -2,15 +2,15 @@
 
 // Single node
 
-iara.kernel @a {
-}
+iara.actor @a {
+} { kernel }
 // CHECK-LABEL: func.func @__iara_run__()
 // CHECK: call @a() : () -> ()
 // CHECK: return
 // CHECK: }
-iara.graph @main  {
+iara.actor @main  {
   iara.node @a out none
-} { flat = true }
+} { flat }
 // CHECK-LABEL: func.func @__iara_init__()
 // CHECK-NEXT: return
 // CHECK-NEXT: }

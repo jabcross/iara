@@ -17,36 +17,15 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Bytecode/BytecodeOpInterface.td"
 include "mlir/IR/RegionKindInterface.td"
 include "mlir/IR/BuiltinTypes.td"
+include "mlir/IR/BuiltinAttributes.td"
+include "mlir/IR/CommonAttrConstraints.td"
+include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinDialect.td"
+include "mlir/IR/BuiltinTypeInterfaces.td"
+include "mlir/IR/OpBase.td"
 
-def IaraFooOp : IaraOp<"foo", [Pure,
-                                             SameOperandsAndResultType]> {
-    let summary = "Illustrates how to define an operation.";
-    let description = [{
-        The `iara.foo` operation illustrates how to define a new
-        operation in a dialect. It uses an operation trait to declare that it
-        has no side effects.
-
-        This operation takes an integer argument and returns an integer.
-
-        Example:
-
-        ```mlir
-        %0 = arith.constant 2 : i32
-        // Apply the foo operation to %0
-        %1 = iara.foo %0 : i32
-        ```
-    }];
-
-    let arguments = (ins I32:$input);
-    let results = (outs I32:$res);
-
-    let assemblyFormat = [{
-        $input attr-dict `:` type($input)
-    }];
-}
-
-def GraphOp : IaraOp<"graph", [ActorInterface, Symbol, SingleBlock, NoTerminator, DeclareOpInterfaceMethods<ActorInterface>]> {
-    let summary = "A dataflow graph. Contains nodes.";
+def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
+    let summary = "A dataflow actor. Defines an interface. May define a subgraph.";
     let description = [{
         The `iara.graph` operation is a container for nodes. It has the same
         interface as a kernel operation (in/out nodes, parameters).
@@ -57,40 +36,19 @@ def GraphOp : IaraOp<"graph", [ActorInterface, Symbol, SingleBlock, NoTerminator
         TODO
         ```
     }];
-
-    let arguments = (ins SymbolNameAttr:$sym_name);
+    let arguments = (ins SymbolNameAttr:$sym_name, OptionalAttr<TypeArrayAttr>: $params);
     let regions = (region AnyRegion:$body);
-
-    let assemblyFormat = [{ $sym_name $body attr-dict }];
-    // ActorInterface Methods
+    let assemblyFormat = [{ $sym_name ( `<` $params^ `>` )? $body attr-dict }];
 
     let extraClassDeclaration = [{
         bool isFlat();
+      ::llvm::SmallVector<::mlir::Type> getParameterTypes();
+      ::llvm::SmallVector<::mlir::Type> getAllInputTypes();
+      ::llvm::SmallVector<::mlir::Type> getPureInTypes();
+      ::llvm::SmallVector<::mlir::Type> getInoutTypes();
+      ::llvm::SmallVector<::mlir::Type> getPureOutTypes();
+      ::llvm::SmallVector<::mlir::Type> getAllOutputTypes();
     }];
-}
-
-def KernelOp : IaraOp<"kernel", [ActorInterface, Symbol, SingleBlock , NoTerminator, DeclareOpInterfaceMethods<ActorInterface>] > {
-    let summary = "A kernel for a dataflow node.";
-    let description = [{
-        The `iara.kernel` operation is a kernel for a dataflow node. It has
-        the same interface as a graph operation (in/out nodes, parameters).
-
-        The name should match a C function that implements the kernel,
-        whose parameters are, in order, the kernel's parameters, the inputs, the inouts, and the outputs.
-
-        The body should contain the kernel's ports.
-
-        Example:
-
-        ```mlir
-        TODO
-        ```
-    }];
-    let arguments = (ins SymbolNameAttr:$sym_name, Variadic
-    <AnyType>: $params);
-    let regions = (region AnyRegion:$body);
-    let assemblyFormat = [{ $sym_name ($params^ `:` type($params))? $body attr-dict }];
-
 }
 
 def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -116,12 +74,18 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods
     (`params` $params^ `:` type($params) )?
     (`in` $in^ `:` type($in))?
     (`inout` $inout^ `:` type($inout) )?
-    `out` type($out)
+    (`out` `:` type($out)^ )?
     attr-dict
   }];
 
     let extraClassDeclaration = [{
         bool isFlat();
+        auto getInoutPairs(){
+            return llvm::zip_first(getInout(), getResults());
+        }
+        auto getPureOuts(){
+            return getResults().drop_front(getInout().size());
+        }
     }];
 
 }
@@ -136,11 +100,12 @@ def InPortOp: IaraOp<"in", [] > {
         TODO
         ```
     }];
-    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type);
-    let assemblyFormat = [{ ($dyn_sizes^)? $type attr-dict }];
+    let arguments = (ins Variadic<Index>:$dyn_sizes, UnitAttr:$inout);
+    let results = (outs AnyType:$result);
+    let assemblyFormat = [{ (`inout` $inout^ )? (`<`$dyn_sizes^`>`)? `:` type($result) attr-dict }];
 }
 
-def OutPortOp: IaraOp<"out", [] > {
+def OutPortOp: IaraOp<"out",  [AttrSizedOperandSegments] > {
     let summary = "An output port for a dataflow node.";
     let description = [{
         The `iara.out` operation declares an output port for a dataflow actor. It takes in a (possibly dynamic) tensor type and a list of dynamic sizes.
@@ -150,10 +115,24 @@ def OutPortOp: IaraOp<"out", [] > {
         TODO
         ```
     }];
-    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type);
-    let assemblyFormat = [{ ($dyn_sizes^)? $type attr-dict }];
+    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type, Optional<AnyType>: $value);
+    let assemblyFormat = [{  (`(` $value^ `:` type($value) `)`  )? ( `<` $dyn_sizes^ `>`)? `:` $type attr-dict }];
 }
 
+def DependencyOp: IaraOp<"dep", [SingleBlock, NoTerminator]> {
+    let summary = "A logical dependency region";
+    let description = [{
+        The `iara.dep` operation declares a logical dependency region. It reads and writes a number of dependencies, which are None values.
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins Variadic<NoneType>:$in);
+    let regions = (region AnyRegion:$group);
+    let results = (outs NoneType:$out);
+}
 
 // def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>] > {
 

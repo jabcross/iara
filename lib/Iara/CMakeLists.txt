@@ -5,6 +5,7 @@ add_mlir_dialect_library(MLIRIara
         IaraDialect.cpp
         IaraOps.cpp
         IaraPasses.cpp
+        IaraInterfaces.cpp
         Schedule/Schedule.cpp
         Schedule/OpenMPScheduler.cpp
 

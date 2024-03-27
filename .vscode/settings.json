@@ -1,4 +1,11 @@
 {
   "workbench.colorTheme": "Visual Studio Dark - C++",
-  "cmake.configureOnOpen": false
+  "cmake.configureOnOpen": false,
+  "cmake.buildTask": true,
+  "cmake.environment": {
+    "CLICOLOR_FORCE": "1"
+  },
+  "editor.inlayHints.enabled": "on",
+  "editor.inlayHints.padding": false,
+  "C_Cpp.inlayHints.autoDeclarationTypes.enabled": false
 }

@@ -10,4 +10,5 @@ add_public_tablegen_target(MLIRIaraPassesIncGen)
 
 set(LLVM_TARGET_DEFINITIONS IaraInterfaces.td)
 mlir_tablegen(IaraInterfaces.h.inc --gen-op-interface-decls)
+mlir_tablegen(IaraInterfaces.cpp.inc --gen-op-interface-defs)
 add_public_tablegen_target(MLIRIaraInterfacesIncGen)

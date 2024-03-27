@@ -36,7 +36,7 @@ public:
   void runOnOperation() final {
     auto module = getOperation();
     auto graph =
-        llvm::dyn_cast_if_present<GraphOp>(module.lookupSymbol("main"));
+        llvm::dyn_cast_if_present<ActorOp>(module.lookupSymbol("main"));
 
     if (!graph) {
       module.emitError("main graph not found");
@@ -55,7 +55,7 @@ public:
 
     llvm::SmallVector<Operation *> to_delete;
     for (Operation &op : *module.getBody()) {
-      if (llvm::isa<GraphOp>(op) && &op != graph)
+      if (llvm::isa<ActorOp>(op) && &op != graph && !op.hasAttr("kernel"))
         to_delete.push_back(&op);
     }
 
@@ -64,7 +64,16 @@ public:
     }
 
     auto scheduler = OpenMPScheduler::create(graph);
-    scheduler->emit(module);
+    if (scheduler->schedule().failed()) {
+      module.emitError("Failed to schedule OpenMP");
+      signalPassFailure();
+      return;
+    }
+    if (scheduler->emit(module).failed()) {
+      module.emitError("Failed to emit OpenMP scheduler");
+      signalPassFailure();
+      return;
+    }
     graph->erase();
   }
 };

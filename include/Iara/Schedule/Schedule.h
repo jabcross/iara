@@ -1,5 +1,5 @@
-#ifndef DATAFLOW_PASSES_H
-#define DATAFLOW_PASSES_H
+#ifndef IARA_SCHEDULE_SCHEDULE_H
+#define IARA_SCHEDULE_SCHEDULE_H
 
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
@@ -54,9 +54,15 @@ public:
 
 class Scheduler {
 public:
+  ModuleOp m_module = 0;
+  ActorOp m_graph = 0;
+  func::FuncOp m_run_func = 0;
+  func::FuncOp m_init_func = 0;
+
   virtual ~Scheduler() = default;
   virtual LogicalResult emit(ModuleOp module) = 0;
   virtual LogicalResult schedule() = 0;
+  bool checkSingleRate();
 };
 
 } // namespace mlir::iara
