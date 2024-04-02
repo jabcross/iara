@@ -4,5 +4,6 @@
 
 #include "Iara/IaraInterfaces.cpp.inc"
 #include "util/util.h"
+#include <mlir/IR/BuiltinTypes.h>
 
 namespace mlir::iara {} // namespace mlir::iara

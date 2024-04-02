@@ -16,12 +16,14 @@
 #include "util/util.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Casting.h"
+#include <assert.h>
 #include <functional>
 #include <iterator>
 #include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <mlir/IR/AttrTypeSubElements.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/LLVM.h>
 #include <ranges>
@@ -59,10 +61,27 @@ llvm::SmallVector<Type> ActorOp::getPureOutTypes() {
          Into<SmallVector<Type>>();
 };
 llvm::SmallVector<Type> ActorOp::getAllOutputTypes() {
-  return getOps<OutPortOp>() |
-         Map([](auto op) { return op.getOperand(0).getType(); }) |
+  return getOps<OutPortOp>() | Map([](auto op) { return op.getType(); }) |
          Into<SmallVector<Type>>();
 };
+
+mlir::FunctionType ActorOp::getImplFunctionType() {
+  OpBuilder builder{*this};
+  SmallVector<Type> tensor_types;
+  tensor_types.append(getParameterTypes());
+  tensor_types.append(getPureInTypes());
+  tensor_types.append(getAllOutputTypes());
+  assert(llvm::all_of(tensor_types, [](Type t) { return isa<TensorType>(t); }));
+  auto memref_types = tensor_types | Map([](auto type) {
+                        auto tensor_type = cast<TensorType>(type);
+                        return MemRefType::get(tensor_type.getShape(),
+                                               tensor_type.getElementType());
+                      }) |
+                      Into<SmallVector<Type>>();
+  return builder.getFunctionType(memref_types, TypeRange{});
+}
+
+bool ActorOp::isKernel() { return this->getOps<NodeOp>().empty(); }
 
 ::mlir::LogicalResult
 NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {

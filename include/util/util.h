@@ -1,12 +1,31 @@
 #ifndef UTIL_UTIL_H
 #define UTIL_UTIL_H
 
+#include <cstddef>
 #include <iterator>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/Dialect.h>
+#include <optional>
 #include <type_traits>
 #include <utility>
+
+template <class T, typename Enable = void> struct NullTypeOf {
+  using type = std::optional<T>;
+  static constexpr std::optional<T> value() { return std::nullopt; };
+};
+
+template <class T>
+struct NullTypeOf<T, typename std::enable_if<std::is_convertible<
+                         T, mlir::Operation *>::value>::type> {
+  using type = T;
+  static constexpr T value() { return nullptr; };
+};
+
 template <class F> struct Filter {
   using type = F;
   F f;
@@ -66,6 +85,23 @@ auto operator|(std::optional<R> &&range, S &&stage)
     end = std::end(*range);
   }
   return llvm::make_range(begin, end) | std::forward<S>(stage);
+}
+
+template <class F> struct Find {
+  using type = F;
+  F f;
+  Find(F &&f) : f(f){};
+};
+
+template <typename F> Find(F) -> Find<F>;
+template <class R, class F>
+auto operator|(R &&range, Find<F> &&find)
+    -> NullTypeOf<decltype(*std::begin(range))>::type {
+  for (auto i : range) {
+    if (find.f(i))
+      return {i};
+  }
+  return NullTypeOf<decltype(*std::begin(range))>::value();
 }
 
 // allow piping into anything that takes begin and end iterators

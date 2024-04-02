@@ -60,7 +60,7 @@ public:
   func::FuncOp m_init_func = 0;
 
   virtual ~Scheduler() = default;
-  virtual LogicalResult emit(ModuleOp module) = 0;
+  virtual LogicalResult emit() = 0;
   virtual LogicalResult schedule() = 0;
   bool checkSingleRate();
 };

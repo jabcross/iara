@@ -23,6 +23,7 @@ include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinDialect.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
 include "mlir/IR/OpBase.td"
+include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
 def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
     let summary = "A dataflow actor. Defines an interface. May define a subgraph.";
@@ -48,10 +49,12 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
       ::llvm::SmallVector<::mlir::Type> getInoutTypes();
       ::llvm::SmallVector<::mlir::Type> getPureOutTypes();
       ::llvm::SmallVector<::mlir::Type> getAllOutputTypes();
+      mlir::FunctionType getImplFunctionType();
+      bool isKernel();
     }];
 }
 
-def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,BufferizableOpInterface, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
     let summary = "A node in a dataflow graph.";
     let description = [{
         The `iara.node` operation is a node in a dataflow graph. It has a
@@ -119,19 +122,18 @@ def OutPortOp: IaraOp<"out",  [AttrSizedOperandSegments] > {
     let assemblyFormat = [{  (`(` $value^ `:` type($value) `)`  )? ( `<` $dyn_sizes^ `>`)? `:` $type attr-dict }];
 }
 
-def DependencyOp: IaraOp<"dep", [SingleBlock, NoTerminator]> {
-    let summary = "A logical dependency region";
+def DepOp: IaraOp<"dep", [Terminator]> {
+    let summary = "A logical dependency block";
     let description = [{
-        The `iara.dep` operation declares a logical dependency region. It reads and writes a number of dependencies, which are None values.
+        The `iara.dep` operation terminates a block and declares which blocks depend on this block.
         Example:
 
         ```mlir
         TODO
         ```
     }];
-    let arguments = (ins Variadic<NoneType>:$in);
-    let regions = (region AnyRegion:$group);
-    let results = (outs NoneType:$out);
+    let successors = (successor VariadicSuccessor<AnySuccessor>:$deps);
+    let assemblyFormat = [{ $deps  attr-dict }];
 }
 
 // def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>] > {

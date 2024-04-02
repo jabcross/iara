@@ -2,16 +2,21 @@
 #define IARA_SCHEDULE_OPENMPSCHEDULER_H
 
 #include "Iara/IaraOps.h"
-#include "Iara/Schedule/Schedule.h"
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 
 namespace mlir::iara {
 
-class OpenMPScheduler : public Scheduler {
+class OpenMPScheduler {
 public:
-  virtual ~OpenMPScheduler() = default;
+  ModuleOp m_module;
+  ActorOp m_graph;
+  func::FuncOp m_run_func;
+  func::FuncOp m_init_func;
+
   static std::unique_ptr<OpenMPScheduler> create(ActorOp graph);
-  virtual LogicalResult emit(ModuleOp module) override;
-  virtual LogicalResult schedule() override;
+  bool checkSingleRate();
+  LogicalResult convertToTasks();
+  LogicalResult convertIntoOpenMP();
 };
 } // namespace mlir::iara
 

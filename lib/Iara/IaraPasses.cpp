@@ -64,17 +64,16 @@ public:
     }
 
     auto scheduler = OpenMPScheduler::create(graph);
-    if (scheduler->schedule().failed()) {
-      module.emitError("Failed to schedule OpenMP");
+    if (scheduler->convertToTasks().failed()) {
+      module.emitError("Failed to convert main actor into task form");
       signalPassFailure();
       return;
     }
-    if (scheduler->emit(module).failed()) {
+    if (scheduler->convertIntoOpenMP().failed()) {
       module.emitError("Failed to emit OpenMP scheduler");
       signalPassFailure();
       return;
     }
-    graph->erase();
   }
 };
 
