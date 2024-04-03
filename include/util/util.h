@@ -10,6 +10,7 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Dialect.h>
+#include <mlir/IR/Operation.h>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -109,6 +110,22 @@ template <class R, class F>
 auto operator|(R &&range, F &&f)
     -> decltype(f(std::begin(range), std::end(range))) {
   return f(std::begin(range), std::end(range));
+}
+
+// based on
+// https://stackoverflow.com/questions/17805969/writing-universal-memoization-function-in-c11
+template <typename... Args, typename F,
+          typename R = std::invoke_result_t<F, Args...>>
+auto memoize(F fn) {
+  llvm::DenseMap<std::tuple<Args...>, R> table;
+  return [fn, table](Args... args) mutable -> R {
+    auto argt = std::make_tuple(args...);
+    auto memoized = table.find(argt);
+    if (memoized == table.end()) {
+      memoized = table.insert({argt, fn(args...)}).first;
+    }
+    return memoized->second;
+  };
 }
 
 #endif
