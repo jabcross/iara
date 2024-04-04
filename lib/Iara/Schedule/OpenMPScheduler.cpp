@@ -1,4 +1,5 @@
 #include "Iara/Schedule/OpenMPScheduler.h"
+#include "Iara/IaraOps.h"
 #include "Iara/Schedule/Schedule.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
@@ -70,6 +71,15 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
 
   for (auto actor : actors) {
     actor.erase();
+  }
+
+  if (m_run_func.getOps().empty()) {
+    // No work to do; add return op and exit
+
+    OpBuilder{m_run_func}
+        .atBlockEnd(&m_run_func.getBody().getBlocks().front())
+        .create<func::ReturnOp>(m_run_func.getLoc());
+    return success();
   }
 
   auto main_block =
@@ -207,19 +217,12 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
 
 LogicalResult OpenMPScheduler::convertToTasks() {
 
-  // for (auto i : m_graph.getBody().getOps() /**/
-  //                   | Map([](auto &op) {
-  //                       op.dump();
-  //                       return &op;
-  //                     }) //
-  //                   | Filter([](auto op) {})) {
-  // }
+  // check if region or block is empty
 
-  // auto x = foo(m_graph.getBody().getOps(), [](Operation &op) { return &op;
-  // });
-
-  // auto x = m_graph.getBody().getOps() | [](Operation *op) { return nullptr;
-  // };
+  if (m_graph.getBody().empty() or m_graph.getOps<NodeOp>().empty()) {
+    m_graph.emitRemark() << "Graph is empty";
+    return success();
+  }
 
   bool has_cycle = false;
   auto sort_result = sortTopologically(m_graph->getBlock());

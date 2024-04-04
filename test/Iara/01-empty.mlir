@@ -1,6 +1,6 @@
 // Empty graph
 
-// RUN: iara-opt --iara-schedule %s  | FileCheck %s
+// RUN: iara-opt --iara-schedule %s | FileCheck %s
 
 // CHECK-LABEL: func.func @__iara_run__()
 iara.actor @main  {

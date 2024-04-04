@@ -1,16 +1,32 @@
-// RUN: iara-opt --iara-schedule %s -split-input-file | FileCheck %s
+// RUN: iara-opt --iara-schedule %s | FileCheck %s
 
 // Single node
 
 iara.actor @a {
 } { kernel }
-// CHECK-LABEL: func.func @__iara_run__()
-// CHECK: call @a() : () -> ()
-// CHECK: return
-// CHECK: }
 iara.actor @main  {
-  iara.node @a out none
+  iara.node @a
+  iara.dep
 } { flat }
-// CHECK-LABEL: func.func @__iara_init__()
-// CHECK-NEXT: return
-// CHECK-NEXT: }
+
+// CHECK: func.func private @a_impl() attributes {llvm.emit_c_interface}
+// CHECK-NEXT:  func.func @__iara_run__() {
+// CHECK-NEXT:    %c0 = arith.constant 0 : index
+// CHECK-NEXT:    %c1_i64 = arith.constant 1 : i64
+// CHECK-NEXT:    %c2_i64 = arith.constant 2 : i64
+// CHECK-NEXT:    %0 = llvm.inttoptr %c2_i64 : i64 to !llvm.ptr
+// CHECK-NEXT:    omp.parallel   {
+// CHECK-NEXT:      omp.single   {
+// CHECK-NEXT:        omp.task   depend(taskdependout -> %0 : !llvm.ptr) {
+// CHECK-NEXT:          func.call @a_impl() : () -> ()
+// CHECK-NEXT:          omp.terminator
+// CHECK-NEXT:        }
+// CHECK-NEXT:        omp.terminator
+// CHECK-NEXT:      }
+// CHECK-NEXT:      omp.terminator
+// CHECK-NEXT:    }
+// CHECK-NEXT:    return
+// CHECK-NEXT:  }
+// CHECK-NEXT:  func.func @__iara_init__() {
+// CHECK-NEXT:    return
+// CHECK-NEXT:  }

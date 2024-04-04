@@ -105,6 +105,16 @@ auto operator|(R &&range, Find<F> &&find)
   return NullTypeOf<decltype(*std::begin(range))>::value();
 }
 
+struct Count {};
+
+template <class R> auto operator|(R &&range, Count count) -> size_t {
+  size_t rv = 0;
+  for (auto i : range) {
+    rv++;
+  }
+  return rv;
+}
+
 // allow piping into anything that takes begin and end iterators
 template <class R, class F>
 auto operator|(R &&range, F &&f)

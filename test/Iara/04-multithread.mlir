@@ -16,24 +16,31 @@
 // RUN:            --reconcile-unrealized-casts \
 // RUN: | mlir-translate --mlir-to-llvmir \
 // RUN:                  --mlir-print-debuginfo \
-// RUN:                  > 03-two-nodes.ll \
-// RUN: && clang -lomp 03-two-nodes.ll "`dirname %s`/03-two-nodes.c" && ./a.out \
+// RUN:                  > 04-multithread.ll \
+// RUN: && clang++ -lomp 04-multithread.ll "`dirname %s`/04-multithread.cpp" && ./a.out \
 // RUN: | FileCheck %s
 
 // Two nodes
 
 iara.actor @a {
-  iara.out : tensor<1xi32>
+  iara.out : tensor<1xi64>
   iara.dep
 } { kernel }
 iara.actor @b {
-  %1 = iara.in : tensor<1xi32>
+  iara.out : tensor<1xi64>
   iara.dep
 } { kernel }
+iara.actor @c {
+  %1 = iara.in : tensor<1xi64>
+  %2 = iara.in : tensor<1xi64>
+  iara.dep
+} { kernel }
+
 iara.actor @main  {
-  %1 = iara.node @a out : tensor<1xi32>
-  iara.node @b in %1 : tensor<1xi32>
+  %1 = iara.node @a out : tensor<1xi64>
+  %2 = iara.node @b out : tensor<1xi64>
+  iara.node @c in %1, %2 : tensor<1xi64> , tensor<1xi64>
   iara.dep
 } { flat }
 
-// CHECK: Hello World!
+// CHECK: Ran in different threads.
