@@ -7,11 +7,36 @@
     {
       "id": "test",
       "type": "pickString",
-      "options": ["test/Iara/03-two-nodes.mlir"],
+      "options": [
+        "test/Iara/01-empty.mlir",
+        "test/Iara/02-single-node.mlir",
+        "test/Iara/03-two-nodes.mlir",
+        "test/Iara/04-multithread.mlir",
+        "test/Iara/05-cholesky/input.mlir"
+      ],
       "description": "Which test to run"
     }
   ],
   "configurations": [
+    {
+      "name": "(gdb) Attach",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${workspaceFolder}/test/Iara/05-cholesky/a.out",
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
     {
       "name": "GDB generic test",
       "type": "cppdbg",
@@ -45,6 +70,14 @@
           "ignoreFailures": true
         }
       ]
+    },
+    {
+      "type": "gdb",
+      "request": "launch",
+      "name": "Launch Program",
+      "target": "a.out",
+      "cwd": "${workspaceRoot}/test/Iara/05-cholesky",
+      "valuesFormatting": "parseText"
     }
   ]
 }
