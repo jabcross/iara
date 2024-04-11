@@ -3,6 +3,7 @@
 
 #include "Iara/IaraOps.h"
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Support/LogicalResult.h>
 
 namespace mlir::iara {
 
@@ -17,6 +18,7 @@ public:
   bool checkSingleRate();
   LogicalResult convertToTasks();
   LogicalResult convertIntoOpenMP();
+  LogicalResult convertIntoSequential();
 };
 } // namespace mlir::iara
 

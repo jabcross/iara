@@ -9,10 +9,12 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/TopologicalSortUtils.h"
+#include <deque>
 #include <format>
 #include <initializer_list>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/ControlFlow/IR/ControlFlowOps.h>
@@ -57,13 +59,36 @@ bool OpenMPScheduler::checkSingleRate() {
   return true;
 }
 
+LogicalResult OpenMPScheduler::convertIntoSequential() {
+  OpBuilder builder{m_module};
+  builder.setInsertionPointToEnd(m_graph->getBlock());
+  m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
+                                               m_graph->getLoc());
+  m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
+  m_graph.erase();
+  auto new_block = builder.createBlock(&m_run_func.getBody().front());
+  builder.atBlockEnd(new_block).create<func::ReturnOp>(m_graph->getLoc());
+  for (auto op :
+       m_run_func.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
+    if (llvm::isa<DepOp>(op))
+      continue;
+    op->moveBefore(&new_block->back());
+  }
+  for (auto block : m_run_func.getBody().getBlocks() | Pointers{} | Drop(1) |
+                        Into<SmallVector<Block *>>()) {
+    block->erase();
+  }
+  for (auto actor : m_module.getOps<ActorOp>() | Into<SmallVector<ActorOp>>()) {
+    actor.erase();
+  }
+  return success();
+}
+
 LogicalResult OpenMPScheduler::convertIntoOpenMP() {
   OpBuilder builder{m_module};
   builder = builder.atBlockEnd(m_graph->getBlock());
   m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
                                                m_graph->getLoc());
-  m_init_func = createEmptyVoidFunctionWithBody(builder, "__iara_init__",
-                                                m_graph->getLoc());
 
   m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
 
@@ -210,9 +235,11 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
   return success();
 }
 
-// template <class R, class F> auto operator|(R &&range, F &&transform) -> auto
+// template <class R, class F> auto operator|(R &&range, F &&transform) ->
+// auto
 // {
-//   return llvm::map_range(std::forward<R>(range), std::forward<F>(transform));
+//   return llvm::map_range(std::forward<R>(range),
+//   std::forward<F>(transform));
 // }
 
 LogicalResult OpenMPScheduler::convertToTasks() {
@@ -265,16 +292,112 @@ LogicalResult OpenMPScheduler::convertToTasks() {
     }
   };
 
+  // Returns true if descendant depends on ancestor.
+  auto dependsOn = [&](Block *descendant, Block *ancestor) {
+    if (descendant == ancestor) {
+      llvm_unreachable("Undefined semantics");
+      exit(1);
+    }
+    // graph search on the successors of other, looking for block
+    SmallVector<Block *> stack{ancestor};
+    DenseSet<Block *> visited;
+    while (!stack.empty()) {
+      auto current = stack.pop_back_val();
+      for (auto successor : current->getSuccessors()) {
+        if (successor == descendant) {
+          return true;
+        }
+        if (!visited.contains(successor)) {
+          visited.insert(successor);
+          stack.push_back(successor);
+        }
+      }
+    }
+    return false;
+  };
+
+  auto topoSortTasks = [&]() -> LogicalResult {
+    // find blocks with no predecessors
+    SmallVector<Block *> final_order;
+    std::deque<Block *> queue;
+    DenseMap<Block *, int> block_number;
+    int counter = 1;
+    for (auto &block : m_graph.getBody().getBlocks()) {
+      if (block.getPredecessors().empty()) {
+        queue.push_back(&block);
+        block_number[&block] = counter++;
+      }
+    }
+    while (queue.size() > 0) {
+      auto current = queue.front();
+      queue.pop_front();
+      final_order.push_back(current);
+      for (auto successor : current->getSuccessors()) {
+        auto it = block_number.find(successor);
+        if (it != block_number.end()) {
+          if (it->second <= block_number[current]) {
+            return failure();
+          }
+        } else {
+          block_number[successor] = counter++;
+          queue.push_back(successor);
+        }
+      }
+    }
+
+    for (auto block : llvm::reverse(final_order)) {
+      block->moveBefore(&m_graph.getBody().front());
+    }
+    return success();
+  };
+
+  auto getLastBlock = [](SmallVector<Block *> &blocks) {
+    assert(blocks.size() > 0);
+    Block *rv = nullptr;
+    for (auto &block : blocks.front()->getParent()->getBlocks()) {
+      if (llvm::find(blocks, &block) != blocks.end()) {
+        rv = &block;
+      }
+    }
+    assert(rv != nullptr);
+    return rv;
+  };
+
+  DenseMap<Value, memref::AllocOp> alloc_sources;
+
+  // Creates a task that deallocs the given allocs, and that deppends on the
+  // given predecessors.
+  auto createDealloc = [&](SmallVector<memref::AllocOp> allocs,
+                           SmallVector<Block *> preds) {
+    Block *last_dep = getLastBlock(preds);
+
+    auto builder = OpBuilder{last_dep->getParentOp()};
+    assert(last_dep->getNextNode() != nullptr);
+    auto new_block = builder.createBlock(last_dep->getNextNode());
+    for (auto input : allocs) {
+      auto dealloc_op = builder.atBlockEnd(new_block).create<memref::DeallocOp>(
+          input.getLoc(), input);
+    };
+    builder.atBlockEnd(new_block).create<DepOp>(
+        last_dep->getParentOp()->getLoc(), BlockRange{});
+    for (auto dep : preds) {
+      addDeps(llvm::cast<DepOp>(dep->getTerminator()), {new_block});
+    }
+  };
+
   // Encapsulate every node in a dependency block
 
   m_graph->walk([&](NodeOp node) { encapsulateInDependency(node); });
 
   m_graph->walk([&](NodeOp node) { setDeps(node); });
 
-  DenseMap<Value, memref::AllocOp> alloc_sources;
+  // These reads will not generate a free.
+  DenseSet<Value> weak_reads;
 
-  // Add allocations to pure outputs
-  m_graph.walk([&](NodeOp node) {
+  // For each output port:
+
+  for (auto node : m_graph.getOps<NodeOp>()) {
+    // Add allocations to pure outputs
     auto new_operands = node.getOperands() | Into<SmallVector<Value>>();
     for (auto output : node.getPureOuts()) {
       auto builder = OpBuilder{node};
@@ -290,32 +413,79 @@ LogicalResult OpenMPScheduler::convertToTasks() {
       new_operands.push_back(new_input);
     }
     node->setOperands(new_operands);
-  });
 
-  // Forward inouts
-  m_graph.walk([&](NodeOp node) {
-    for (auto [input, output] : node.getInoutPairs()) {
-      alloc_sources[output] = alloc_sources[input];
-    };
-  });
+    DenseSet<OpResult> inout_outs;
 
-  // Free inputs
+    // Forward inouts
+    for (auto [in, out] : node.getInoutPairs()) {
+      inout_outs.insert(out);
+      alloc_sources[out] = alloc_sources[in];
+    }
 
-  DenseMap<memref::DeallocOp, Value> dealloc_ops;
+    // Determine copies for implicit broadcasts
+    for (auto output : node.getResults()) {
+      SmallVector<OpOperand *> uses_taking_ownership{};
+      SmallVector<OpOperand *> read_only_uses{};
+      for (auto &use : output.getUses()) {
+        auto user = llvm::cast<NodeOp>(use.getOwner());
+        if (user.isInoutInput(use)) {
+          uses_taking_ownership.push_back(&use);
+        } else {
+          read_only_uses.push_back(&use);
+        }
+      }
+      while (uses_taking_ownership.size() > 1) {
+        llvm_unreachable("unimplemented: more than one output takes ownership");
+        exit(1);
+      }
+      if (uses_taking_ownership.size() == 1) {
+        auto move_use = uses_taking_ownership.front();
+        // Try to schedule this execution after all of the other reads to
+        // avoid a copy.
+        bool possible = llvm::none_of(read_only_uses, [&](OpOperand *readonly) {
+          return !dependsOn(readonly->getOwner()->getBlock(),
+                            move_use->getOwner()->getBlock());
+        });
+
+        if (possible) {
+          for (auto &readonly : read_only_uses) {
+            weak_reads.insert(readonly->get());
+            addDeps(
+                cast<DepOp>(readonly->getOwner()->getBlock()->getTerminator()),
+                {move_use->getOwner()->getBlock()});
+          }
+          if (topoSortTasks().failed()) {
+            llvm_unreachable(
+                "unimplemented: topological sort failed when elliding copy");
+            exit(1);
+          }
+        }
+      } else {
+        // Create the free here.
+        for (auto &readonly : read_only_uses) {
+          weak_reads.insert(readonly->get());
+        }
+        auto alloc = alloc_sources[output];
+        SmallVector<Block *> deps;
+        for (auto &readonly : read_only_uses) {
+          deps.push_back(readonly->getOwner()->getBlock());
+        }
+        createDealloc({alloc}, deps);
+      }
+    }
+  }
+
+  // Free remaining inputs
 
   for (auto node : m_graph.getOps<NodeOp>()) {
-    auto ins = node.getIn();
-    if (ins.empty())
+    auto allocs =
+        node.getIn() |
+        Filter([&](Value value) { return !weak_reads.contains(value); }) |
+        Map([&](Value value) { return alloc_sources[value]; }) |
+        Into<SmallVector<memref::AllocOp>>();
+    if (allocs.empty())
       continue;
-    auto builder = OpBuilder{node};
-    auto new_block = builder.createBlock(node->getBlock()->getNextNode());
-    for (auto input : ins) {
-      auto dealloc_op = builder.atBlockEnd(new_block).create<memref::DeallocOp>(
-          node.getLoc(), alloc_sources[input]);
-      dealloc_ops[dealloc_op] = input;
-    };
-    builder.atBlockEnd(new_block).create<DepOp>(node.getLoc(), BlockRange{});
-    addDeps(llvm::cast<DepOp>(node->getBlock()->getTerminator()), {new_block});
+    createDealloc(allocs, {node->getBlock()});
   }
 
   // Generate function declarations

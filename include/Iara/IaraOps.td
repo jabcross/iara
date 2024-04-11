@@ -49,6 +49,8 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
       ::llvm::SmallVector<::mlir::Type> getInoutTypes();
       ::llvm::SmallVector<::mlir::Type> getPureOutTypes();
       ::llvm::SmallVector<::mlir::Type> getAllOutputTypes();
+      // is the input indexed by `idx` inout?
+      bool isInoutInput(size_t idx);
       mlir::FunctionType getImplFunctionType();
       bool isKernel();
     }];
@@ -89,6 +91,7 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,BufferizableOpInterface, D
         auto getPureOuts(){
             return getResults().drop_front(getInout().size());
         }
+        bool isInoutInput(OpOperand &operand);
     }];
 
 }

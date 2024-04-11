@@ -12,7 +12,8 @@
         "test/Iara/02-single-node.mlir",
         "test/Iara/03-two-nodes.mlir",
         "test/Iara/04-multithread.mlir",
-        "test/Iara/05-cholesky/input.mlir"
+        "test/Iara/05-cholesky/topology.mlir",
+        "test/Iara/06-broadcast.mlir"
       ],
       "description": "Which test to run"
     }

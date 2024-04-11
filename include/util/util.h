@@ -66,6 +66,12 @@ template <class R, class C> auto operator|(R &&range, Into<C> c) {
   return C{range};
 }
 
+struct Pointers {};
+
+template <class R> auto operator|(R &&range, Pointers) -> auto {
+  return range | Map([](auto &x) { return &x; });
+}
+
 struct Drop {
   unsigned int count;
   Drop(unsigned int count) : count(count) {}

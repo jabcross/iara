@@ -10,10 +10,14 @@
 #include <string.h>
 #include <unistd.h>
 
-#define DIM (4)
-#define NB (4)
+#define DIM (2)
+#define NB (2)
+
 #define BS (DIM / NB)
 #define BS_BYTES (BS * BS * sizeof(double))
+
+#define BLOCKS ITEM(0, 1) ITEM(1, 0) ITEM(1, 1)
+
 // #define VERBOSE
 
 void omp_potrf(double *const A, int ts, int ld) {
@@ -65,72 +69,26 @@ static double *const original_matrix = (double[DIM * DIM]){0};
 double ***dummy;
 double *Ah[NB][NB];
 
-void kernel_split_impl(double *out_0_0, double *out_0_1, double *out_0_2,
-                       double *out_0_3, double *out_1_0, double *out_1_1,
-                       double *out_1_2, double *out_1_3, double *out_2_0,
-                       double *out_2_1, double *out_2_2, double *out_2_3,
-                       double *out_3_0, double *out_3_1, double *out_3_2,
-                       double *out_3_3) {
+#define ITEM(i, j) , double *out_##i##_##j
+
+void kernel_split_impl(double *out_0_0 BLOCKS) {
+
+#define ITEM(i, j) assert(malloc_usable_size(out_##i##_##j) >= BS_BYTES);
+
   assert(malloc_usable_size(out_0_0) >= BS_BYTES);
-  assert(malloc_usable_size(out_0_1) >= BS_BYTES);
-  assert(malloc_usable_size(out_0_2) >= BS_BYTES);
-  assert(malloc_usable_size(out_0_3) >= BS_BYTES);
+  BLOCKS
 
-  assert(malloc_usable_size(out_1_0) >= BS_BYTES);
-  assert(malloc_usable_size(out_1_1) >= BS_BYTES);
-  assert(malloc_usable_size(out_1_2) >= BS_BYTES);
-  assert(malloc_usable_size(out_1_3) >= BS_BYTES);
-
-  assert(malloc_usable_size(out_2_0) >= BS_BYTES);
-  assert(malloc_usable_size(out_2_1) >= BS_BYTES);
-  assert(malloc_usable_size(out_2_2) >= BS_BYTES);
-  assert(malloc_usable_size(out_2_3) >= BS_BYTES);
-
-  assert(malloc_usable_size(out_3_0) >= BS_BYTES);
-  assert(malloc_usable_size(out_3_1) >= BS_BYTES);
-  assert(malloc_usable_size(out_3_2) >= BS_BYTES);
-  assert(malloc_usable_size(out_3_3) >= BS_BYTES);
-
+#define ITEM(i, j) memcpy(out_##i##_##j, Ah[i][j], BS_BYTES);
   memcpy(out_0_0, Ah[0][0], BS_BYTES);
-  memcpy(out_0_1, Ah[0][1], BS_BYTES);
-  memcpy(out_0_2, Ah[0][2], BS_BYTES);
-  memcpy(out_0_3, Ah[0][3], BS_BYTES);
-  memcpy(out_1_0, Ah[1][0], BS_BYTES);
-  memcpy(out_1_1, Ah[1][1], BS_BYTES);
-  memcpy(out_1_2, Ah[1][2], BS_BYTES);
-  memcpy(out_1_3, Ah[1][3], BS_BYTES);
-  memcpy(out_2_0, Ah[2][0], BS_BYTES);
-  memcpy(out_2_1, Ah[2][1], BS_BYTES);
-  memcpy(out_2_2, Ah[2][2], BS_BYTES);
-  memcpy(out_2_3, Ah[2][3], BS_BYTES);
-  memcpy(out_3_0, Ah[3][0], BS_BYTES);
-  memcpy(out_3_1, Ah[3][1], BS_BYTES);
-  memcpy(out_3_2, Ah[3][2], BS_BYTES);
-  memcpy(out_3_3, Ah[3][3], BS_BYTES);
+  BLOCKS
 }
 
-void kernel_join_impl(double *in_0_0, double *in_0_1, double *in_0_2,
-                      double *in_0_3, double *in_1_0, double *in_1_1,
-                      double *in_1_2, double *in_1_3, double *in_2_0,
-                      double *in_2_1, double *in_2_2, double *in_2_3,
-                      double *in_3_0, double *in_3_1, double *in_3_2,
-                      double *in_3_3) {
+#define ITEM(i, j) , double *in_##i##_##j
+
+void kernel_join_impl(double *in_0_0 BLOCKS) {
+#define ITEM(i, j) memcpy(Ah[i][j], in_##i##_##j, BS_BYTES);
   memcpy(Ah[0][0], in_0_0, BS_BYTES);
-  memcpy(Ah[0][1], in_0_1, BS_BYTES);
-  memcpy(Ah[0][2], in_0_2, BS_BYTES);
-  memcpy(Ah[0][3], in_0_3, BS_BYTES);
-  memcpy(Ah[1][0], in_1_0, BS_BYTES);
-  memcpy(Ah[1][1], in_1_1, BS_BYTES);
-  memcpy(Ah[1][2], in_1_2, BS_BYTES);
-  memcpy(Ah[1][3], in_1_3, BS_BYTES);
-  memcpy(Ah[2][0], in_2_0, BS_BYTES);
-  memcpy(Ah[2][1], in_2_1, BS_BYTES);
-  memcpy(Ah[2][2], in_2_2, BS_BYTES);
-  memcpy(Ah[2][3], in_2_3, BS_BYTES);
-  memcpy(Ah[3][0], in_3_0, BS_BYTES);
-  memcpy(Ah[3][1], in_3_1, BS_BYTES);
-  memcpy(Ah[3][2], in_3_2, BS_BYTES);
-  memcpy(Ah[3][3], in_3_3, BS_BYTES);
+  BLOCKS
 }
 
 void __iara_run__();

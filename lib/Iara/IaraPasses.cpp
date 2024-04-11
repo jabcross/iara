@@ -69,7 +69,7 @@ public:
       signalPassFailure();
       return;
     }
-    if (scheduler->convertIntoOpenMP().failed()) {
+    if (scheduler->convertIntoSequential().failed()) {
       module.emitError("Failed to emit OpenMP scheduler");
       signalPassFailure();
       return;

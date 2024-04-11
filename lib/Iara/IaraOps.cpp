@@ -64,6 +64,9 @@ llvm::SmallVector<Type> ActorOp::getAllOutputTypes() {
   return getOps<OutPortOp>() | Map([](auto op) { return op.getType(); }) |
          Into<SmallVector<Type>>();
 };
+bool ActorOp::isInoutInput(size_t idx) {
+  return idx >= getPureInTypes().size();
+}
 
 mlir::FunctionType ActorOp::getImplFunctionType() {
   OpBuilder builder{*this};
@@ -82,6 +85,14 @@ mlir::FunctionType ActorOp::getImplFunctionType() {
 }
 
 bool ActorOp::isKernel() { return this->getOps<NodeOp>().empty(); }
+
+bool NodeOp::isInoutInput(OpOperand &operand) {
+  for (auto opd : this->getInout()) {
+    if (opd == operand.get())
+      return true;
+  }
+  return false;
+}
 
 ::mlir::LogicalResult
 NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {

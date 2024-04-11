@@ -46,8 +46,9 @@ def generate(dim: int, nb: int):
 
 
 if __name__ == "__main__":
-    dim = 4
-    nb = 4
+    assert (len(sys.argv) == 3)
+    dim = int(sys.argv[1])
+    nb = int(sys.argv[2])
     ts = dim // nb
     tasks = generate(dim, nb)
     deps = {}

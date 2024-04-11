@@ -1,5 +1,4 @@
-// RUN: python "`dirname %s`/generate_topology.py" \
-// RUN: | iara-opt --iara-schedule  \
+// RUN:   iara-opt --iara-schedule %s \
 // RUN: | mlir-opt --convert-vector-to-scf \
 // RUN:            --convert-linalg-to-loops \
 // RUN:            --lower-affine \
@@ -17,5 +16,29 @@
 // RUN:            --reconcile-unrealized-casts \
 // RUN: | mlir-translate --mlir-to-llvmir \
 // RUN:                  --mlir-print-debuginfo \
-// RUN: | clang++ -lomp -xir - "`dirname %s`/05-cholesky.cpp" && ./a.out \
+// RUN: | clang -lomp -lpthread -xir - "`dirname %s`/06-broadcast.c" && ./a.out \
 // RUN: | FileCheck %s
+
+// Two nodes
+
+iara.actor @a {
+  iara.out : tensor<1xi32>
+  iara.dep
+} { kernel }
+iara.actor @b {
+  %1 = iara.in : tensor<1xi32>
+  iara.dep
+} { kernel }
+iara.actor @c {
+  %1 = iara.in : tensor<1xi32>
+  iara.dep
+} { kernel }
+iara.actor @main  {
+  %1 = iara.node @a out : tensor<1xi32>
+  iara.node @b in %1 : tensor<1xi32>
+  iara.node @c in %1 : tensor<1xi32>
+  iara.dep
+} { flat }
+
+// CHECK: Broadcast 1! Val = 42
+// CHECK: Broadcast 2! Val = 42
