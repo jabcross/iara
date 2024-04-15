@@ -52,16 +52,22 @@ public:
   void runOnOperation() final;
 };
 
-class Scheduler {
+class TaskScheduler {
 public:
   ModuleOp m_module = 0;
   ActorOp m_graph = 0;
   func::FuncOp m_run_func = 0;
   func::FuncOp m_init_func = 0;
 
-  virtual ~Scheduler() = default;
-  virtual LogicalResult emit() = 0;
-  virtual LogicalResult schedule() = 0;
+  // Wraps each node in a basic block; logical
+  // dependencies are defined by block successors
+  // and can be decoupled from the control flow
+  LogicalResult convertToTasks();
+
+  // Converts graph in task form to a simple sequential function
+  // (simply puts whole graph into the same basic block)
+  LogicalResult convertIntoSequential();
+
   bool checkSingleRate();
 };
 

@@ -6,11 +6,13 @@ add_mlir_dialect_library(MLIRIara
         IaraOps.cpp
         IaraPasses.cpp
         IaraInterfaces.cpp
-        Schedule/Schedule.cpp
+        Schedule/TaskScheduler.cpp
         Schedule/OpenMPScheduler.cpp
+        ../Util/MlirUtil.cpp
 
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/Iara
+        ${PROJECT_SOURCE_DIR}/include/Util
 
         DEPENDS
         MLIRIaraOpsIncGen

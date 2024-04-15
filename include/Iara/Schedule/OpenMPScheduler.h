@@ -16,9 +16,7 @@ public:
 
   static std::unique_ptr<OpenMPScheduler> create(ActorOp graph);
   bool checkSingleRate();
-  LogicalResult convertToTasks();
   LogicalResult convertIntoOpenMP();
-  LogicalResult convertIntoSequential();
 };
 } // namespace mlir::iara
 

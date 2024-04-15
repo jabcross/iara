@@ -56,7 +56,7 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
     }];
 }
 
-def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,BufferizableOpInterface, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
     let summary = "A node in a dataflow graph.";
     let description = [{
         The `iara.node` operation is a node in a dataflow graph. It has a
@@ -92,6 +92,7 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,BufferizableOpInterface, D
             return getResults().drop_front(getInout().size());
         }
         bool isInoutInput(OpOperand &operand);
+        bool isPureInInput(OpOperand &operand);
     }];
 
 }

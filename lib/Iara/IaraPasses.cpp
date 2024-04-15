@@ -14,6 +14,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/Support/Casting.h"
+#include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
 
 namespace mlir::iara {
 #define GEN_PASS_DEF_IARASWITCHBARFOO
@@ -63,8 +64,13 @@ public:
       op->erase();
     }
 
-    auto scheduler = OpenMPScheduler::create(graph);
-    if (scheduler->convertToTasks().failed()) {
+    auto task_scheduler = Scheduler();
+
+    task_scheduler.convertToTasks(graph);
+
+    mlir::bufferization::runOneShotBufferize(module.lookupSymbol("main"), {});
+
+    if (scheduler.convertToTasks().failed()) {
       module.emitError("Failed to convert main actor into task form");
       signalPassFailure();
       return;

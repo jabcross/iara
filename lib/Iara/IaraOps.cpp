@@ -8,12 +8,12 @@
 
 #include "Iara/IaraOps.h"
 #include "Iara/IaraDialect.h"
+#include "Util/RangeUtil.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/Support/LogicalResult.h"
-#include "util/util.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Casting.h"
 #include <assert.h>
@@ -21,9 +21,11 @@
 #include <iterator>
 #include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
+#include <mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h>
 #include <mlir/IR/AttrTypeSubElements.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Value.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/LLVM.h>
 #include <ranges>
@@ -88,6 +90,14 @@ bool ActorOp::isKernel() { return this->getOps<NodeOp>().empty(); }
 
 bool NodeOp::isInoutInput(OpOperand &operand) {
   for (auto opd : this->getInout()) {
+    if (opd == operand.get())
+      return true;
+  }
+  return false;
+}
+
+bool NodeOp::isPureInInput(OpOperand &operand) {
+  for (auto opd : this->getIn()) {
     if (opd == operand.get())
       return true;
   }

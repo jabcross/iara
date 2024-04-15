@@ -6,14 +6,18 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Dialect.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <optional>
 #include <type_traits>
 #include <utility>
+
+namespace RangeUtil {
 
 template <class T, typename Enable = void> struct NullTypeOf {
   using type = std::optional<T>;
@@ -66,6 +70,7 @@ template <class R, class C> auto operator|(R &&range, Into<C> c) {
   return C{range};
 }
 
+// Converts a range of references to a range of pointers.
 struct Pointers {};
 
 template <class R> auto operator|(R &&range, Pointers) -> auto {
@@ -128,6 +133,14 @@ auto operator|(R &&range, F &&f)
   return f(std::begin(range), std::end(range));
 }
 
+// Calls copy assignment on the object and returns the result.
+struct Copy {};
+
+auto operator|(auto &c, Copy) -> auto {
+  auto rv = c;
+  return rv;
+}
+
 // based on
 // https://stackoverflow.com/questions/17805969/writing-universal-memoization-function-in-c11
 template <typename... Args, typename F,
@@ -145,3 +158,4 @@ auto memoize(F fn) {
 }
 
 #endif
+}

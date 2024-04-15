@@ -13,7 +13,8 @@
         "test/Iara/03-two-nodes.mlir",
         "test/Iara/04-multithread.mlir",
         "test/Iara/05-cholesky/topology.mlir",
-        "test/Iara/06-broadcast.mlir"
+        "test/Iara/06-broadcast.mlir",
+        "test/Iara/07-ownership.mlir"
       ],
       "description": "Which test to run"
     }
