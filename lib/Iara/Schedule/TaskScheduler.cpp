@@ -7,6 +7,8 @@
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/Support/YAMLParser.h>
 #include <mlir-c/IR.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Dialect.h>
 #include <mlir/IR/Location.h>
@@ -133,17 +135,11 @@ struct TaskSchedule {
     return schedule;
   }
 
-  void bufferize() {
-    for (auto node : actor.getOps<NodeOp>()) {
-      solveOutputOwnerships(node);
-    }
-  }
-
   Task createSuccessorTask(Task task) {
     auto builder = OpBuilder{task.block->getParentOp()};
-    auto new_block = builder.createBlock(task.block->getNextNode());
-    builder.atBlockEnd(new_block).create<DepOp>(
-        task.block->getParentOp()->getLoc(), BlockRange{});
+    auto new_dep = CREATE(DepOp, builder.atBlockEnd(task.block),
+                          task.block->getParentOp()->getLoc(), BlockRange{});
+    auto new_block = task.block->splitBlock(new_dep);
     task.addDependent(Task{new_block});
     return new_block;
   }
@@ -176,20 +172,9 @@ struct TaskSchedule {
   // Creates a dealloc node op inside given task.
   void createDeallocNodes(SmallVector<Value> vals, Task task, Location loc) {
     for (auto val : vals) {
-      CREATE(NodeOp,
+      CREATE(memref::DeallocOp,
              OpBuilder{val.getDefiningOp()}.atBlockTerminator(task.block), loc,
-             TypeRange{}, "__iara__dealloc__", ValueRange{}, ValueRange{val},
-             ValueRange{});
-    }
-  }
-
-  // Creates an alloc node op inside given task.
-  void createAllocNodes(SmallVector<Value> vals, Task task, Location loc) {
-    for (auto val : vals) {
-      OpBuilder{val.getDefiningOp()}
-          .atBlockTerminator(task.block)
-          .create<NodeOp>(loc, TypeRange{}, "__iara__alloc__", ValueRange{},
-                          ValueRange{}, ValueRange{});
+             val);
     }
   }
 
@@ -276,9 +261,12 @@ struct TaskSchedule {
       if (in_uses.size() > 0 and inout_uses.size() == 1) {
         // All in uses should be scheduled before the single inout use.
         if (!in_tasks.empty()) {
+          auto inout_task = getTask(inout_uses[0]->getOwner());
           for (auto task : in_tasks) {
-            task.addDependent(getTask(inout_uses[0]->getOwner()));
+            task.addDependent(inout_task);
           }
+          auto last = findLastTask(in_tasks);
+          moveBlockAfter(inout_task.block, last.block);
         }
       } else if (in_uses.size() > 0) {
         // Create a dealloc node for all `in` uses.
@@ -300,39 +288,8 @@ struct TaskSchedule {
     }
   }
 
-  // Assumes all ins have been allocated
-  void bufferize(NodeOp node) {
-    auto builder = OpBuilder{node};
-
-    for (auto [in, out] : node.getInoutPairs()) {
-      alloc_ops[out] = alloc_ops[in];
-    }
-
-    auto ins_to_free =
-        node.getIn() |
-        Filter([&](Value in) { return !ownership_handled.contains(in); }) |
-        Into<SmallVector<Value>>();
-    if (!ins_to_free.empty()) {
-      auto frees = createSuccessorTask(getTask(node));
-      for (auto in : ins_to_free) {
-        if (dealloc_ops.find(in) != dealloc_ops.end()) {
-          continue;
-        }
-        dealloc_ops[in] = //
-            CREATE(memref::DeallocOp,
-                   builder.atBlockTerminator(frees.block), //
-                   node.getLoc(), alloc_ops[in]);
-      }
-    }
-    if (!node.getPureOuts().empty()) {
-      auto allocs = createPredecessorTask(getTask(node));
-      for (auto out : node.getPureOuts()) {
-        alloc_ops[out] =
-            CREATE(memref::AllocOp, builder.atBlockTerminator(allocs.block),
-                   node.getLoc(), cast<MemRefType>(out.getType()));
-      }
-    }
-  }
+  // Add dealloc symbolic nodes to consumed ins and dangling inouts.
+  // Skips deallocs for values with shared ownership.
   void addDeallocs(NodeOp node) {
 
     SmallVector<Value> values_to_deallocate;
@@ -359,56 +316,120 @@ struct TaskSchedule {
     createDeallocNodes(values_to_deallocate, new_block, node.getLoc());
   }
 
-  void addAllocs(NodeOp node) {
-    SmallVector<Value> values_to_allocate = node.getPureOuts();
-    if (values_to_allocate.empty())
+  MemRefType memrefTypeFromTensorType(RankedTensorType tensortype) {
+    return MemRefType::get(tensortype.getShape(), tensortype.getElementType());
+  }
+
+  // If the use is an inout port, propagate through the corresponding output
+  // port.
+  void propagateInout(OpOperand &use) {
+    auto user = dyn_cast<NodeOp>(use.getOwner());
+    if (!user)
       return;
-    auto new_task = createPredecessorTask(getTask(node));
-    createAllocNodes(values_to_allocate, new_task, node.getLoc());
+    for (auto [in, out] : user.getInoutPairs()) {
+      if (in == use.get()) {
+        alloc_ops[out] = alloc_ops[in];
+        for (auto &use : out.getUses()) {
+          if (use.get() != in) {
+            use.set(in);
+            propagateInout(use);
+          }
+        }
+      }
+    }
   }
 
-  LogicalResult TaskScheduler::convertToTasks() {
-
-    TaskSchedule scheduler(m_graph);
-    auto nodes = m_graph.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
-    for (auto node : nodes) {
-      scheduler.wrapIntoTask(node);
+  // Should only be called on a pure output, as an inout output will write on
+  // preexisting memory.
+  void createAlloc(OpResult &pure_out, Task task) {
+    auto builder = OpBuilder{pure_out.getOwner()}.atBlockTerminator(task.block);
+    auto alloc_op =
+        CREATE(memref::AllocOp, builder, pure_out.getOwner()->getLoc(),
+               memrefTypeFromTensorType(
+                   dyn_cast<RankedTensorType>(pure_out.getType())),
+               IntegerAttr());
+    alloc_ops[pure_out] = alloc_op;
+    appendOperand(pure_out.getOwner(), alloc_op);
+    auto uses =
+        pure_out.getUses() | Pointers() | Into<SmallVector<OpOperand *>>();
+    for (auto &use : uses) {
+      use->set(alloc_op);
+      propagateInout(*use);
     }
-    for (auto node : nodes) {
-      scheduler.setDeps(node);
-    }
-    for (auto node : nodes) {
-      scheduler.solveOutputOwnerships(node);
-    }
-    for (auto node : nodes) {
-      scheduler.addDeallocs(node);
-    }
-    for (auto node : m_graph.getOps<NodeOp>()) {
-      scheduler.addAllocs(node);
-    }
-    return success();
   }
 
-  LogicalResult TaskScheduler::convertIntoSequential() {
-    OpBuilder builder{m_graph};
-    builder.setInsertionPointToEnd(m_graph->getBlock());
-    m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
-                                                 m_graph->getLoc());
-    m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
-    m_graph.erase();
-    auto new_block = builder.createBlock(&m_run_func.getBody().front());
-    builder.atBlockEnd(new_block).create<func::ReturnOp>(m_graph->getLoc());
-    for (auto op :
-         m_run_func.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
-      if (llvm::isa<DepOp>(op))
+  // Adds allocations, convert copy nodes into memcpys and dealloc nodes into
+  // dealloc ops.
+  void bufferize() {
+
+    auto getAllocTaskForBlock = memoize<Block *>([&](Block *block) -> Task {
+      return createPredecessorTask(Task{block});
+    });
+
+    auto nodes = actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
+    for (auto node : nodes) {
+      if (node.getPureOuts().empty())
         continue;
-      op->moveBefore(&new_block->back());
+      auto task = getAllocTaskForBlock(node->getBlock());
+      for (auto out : node.getPureOuts()) {
+        createAlloc(out, task);
+      }
     }
-    for (auto block : m_run_func.getBody().getBlocks() | Pointers{} | Drop(1) |
-                          Into<SmallVector<Block *>>()) {
-      block->erase();
+
+    // Convert placeholder copies into CopyOps.
+    for (auto node : actor.getOps<NodeOp>() | //
+                         Filter([](NodeOp node) {
+                           return node.getImpl() == "__iara_copy__";
+                         }) |
+                         Into<SmallVector<NodeOp>>()) {
+      assert(node->getNumOperands() == 2);
+      CREATE(memref::CopyOp, OpBuilder{node}, node->getLoc(),
+             node->getOperand(0), node.getOperand(1));
+      node->erase();
     }
-    return success();
   }
+};
+
+LogicalResult TaskScheduler::convertToTasks() {
+
+  TaskSchedule scheduler(m_graph);
+  auto nodes = m_graph.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
+  for (auto node : nodes) {
+    scheduler.wrapIntoTask(node);
+  }
+  for (auto node : nodes) {
+    scheduler.setDeps(node);
+  }
+  for (auto node : nodes) {
+    scheduler.solveOutputOwnerships(node);
+  }
+  for (auto node : nodes) {
+    scheduler.addDeallocs(node);
+  }
+  scheduler.bufferize();
+  return success();
+}
+
+LogicalResult TaskScheduler::convertIntoSequential() {
+  OpBuilder builder{m_graph};
+  builder.setInsertionPointToEnd(m_graph->getBlock());
+  m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
+                                               m_graph->getLoc());
+  m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
+  m_graph.erase();
+  auto new_block = builder.createBlock(&m_run_func.getBody().front());
+  builder.atBlockEnd(new_block).create<func::ReturnOp>(m_graph->getLoc());
+  for (auto op :
+       m_run_func.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
+    if (llvm::isa<DepOp>(op))
+      continue;
+    op->moveBefore(&new_block->back());
+  }
+  for (auto block : m_run_func.getBody().getBlocks() | Pointers{} | Drop(1) |
+                        Into<SmallVector<Block *>>()) {
+    block->erase();
+  }
+  return success();
+}
 
 } // namespace mlir::iara

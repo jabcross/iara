@@ -3,7 +3,10 @@
 namespace mlir {
 func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
                                              Location loc);
-}
+OpOperand &appendOperand(Operation *op, Value val);
+void moveBlockAfter(Block *to_move, Block *after_this);
+
+} // namespace mlir
 
 template <class OpTy> struct CreateHelper {
   mlir::OpBuilder builder;
@@ -32,7 +35,7 @@ public:
   ()
 
 // Help with op autocompletion. Takes op type, builder, location and then
-// YourOp::build() arguments.
+// YourOp::build() arguments. Works fine with clangd.
 #define CREATE(__type, __builder, __loc, ... ) CREATE_OP(__type, __builder, __loc) __VA_ARGS__ END_OP
 
 // clang-format on
