@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 #include "Iara/IaraPasses.h"
+#include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
-#include "Iara/Schedule/OpenMPScheduler.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/Support/Casting.h"
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
+#include <mlir/Dialect/Linalg/IR/Linalg.h>
+#include <mlir/Dialect/Math/IR/Math.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
 
 namespace mlir::iara {
 #define GEN_PASS_DEF_IARASWITCHBARFOO
@@ -64,18 +64,18 @@ public:
       op->erase();
     }
 
-    auto task_scheduler = Scheduler();
+    auto task_scheduler = TaskScheduler(graph);
 
-    task_scheduler.convertToTasks(graph);
+    task_scheduler.convertToTasks();
 
     mlir::bufferization::runOneShotBufferize(module.lookupSymbol("main"), {});
 
-    if (scheduler.convertToTasks().failed()) {
+    if (task_scheduler.convertToTasks().failed()) {
       module.emitError("Failed to convert main actor into task form");
       signalPassFailure();
       return;
     }
-    if (scheduler->convertIntoSequential().failed()) {
+    if (task_scheduler.convertIntoSequential().failed()) {
       module.emitError("Failed to emit OpenMP scheduler");
       signalPassFailure();
       return;

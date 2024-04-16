@@ -5,7 +5,7 @@ add_mlir_dialect_library(MLIRIara
         IaraDialect.cpp
         IaraOps.cpp
         IaraPasses.cpp
-        IaraInterfaces.cpp
+        # IaraInterfaces.cpp
         Schedule/TaskScheduler.cpp
         Schedule/OpenMPScheduler.cpp
         ../Util/MlirUtil.cpp
@@ -17,7 +17,7 @@ add_mlir_dialect_library(MLIRIara
         DEPENDS
         MLIRIaraOpsIncGen
         MLIRIaraPassesIncGen
-        MLIRIaraInterfacesIncGen
+        # MLIRIaraInterfacesIncGen
 
 
         LINK_LIBS PUBLIC

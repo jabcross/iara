@@ -1,19 +1,12 @@
 #include "Iara/Schedule/OpenMPScheduler.h"
 #include "Iara/IaraOps.h"
-#include "Iara/Schedule/Schedule.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/ExecutionEngine/CRunnerUtils.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
-#include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LogicalResult.h"
-#include "mlir/Transforms/TopologicalSortUtils.h"
 #include <Util/MlirUtil.h>
 #include <Util/RangeUtil.h>
-#include <deque>
-#include <format>
-#include <initializer_list>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/ErrorHandling.h>
@@ -29,7 +22,6 @@
 #include <mlir/IR/Value.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/LLVM.h>
-#include <utility>
 
 namespace mlir::iara {
 using namespace RangeUtil;

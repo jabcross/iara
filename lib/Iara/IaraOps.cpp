@@ -16,6 +16,7 @@
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Casting.h"
+#include <Util/RangeUtil.h>
 #include <assert.h>
 #include <functional>
 #include <iterator>
@@ -28,10 +29,11 @@
 #include <mlir/IR/Value.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/LLVM.h>
-#include <ranges>
 
 #define GET_OP_CLASSES
 #include "Iara/IaraOps.cpp.inc"
+
+using namespace RangeUtil;
 
 namespace mlir::iara {
 bool ActorOp::isFlat() { return (*this)->hasAttr("flat"); }

@@ -156,6 +156,6 @@ auto memoize(F fn) {
     return memoized->second;
   };
 }
+} // namespace RangeUtil
 
 #endif
-}

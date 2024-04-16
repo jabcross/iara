@@ -10,7 +10,6 @@
 #define IARA_OPS
 
 include "Iara/IaraTypes.td"
-include "Iara/IaraInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"

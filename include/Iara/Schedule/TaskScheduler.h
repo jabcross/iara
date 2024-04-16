@@ -54,10 +54,10 @@ public:
 
 class TaskScheduler {
 public:
-  ModuleOp m_module = 0;
-  ActorOp m_graph = 0;
-  func::FuncOp m_run_func = 0;
-  func::FuncOp m_init_func = 0;
+  ActorOp m_graph = nullptr;
+  func::FuncOp m_run_func = nullptr;
+
+  TaskScheduler(ActorOp graph) : m_graph(graph) {}
 
   // Wraps each node in a basic block; logical
   // dependencies are defined by block successors
