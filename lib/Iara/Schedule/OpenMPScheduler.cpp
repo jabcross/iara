@@ -7,6 +7,7 @@
 #include "mlir/Support/LogicalResult.h"
 #include <Util/MlirUtil.h>
 #include <Util/RangeUtil.h>
+#include <iterator>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/ErrorHandling.h>
@@ -25,58 +26,51 @@
 
 namespace mlir::iara {
 using namespace RangeUtil;
-std::unique_ptr<OpenMPScheduler> OpenMPScheduler::create(ActorOp graph) {
-  auto rv = std::make_unique<OpenMPScheduler>();
-  rv->m_graph = graph;
-  rv->m_module = graph->getParentOfType<ModuleOp>();
-  return rv;
-}
 
-bool OpenMPScheduler::checkSingleRate() {
-  assert(m_graph.getParameterTypes().empty() &&
-         m_graph->getOperands().empty() && m_graph.isFlat());
+func::FuncOp OpenMPScheduler::convertIntoOpenMP(ActorOp actor) {
+  if (actor.isKernel()) {
+    auto impl_name = actor.getSymName();
+    OpBuilder builder{actor};
+    auto decl = builder.create<func::FuncOp>(
+        actor.getLoc(), TypeRange{}, ValueRange{}, ArrayRef<NamedAttribute>{});
 
-  // check that all nodes have a single rate
-
-  assert(llvm::all_of(m_graph.getOps<NodeOp>(),
-                      [](NodeOp node) { return node.getParams().empty(); }));
-
-  // todo: check all port connections
-  return true;
-}
-
-LogicalResult OpenMPScheduler::convertIntoOpenMP() {
-  OpBuilder builder{m_module};
-  builder = builder.atBlockEnd(m_graph->getBlock());
-  m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
-                                               m_graph->getLoc());
-
-  m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
-
-  auto actors = m_module.getOps<ActorOp>() | Into<SmallVector<ActorOp>>();
-
-  for (auto actor : actors) {
-    actor.erase();
+    decl->setAttr("sym_name", builder.getStringAttr(impl_name));
+    decl->setAttr("sym_visibility", builder.getStringAttr("private"));
+    decl->setAttr("function_type", TypeAttr::get(actor.getImplFunctionType()));
+    decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
+    return decl;
   }
 
-  if (m_run_func.getOps().empty()) {
-    // No work to do; add return op and exit
+  OpBuilder builder{actor};
+  builder = builder.atBlockEnd(actor->getBlock());
+  auto func_op = createEmptyVoidFunctionWithBody(builder, actor.getSymName(),
+                                                 actor->getLoc());
 
-    OpBuilder{m_run_func}
-        .atBlockEnd(&m_run_func.getBody().getBlocks().front())
-        .create<func::ReturnOp>(m_run_func.getLoc());
-    return success();
+  func_op.getFunctionBody().takeBody(actor->getRegion(0));
+
+  auto ops = func_op.getOps() | Pointers() | Into<SmallVector<Operation *>>();
+
+  // If function is empty (save for terminator), add a ReturnOp and return.
+  if (ops.size() == 1 and isa<DepOp>(ops.back())) {
+    ops.back()->erase();
+    ops.clear();
   }
 
-  auto main_block =
-      builder.createBlock(&m_run_func.getBody().getBlocks().front());
+  if (ops.size() == 0) {
+    OpBuilder{func_op}
+        .atBlockEnd(&func_op.getBody().getBlocks().front())
+        .create<func::ReturnOp>(func_op.getLoc());
+    return func_op;
+  }
+
+  auto main_block = builder.createBlock(&func_op.getBody().getBlocks().front());
 
   // Store allocation pointers in stack
 
-  auto alloca_builder = OpBuilder{m_run_func};
+  auto alloca_builder = OpBuilder{func_op};
   alloca_builder.setInsertionPointToStart(main_block);
   SmallVector<Value> zero_index = {
-      alloca_builder.create<arith::ConstantIndexOp>(m_run_func.getLoc(), 0)};
+      alloca_builder.create<arith::ConstantIndexOp>(func_op.getLoc(), 0)};
 
   auto allocate_ptr = [&](memref::AllocOp alloc_op) {
     auto alloca_op = alloca_builder.create<memref::AllocaOp>(
@@ -95,7 +89,7 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
     return alloca_op;
   };
 
-  m_run_func->walk([&](memref::AllocOp alloc_op) { allocate_ptr(alloc_op); });
+  func_op->walk([&](memref::AllocOp alloc_op) { allocate_ptr(alloc_op); });
 
   // Convert blocks into tasks
 
@@ -103,18 +97,18 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
   DenseMap<Block *, int64_t> indices;
 
   for (auto [idx, block_ref] :
-       llvm::enumerate(m_run_func.getFunctionBody().getBlocks())) {
+       llvm::enumerate(func_op.getFunctionBody().getBlocks())) {
     indices[&block_ref] = idx + 1;
   }
-  for (auto &block_ref : m_run_func.getFunctionBody().getBlocks()) {
+  for (auto &block_ref : func_op.getFunctionBody().getBlocks()) {
     for (auto succ : block_ref.getSuccessors()) {
       input_deps[succ].insert(indices[&block_ref]);
       output_deps[&block_ref].insert(indices[succ]);
     }
   }
 
-  auto parallel_op = builder.atBlockEnd(main_block)
-                         .create<omp::ParallelOp>(m_run_func->getLoc());
+  auto parallel_op =
+      builder.atBlockEnd(main_block).create<omp::ParallelOp>(func_op->getLoc());
   auto single_op =
       builder.atBlockBegin(builder.createBlock(&parallel_op->getRegion(0)))
           .create<omp::SingleOp>(parallel_op.getLoc(), ValueRange{},
@@ -138,8 +132,8 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
   auto getConstant = memoize<int64_t>([&](int64_t val) {
     if (last_const)
       const_builder.setInsertionPointAfter(last_const);
-    auto rv = const_builder.create<arith::ConstantIntOp>(m_run_func.getLoc(),
-                                                         val, 64);
+    auto rv =
+        const_builder.create<arith::ConstantIntOp>(func_op.getLoc(), val, 64);
     last_const = rv;
     return rv;
   });
@@ -152,7 +146,7 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
     if (last_ptr)
       pointer_builder.setInsertionPointAfter(last_ptr);
     auto rv = pointer_builder.create<LLVM::IntToPtrOp>(
-        m_run_func.getLoc(), LLVM::LLVMPointerType::get(builder.getContext()),
+        func_op.getLoc(), LLVM::LLVMPointerType::get(builder.getContext()),
         getConstant(val));
     last_ptr = rv;
     return rv;
@@ -163,7 +157,7 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
   task_builder.setInsertionPointToStart(
       &single_op->getRegion(0).getBlocks().front());
 
-  auto blocks = m_run_func.getBlocks() | Drop(1) |
+  auto blocks = func_op.getBlocks() | Drop(1) |
                 Map([](Block &block) { return &block; }) |
                 Into<SmallVector<Block *>>();
 
@@ -190,17 +184,9 @@ LogicalResult OpenMPScheduler::convertIntoOpenMP() {
     block->back().erase();
     task_builder.atBlockEnd(block).create<omp::TerminatorOp>(task_op.getLoc());
   }
-  task_builder.atBlockEnd(main_block)
-      .create<func::ReturnOp>(m_run_func.getLoc());
+  task_builder.atBlockEnd(main_block).create<func::ReturnOp>(func_op.getLoc());
 
-  return success();
+  return func_op;
 }
-
-// template <class R, class F> auto operator|(R &&range, F &&transform) ->
-// auto
-// {
-//   return llvm::map_range(std::forward<R>(range),
-//   std::forward<F>(transform));
-// }
 
 } // namespace mlir::iara

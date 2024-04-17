@@ -7,16 +7,8 @@
 
 namespace mlir::iara {
 
-class OpenMPScheduler {
-public:
-  ModuleOp m_module;
-  ActorOp m_graph;
-  func::FuncOp m_run_func;
-  func::FuncOp m_init_func;
-
-  static std::unique_ptr<OpenMPScheduler> create(ActorOp graph);
-  bool checkSingleRate();
-  LogicalResult convertIntoOpenMP();
+struct OpenMPScheduler {
+  func::FuncOp convertIntoOpenMP(ActorOp actor);
 };
 } // namespace mlir::iara
 

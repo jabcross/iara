@@ -54,21 +54,19 @@ public:
 
 class TaskScheduler {
 public:
-  ActorOp m_graph = nullptr;
-  func::FuncOp m_run_func = nullptr;
-
-  TaskScheduler(ActorOp graph) : m_graph(graph) {}
+  bool checkSingleRate(ActorOp actor);
 
   // Wraps each node in a basic block; logical
   // dependencies are defined by block successors
   // and can be decoupled from the control flow
-  LogicalResult convertToTasks();
+  LogicalResult convertToTasks(ActorOp actor);
+
+  // Remove actors that have been replaced by functions.
+  LogicalResult removeLoweredActors(ModuleOp module);
 
   // Converts graph in task form to a simple sequential function
   // (simply puts whole graph into the same basic block)
-  LogicalResult convertIntoSequential();
-
-  bool checkSingleRate();
+  func::FuncOp convertIntoSequential(ActorOp actor);
 };
 
 } // namespace mlir::iara

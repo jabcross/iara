@@ -8,13 +8,13 @@
       "id": "test",
       "type": "pickString",
       "options": [
-        "test/Iara/01-empty.mlir",
-        "test/Iara/02-single-node.mlir",
-        "test/Iara/03-two-nodes.mlir",
-        "test/Iara/04-multithread.mlir",
+        "test/Iara/01-empty/01-empty.mlir",
+        "test/Iara/02-single-node/02-single-node.mlir",
+        "test/Iara/03-two-nodes/03-two-nodes.mlir",
+        "test/Iara/04-multithread/04-multithread.mlir",
         "test/Iara/05-cholesky/topology.mlir",
-        "test/Iara/06-broadcast.mlir",
-        "test/Iara/07-ownership.mlir"
+        "test/Iara/06-broadcast/06-broadcast.mlir",
+        "test/Iara/07-ownership/07-ownership.mlir"
       ],
       "description": "Which test to run"
     }

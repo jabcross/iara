@@ -4,11 +4,14 @@
 #include "mlir/IR/TypeRange.h"
 #include "llvm/ADT/STLExtras.h"
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/YAMLParser.h>
 #include <mlir-c/IR.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Dialect.h>
 #include <mlir/IR/Location.h>
@@ -23,6 +26,19 @@
 namespace mlir::iara {
 
 using namespace RangeUtil;
+
+bool TaskScheduler::checkSingleRate(ActorOp actor) {
+  assert(actor.getParameterTypes().empty() && actor->getOperands().empty() &&
+         actor.isFlat());
+
+  // check that all nodes have a single rate
+
+  assert(llvm::all_of(actor.getOps<NodeOp>(),
+                      [](NodeOp node) { return node.getParams().empty(); }));
+
+  // todo: check all port connections
+  return true;
+}
 
 struct Task;
 struct Task {
@@ -387,13 +403,20 @@ struct TaskSchedule {
              node->getOperand(0), node.getOperand(1));
       node->erase();
     }
+
+    // Convert nodes into function calls
+    for (auto node : actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>()) {
+      CREATE(func::CallOp, OpBuilder{node}, node->getLoc(), node.getImpl(), {},
+             node->getOperands());
+      node.erase();
+    }
   }
 };
 
-LogicalResult TaskScheduler::convertToTasks() {
+LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
 
-  TaskSchedule scheduler(m_graph);
-  auto nodes = m_graph.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
+  TaskSchedule scheduler(actor);
+  auto nodes = actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
   for (auto node : nodes) {
     scheduler.wrapIntoTask(node);
   }
@@ -407,29 +430,51 @@ LogicalResult TaskScheduler::convertToTasks() {
     scheduler.addDeallocs(node);
   }
   scheduler.bufferize();
+
   return success();
 }
 
-LogicalResult TaskScheduler::convertIntoSequential() {
-  OpBuilder builder{m_graph};
-  builder.setInsertionPointToEnd(m_graph->getBlock());
-  m_run_func = createEmptyVoidFunctionWithBody(builder, "__iara_run__",
-                                               m_graph->getLoc());
-  m_run_func.getFunctionBody().takeBody(m_graph->getRegion(0));
-  m_graph.erase();
-  auto new_block = builder.createBlock(&m_run_func.getBody().front());
-  builder.atBlockEnd(new_block).create<func::ReturnOp>(m_graph->getLoc());
+LogicalResult TaskScheduler::removeLoweredActors(ModuleOp module) {
+  llvm::StringMap<ActorOp> actors;
+  llvm::StringMap<func::FuncOp> funcs;
+
+  for (auto actor : module.getOps<ActorOp>()) {
+    actors[actor.getSymName()] = actor;
+  }
+  for (auto func : module.getOps<func::FuncOp>()) {
+    funcs[func.getSymName()] = func;
+  }
+
+  for (auto &[name, actor] : actors) {
+    if (funcs.contains(name)) {
+      actor->erase();
+    } else {
+      return failure();
+    }
+  }
+  return success();
+}
+
+func::FuncOp TaskScheduler::convertIntoSequential(ActorOp actor) {
+  OpBuilder builder{actor};
+  builder.setInsertionPointToEnd(actor->getBlock());
+  auto func_op =
+      createEmptyVoidFunctionWithBody(builder, "__iara_run__", actor->getLoc());
+  func_op.getFunctionBody().takeBody(actor->getRegion(0));
+  actor.erase();
+  auto new_block = builder.createBlock(&func_op.getBody().front());
+  builder.atBlockEnd(new_block).create<func::ReturnOp>(actor->getLoc());
   for (auto op :
-       m_run_func.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
+       func_op.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
     if (llvm::isa<DepOp>(op))
       continue;
     op->moveBefore(&new_block->back());
   }
-  for (auto block : m_run_func.getBody().getBlocks() | Pointers{} | Drop(1) |
+  for (auto block : func_op.getBody().getBlocks() | Pointers{} | Drop(1) |
                         Into<SmallVector<Block *>>()) {
     block->erase();
   }
-  return success();
+  return func_op;
 }
 
 } // namespace mlir::iara

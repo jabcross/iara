@@ -88,7 +88,21 @@ mlir::FunctionType ActorOp::getImplFunctionType() {
   return builder.getFunctionType(memref_types, TypeRange{});
 }
 
-bool ActorOp::isKernel() { return this->getOps<NodeOp>().empty(); }
+bool ActorOp::isKernel() { return (*this)->hasAttr("kernel"); }
+
+LogicalResult ActorOp::verifyRegions() {
+  int inouts = 0;
+  int outs = 0;
+  for (auto &op : this->getOps()) {
+    if (auto in = dyn_cast<InPortOp>(&op); in && in.getInout())
+      inouts++;
+    if (isa<OutPortOp>(&op))
+      outs++;
+  }
+  if (inouts > outs)
+    return failure();
+  return success();
+}
 
 bool NodeOp::isInoutInput(OpOperand &operand) {
   for (auto opd : this->getInout()) {

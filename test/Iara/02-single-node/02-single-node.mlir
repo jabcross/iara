@@ -9,8 +9,8 @@ iara.actor @main  {
   iara.dep
 } { flat }
 
-// CHECK: func.func private @a_impl() attributes {llvm.emit_c_interface}
-// CHECK-NEXT:  func.func @__iara_run__() {
+// CHECK: func.func private @a() attributes {llvm.emit_c_interface}
+// CHECK-NEXT:  func.func @main() {
 // CHECK-NEXT:    %c0 = arith.constant 0 : index
 // CHECK-NEXT:    %c1_i64 = arith.constant 1 : i64
 // CHECK-NEXT:    %c2_i64 = arith.constant 2 : i64
@@ -18,15 +18,12 @@ iara.actor @main  {
 // CHECK-NEXT:    omp.parallel   {
 // CHECK-NEXT:      omp.single   {
 // CHECK-NEXT:        omp.task   depend(taskdependout -> %0 : !llvm.ptr) {
-// CHECK-NEXT:          func.call @a_impl() : () -> ()
+// CHECK-NEXT:          func.call @a() : () -> ()
 // CHECK-NEXT:          omp.terminator
 // CHECK-NEXT:        }
 // CHECK-NEXT:        omp.terminator
 // CHECK-NEXT:      }
 // CHECK-NEXT:      omp.terminator
 // CHECK-NEXT:    }
-// CHECK-NEXT:    return
-// CHECK-NEXT:  }
-// CHECK-NEXT:  func.func @__iara_init__() {
 // CHECK-NEXT:    return
 // CHECK-NEXT:  }

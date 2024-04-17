@@ -5,9 +5,6 @@
 
 iara.actor @a {
   iara.out : tensor<1xi32>
-  iara.out : tensor<1xi32>
-  iara.out : tensor<1xi32>
-  iara.out : tensor<1xi32>
   iara.dep
 } { kernel }
 iara.actor @b {
@@ -16,6 +13,7 @@ iara.actor @b {
 } { kernel }
 iara.actor @c {
   %1 = iara.in inout : tensor<1xi32>
+  iara.out : tensor<1xi32>
   iara.dep
 } { kernel }
 iara.actor @main  {

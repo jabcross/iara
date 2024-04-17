@@ -8,6 +8,8 @@
 #include "Iara/IaraPasses.h"
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
+#include "Iara/Schedule/OpenMPScheduler.h"
+#include "Iara/Schedule/TaskScheduler.h"
 #include "llvm/Support/Casting.h"
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -36,47 +38,31 @@ public:
   using impl::IaraScheduleBase<IaraSchedule>::IaraScheduleBase;
   void runOnOperation() final {
     auto module = getOperation();
-    auto graph =
-        llvm::dyn_cast_if_present<ActorOp>(module.lookupSymbol("main"));
+    for (auto actor : module.getOps<ActorOp>()) {
+      if (!actor.getOps<NodeOp>().empty()) {
+        if (!actor->hasAttr("flat")) {
+          actor->emitRemark(
+              "Actor has not been flattened. Run --iara-flatten first.");
+          signalPassFailure();
+          continue;
+        }
 
-    if (!graph) {
-      module.emitError("main graph not found");
-      signalPassFailure();
-      return;
+        TaskScheduler task_scheduler{};
+
+        if (task_scheduler.convertToTasks(actor).failed()) {
+          module.emitError("Failed to convert actor into task form");
+          signalPassFailure();
+          return;
+        }
+      }
+
+      OpenMPScheduler omp_scheduler{};
+
+      omp_scheduler.convertIntoOpenMP(actor);
     }
 
-    if (!graph->hasAttr("flat")) {
-      module.emitError(
-          "Graph has not been flattened. Run --iara-flatten first.");
-      signalPassFailure();
-      return;
-    }
-
-    // Delete all graphs other than Main.
-
-    llvm::SmallVector<Operation *> to_delete;
-    for (Operation &op : *module.getBody()) {
-      if (llvm::isa<ActorOp>(op) && &op != graph && !op.hasAttr("kernel"))
-        to_delete.push_back(&op);
-    }
-
-    for (auto op : to_delete) {
-      op->erase();
-    }
-
-    auto task_scheduler = TaskScheduler(graph);
-
-    task_scheduler.convertToTasks();
-
-    mlir::bufferization::runOneShotBufferize(module.lookupSymbol("main"), {});
-
-    if (task_scheduler.convertToTasks().failed()) {
-      module.emitError("Failed to convert main actor into task form");
-      signalPassFailure();
-      return;
-    }
-    if (task_scheduler.convertIntoSequential().failed()) {
-      module.emitError("Failed to emit OpenMP scheduler");
+    if (TaskScheduler{}.removeLoweredActors(module).failed()) {
+      module.emitError("Failed to remove all actors");
       signalPassFailure();
       return;
     }

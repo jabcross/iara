@@ -39,6 +39,7 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
     let arguments = (ins SymbolNameAttr:$sym_name, OptionalAttr<TypeArrayAttr>: $params);
     let regions = (region AnyRegion:$body);
     let assemblyFormat = [{ $sym_name ( `<` $params^ `>` )? $body attr-dict }];
+    let hasRegionVerifier = 1;
 
     let extraClassDeclaration = [{
         bool isFlat();
