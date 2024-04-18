@@ -10,8 +10,14 @@
 #include <string.h>
 #include <unistd.h>
 
-#define DIM (2)
-#define NB (2)
+// Define size from compilation (-DDIM=2 -DNB=2)
+#ifndef DIM
+#define DIM (4)
+#endif
+
+#ifndef NB
+#define NB (4)
+#endif
 
 #define BS (DIM / NB)
 #define BS_BYTES (BS * BS * sizeof(double))
@@ -26,7 +32,7 @@ void omp_potrf(double *const A, int ts, int ld) {
   dpotrf_(&L, &ts, A, &ld, &INFO, 1);
 }
 
-void kernel_potrf_impl(double *in_A, double *out_A) { //
+void kernel_potrf(double *in_A, double *out_A) { //
   omp_potrf(in_A, BS, BS);
   // memcpy(out_A, in_A, BS_BYTES);
 }
@@ -37,7 +43,7 @@ void omp_trsm(double *A, double *B, int ts, int ld) {
   dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld);
 }
 
-void kernel_trsm_impl(double *in_A, double *in_B, double *out_B) {
+void kernel_trsm(double *in_A, double *in_B, double *out_B) {
   omp_trsm(in_A, in_B, BS, BS);
   // memcpy(out_B, in_B, BS_BYTES);
 }
@@ -48,7 +54,7 @@ void omp_syrk(double *A, double *B, int ts, int ld) {
   dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld);
 }
 
-void kernel_syrk_impl(double *in_A, double *in_B, double *out_B) {
+void kernel_syrk(double *in_A, double *in_B, double *out_B) {
   omp_syrk(in_A, in_B, BS, BS);
   // memcpy(out_B, in_B, BS_BYTES);
 }
@@ -59,7 +65,7 @@ void omp_gemm(double *A, double *B, double *C, int ts, int ld) {
   dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
 }
 
-void kernel_gemm_impl(double *in_A, double *in_B, double *in_C, double *out_C) {
+void kernel_gemm(double *in_A, double *in_B, double *in_C, double *out_C) {
   omp_gemm(in_A, in_B, out_C, BS, BS);
   // memcpy(in_C, out_C, BS_BYTES);
 }
@@ -71,7 +77,7 @@ double *Ah[NB][NB];
 
 #define ITEM(i, j) , double *out_##i##_##j
 
-void kernel_split_impl(double *out_0_0 BLOCKS) {
+void kernel_split(double *out_0_0 BLOCKS) {
 
 #define ITEM(i, j) assert(malloc_usable_size(out_##i##_##j) >= BS_BYTES);
 
@@ -85,13 +91,13 @@ void kernel_split_impl(double *out_0_0 BLOCKS) {
 
 #define ITEM(i, j) , double *in_##i##_##j
 
-void kernel_join_impl(double *in_0_0 BLOCKS) {
+void kernel_join(double *in_0_0 BLOCKS) {
 #define ITEM(i, j) memcpy(Ah[i][j], in_##i##_##j, BS_BYTES);
   memcpy(Ah[0][0], in_0_0, BS_BYTES);
   BLOCKS
 }
 
-void __iara_run__();
+void run();
 
 int main(int argc, char *argv[]) {
 
@@ -135,7 +141,7 @@ int main(int argc, char *argv[]) {
 
   convert_to_blocks(ts, NB, n, (double(*)[n])matrix, Ah);
 
-  __iara_run__();
+  run();
 
   convert_to_linear(ts, NB, n, Ah, (double(*)[n])matrix);
 

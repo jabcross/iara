@@ -98,7 +98,7 @@ iara.actor @kernel_join {
 } { kernel }
 """)
 
-    print("iara.actor @main {")
+    print("iara.actor @run {")
 
     print("  ", end="")
     # print(labels)
