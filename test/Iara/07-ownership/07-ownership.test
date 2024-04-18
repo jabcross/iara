@@ -25,4 +25,4 @@ iara.actor @main  {
   iara.dep
 } { flat }
 
-// CHECK: __iara_copy__
+// CHECK: memref.copy

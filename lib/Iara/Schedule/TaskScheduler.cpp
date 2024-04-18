@@ -345,11 +345,10 @@ struct TaskSchedule {
     for (auto [in, out] : user.getInoutPairs()) {
       if (in == use.get()) {
         alloc_ops[out] = alloc_ops[in];
-        for (auto &use : out.getUses()) {
-          if (use.get() != in) {
-            use.set(in);
-            propagateInout(use);
-          }
+        for (auto &next_use :
+             out.getUses() | Pointers() | Into<SmallVector<OpOperand *>>()) {
+          next_use->set(in);
+          propagateInout(*next_use);
         }
       }
     }

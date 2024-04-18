@@ -1,0 +1,6 @@
+// RUN: python "`dirname %s`/generate_topology.py" 3 3 \
+// RUN: | iara-opt --iara-schedule  \
+// RUN: | mlir-to-llvmir.sh \
+// RUN: | clang++ -DDIM=3 -DNB=3 -lomp -lblas -xir - -xc "`dirname %s`/main.c" && ./a.out \
+// RUN: | FileCheck %s
+// CHECK: Factorization correct
