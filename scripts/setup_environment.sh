@@ -3,7 +3,15 @@
 echo Setting up new environment.
 echo checking for dependencies...
 
-for command in cmake ninja g++ mold gdb lldb ccache; do
+cat <<EOF
+This script will clone Polygeist in a sibling directory to IaRa, and LLVM as a submodule.
+Compiling LLVM may take a long time. This script is not appropriate if you're not setting up from a clean slate.
+Press any key to continue.
+EOF
+read
+
+echo Checking for build dependencies:
+for command in cmake ninja g++ mold gdb lldb ccache /usr/bin/time ; do
   if ! which $command; then
     echo "$command not found"
     exit 1
@@ -27,18 +35,16 @@ POLYGEIST_COMMIT=4b04755a63fce54e3965c248e6da5c8ae20b26f4
 
 cd $PROJECTS_DIR
 pwd
-git clone https://github.com/wsmoses/Polygeist.git --depth 1
+git clone https://github.com/wsmoses/Polygeist.git
 cd Polygeist
 pwd
 git pull origin main
 git fetch origin $POLYGEIST_COMMIT
 git checkout $POLYGEIST_COMMIT
+/usr/bin/time sh -c 'git submodule update --init'
 
-if ! test -d llvm-project ; then
-( GIT_TRACE=1 GIT_CURL_VERBOSE=1 git submodule update --init ) ;
-fi
-
-/usr/bin/time -o llvm-cmake-and-build-time.txt sh -c ' cd llvm-project ;\
+/usr/bin/time -o llvm-cmake-and-build-time.txt sh -c '
+cd llvm-project ;\
 echo Building LLVM. ;\
 mkdir build ;\
 cd build ;\

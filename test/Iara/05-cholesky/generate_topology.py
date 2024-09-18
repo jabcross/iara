@@ -29,10 +29,8 @@ def generate(dim: int, nb: int):
     ts = dim // nb
     for k in range(nb):
         tasks.append({"kernel": "kernel_potrf", "A": (k, k)})
-    for k in range(nb):
         for i in range(k + 1, nb):
             tasks.append({"kernel": "kernel_trsm", "A": (k, k), "B": (k, i)})
-    for k in range(nb):
         for l in range(k+1, nb):
             for j in range(k+1, l):
                 task = {"kernel": "kernel_gemm", "A": (

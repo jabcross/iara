@@ -141,7 +141,8 @@ int main(int argc, char *argv[]) {
 
   convert_to_blocks(ts, NB, n, (double(*)[n])matrix, Ah);
 
-  run();
+  for (int i = 0; i < 1000; i++)
+    run();
 
   convert_to_linear(ts, NB, n, Ah, (double(*)[n])matrix);
 

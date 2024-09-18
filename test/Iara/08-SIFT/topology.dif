@@ -1,0 +1,1009 @@
+dif blur2x {
+  parameter {
+    imgDouble : int = 1;
+    image_width : int = 800;
+    image_height : int = 640;
+    gWmax : int = 21;
+    parallelismLevel : int = 4;
+    nGpyrLayers : int = 6;
+    tot_image_size : int = 512000;
+  }
+  interface {
+    consumption gauss_coefs1;
+    consumption imgOri;
+    consumption col_sizes1;
+    consumption iterPrev;
+    consumption iter_nb1;
+    consumption col_sizes2;
+    consumption gauss_coefs2;
+    consumption iter_nb2;
+    production imgBlurred;
+  }
+  actortype row_filter_transpose2x_1 {
+    param image_height;
+    param image_width;
+    param imgDouble;
+    param nGpyrLayers;
+    param parallelismLevel;
+    param gWmax;
+    param tot_image_size;
+    consumption gaussian_coefs: float = 126;
+    consumption img: float = 512000;
+    consumption column_sizes: int = 6;
+    consumption imgIterPrev: float = 512000;
+    consumption iter: int = 1;
+    production imgGT: float = 512000;
+  }
+  actor n1_row_filter_transpose2x_1 {
+    type: row_filter_transpose2x_1;
+    interface gauss_coefs1 -> gaussian_coefs;
+    interface imgOri -> img;
+    interface col_sizes1 -> column_sizes;
+    interface iterPrev -> imgIterPrev;
+    interface iter_nb1 -> iter;
+    interface imgGT -> e1;
+  }
+  actortype row_filter_transpose2x_2 {
+    param image_height;
+    param image_width;
+    param imgDouble;
+    param nGpyrLayers;
+    param parallelismLevel;
+    param gWmax;
+    param tot_image_size;
+    consumption column_sizes: int = 6;
+    consumption img: float = 512000;
+    consumption gaussian_coefs: float = 126;
+    consumption iter: int = 1;
+    production imgGT: float = 512000;
+  }
+  actor n2_row_filter_transpose2x_2 {
+    type: row_filter_transpose2x_2;
+    interface col_sizes2 -> column_sizes;
+    interface e2 -> img;
+    interface gauss_coefs2 -> gaussian_coefs;
+    interface iter_nb2 -> iter;
+    interface imgGT -> e3;
+  }
+  actortype BarrierTranspose2x_1 {
+    param image_width;
+    param image_height;
+    param imgDouble;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img_in: float = 2048000;
+    production img_out: float = 2048000;
+  }
+  actor n3_BarrierTranspose2x_1 {
+    type: BarrierTranspose2x_1;
+    interface e1 -> img_in;
+    interface img_out -> e2;
+  }
+  actortype BarrierTranspose2x_2 {
+    param image_width;
+    param image_height;
+    param imgDouble;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img_in: float = 2048000;
+    production img_out: float = 2048000;
+  }
+  actor n4_BarrierTranspose2x_2 {
+    type: BarrierTranspose2x_2;
+    interface e3 -> img_in;
+    interface img_out -> imgBlurred;
+  }
+}
+
+
+dif blur {
+  parameter {
+    image_width : int = 800;
+    image_height : int = 640;
+    gWmax : int = 21;
+    parallelismLevel : int = 4;
+    nGpyrLayers : int = 6;
+    tot_image_size : int = 512000;
+  }
+  interface {
+    consumption gauss_coefs1;
+    consumption imgOri;
+    consumption col_sizes1;
+    consumption iterPrev;
+    consumption iter_nb1;
+    consumption iter_nb2;
+    consumption gauss_coefs2;
+    consumption col_sizes2;
+    production imgBlurred;
+  }
+  actortype row_filter_transpose_1 {
+    param image_height;
+    param image_width;
+    param nGpyrLayers;
+    param parallelismLevel;
+    param gWmax;
+    param tot_image_size;
+    consumption gaussian_coefs: float = 126;
+    consumption img: float = 128000;
+    consumption column_sizes: int = 6;
+    consumption imgIterPrev: float = 128000;
+    consumption iter: int = 1;
+    production imgGT: float = 128000;
+  }
+  actor n1_row_filter_transpose_1 {
+    type: row_filter_transpose_1;
+    interface gauss_coefs1 -> gaussian_coefs;
+    interface imgOri -> img;
+    interface col_sizes1 -> column_sizes;
+    interface iterPrev -> imgIterPrev;
+    interface iter_nb1 -> iter;
+    interface imgGT -> e1;
+  }
+  actortype row_filter_transpose_2 {
+    param image_height;
+    param image_width;
+    param nGpyrLayers;
+    param parallelismLevel;
+    param gWmax;
+    param tot_image_size;
+    consumption gaussian_coefs: float = 126;
+    consumption img: float = 128000;
+    consumption column_sizes: int = 6;
+    consumption iter: int = 1;
+    production imgGT: float = 128000;
+  }
+  actor n2_row_filter_transpose_2 {
+    type: row_filter_transpose_2;
+    interface gauss_coefs2 -> gaussian_coefs;
+    interface e2 -> img;
+    interface col_sizes2 -> column_sizes;
+    interface iter_nb2 -> iter;
+    interface imgGT -> e3;
+  }
+  actortype BarrierTranspose_1 {
+    param image_width;
+    param image_height;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img_in: float = 512000;
+    production img_out: float = 512000;
+  }
+  actor n3_BarrierTranspose_1 {
+    type: BarrierTranspose_1;
+    interface e1 -> img_in;
+    interface img_out -> e2;
+  }
+  actortype BarrierTranspose_2 {
+    param image_width;
+    param image_height;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img_in: float = 512000;
+    production img_out: float = 512000;
+  }
+  actor n4_BarrierTranspose_2 {
+    type: BarrierTranspose_2;
+    interface e3 -> img_in;
+    interface img_out -> imgBlurred;
+  }
+}
+
+
+dif Htop_sift {
+  datatype {
+    SiftKpt = 556; // size in bytes;
+  }
+  parameter {
+    image_width : int = 800;
+    image_height : int = 640;
+    nBins : int = 128;
+    nHistBins : int = 360;
+    nOctaves : int = 7; // min(maxOctaveWH+1, floor(ln(min(image_height, image_width))/ln(2) - 3))+imgDouble
+    imgDouble : int = 1; // 1
+    nLayers : int = 3; // 3
+    nGpyrLayers : int = 6; // nLayers+3
+    nDogLayers : int = 5; // nGpyrLayers-1
+    gRmax : int = 10; // if(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))>1.0, ceil(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))), 1.0)
+    gWmax : int = 21; // 2*gRmax+1
+    nKeypointsMax : int = 1400;
+    parallelismLevel : int = 4;
+    totSizeWithoutLayers : int = 5120000; // if(imgDouble, geo_sum(4*tot_image_size,1/4,nOctaves), geo_sum(tot_image_size,1/4,nOctaves))
+    nOctavesDownN : int = 4; // if(imgDouble, nOctaves-3, nOctaves-2)
+    nLocalKptMax : int = 350;
+    descrWidth : int = 4;
+    descrHistBins : int = 8;
+    tot_image_size : int = 512000;
+    image_maxWH : int = 800; // max(image_width,image_height)
+    maxOctaveH : int = 7; // pow_div_max(2, image_height)
+    maxOctaveW : int = 5; // pow_div_max(2, image_width)
+    maxOctaveWH : int = 5; // min(maxOctaveW, maxOctaveH)
+  }
+  interface {
+    consumption image;
+    production keypoints;
+    production nbKeypoints;
+  }
+  delay {
+    e1 : 32000;
+    e2 : 128000;
+    e3 : 32000;
+    e4 : 512000;
+    e5 : 2048000;
+  }
+  actortype compute_gaussian_coefs {
+    param gWmax;
+    param nGpyrLayers;
+    param nLayers;
+    param imgDouble;
+    production columns_sizes: int = 6;
+    production gaussian_coefs: float = 126;
+  }
+  actor n1_compute_gaussian_coefs {
+    type: compute_gaussian_coefs;
+    interface columns_sizes -> e35;
+    interface gaussian_coefs -> e36;
+  }
+  actortype extract_descriptor {
+    param parallelismLevel;
+    param totSizeWithoutLayers;
+    param nLayers;
+    param nLocalKptMax;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    param nBins;
+    param nHistBins;
+    param descrWidth;
+    param descrHistBins;
+    consumption keypoints_in: SiftKpt = 351;
+    consumption grdPyr: float = 8191500;
+    consumption rotPyr: float = 8191500;
+    production keypoints_out: SiftKpt = 351;
+  }
+  actor n2_extract_descriptor {
+    type: extract_descriptor;
+    interface e6 -> keypoints_in;
+    interface e14 -> grdPyr;
+    interface e16 -> rotPyr;
+    interface keypoints_out -> e58;
+  }
+  actortype detect_keypoints {
+    param totSizeWithoutLayers;
+    param parallelismLevel;
+    param nDogLayers;
+    param nLayers;
+    param nLocalKptMax;
+    param nOctaves;
+    param imgDouble;
+    param image_width;
+    param image_height;
+    consumption grdPyr: float = 8191500;
+    consumption rotPyr: float = 8191500;
+    consumption dogPyr: float = 13652500;
+    consumption start_octave: int = 1;
+    consumption stop_octave: int = 1;
+    consumption start_layer: int = 1;
+    consumption stop_layer: int = 1;
+    consumption start_line: int = 1;
+    consumption stop_line: int = 1;
+    consumption start_col: int = 1;
+    consumption stop_col: int = 1;
+    production keypoints: SiftKpt = 351;
+  }
+  actor n3_detect_keypoints {
+    type: detect_keypoints;
+    interface e13 -> grdPyr;
+    interface e15 -> rotPyr;
+    interface e65 -> dogPyr;
+    interface e7 -> start_octave;
+    interface e8 -> stop_octave;
+    interface e9 -> start_layer;
+    interface e10 -> stop_layer;
+    interface e11 -> start_line;
+    interface e12 -> stop_line;
+    interface e72 -> start_col;
+    interface e73 -> stop_col;
+    interface keypoints -> e6;
+  }
+  actortype ITERATOR_detect_keypoints {
+    param parallelismLevel;
+    param nOctaves;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    param nLayers;
+    production start_octave: int = 4;
+    production stop_octave: int = 4;
+    production start_layer: int = 4;
+    production stop_layer: int = 4;
+    production start_line: int = 4;
+    production stop_line: int = 4;
+    production start_col: int = 4;
+    production stop_col: int = 4;
+  }
+  actor n4_ITERATOR_detect_keypoints {
+    type: ITERATOR_detect_keypoints;
+    interface start_octave -> e7;
+    interface stop_octave -> e8;
+    interface start_layer -> e9;
+    interface stop_layer -> e10;
+    interface start_line -> e11;
+    interface stop_line -> e12;
+    interface start_col -> e72;
+    interface stop_col -> e73;
+  }
+  actortype BdRot_BROADCAST {
+    consumption rotPyr: float = 8191500;
+    production forDetection: float = 32766000;
+    production forExtraction: float = 32766000;
+  }
+  actor n5_BdRot {
+    type: BdRot_BROADCAST;
+    interface e30 -> rotPyr;
+    interface forDetection -> e15;
+    interface forExtraction -> e16;
+  }
+  actortype BdGrd_BROADCAST {
+    consumption grdPyr: float = 8191500;
+    production forDetection: float = 32766000;
+    production forExtraction: float = 32766000;
+  }
+  actor n6_BdGrd {
+    type: BdGrd_BROADCAST;
+    interface e29 -> grdPyr;
+    interface forDetection -> e13;
+    interface forExtraction -> e14;
+  }
+  actortype build_dog_pyr {
+    param nDogLayers;
+    param totSizeWithoutLayers;
+    param parallelismLevel;
+    param nGpyrLayers;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    consumption gpyr: float = 16383000;
+    consumption start_octave: int = 1;
+    consumption stop_octave: int = 1;
+    consumption start_layer: int = 1;
+    consumption stop_layer: int = 1;
+    consumption start_line: int = 1;
+    consumption stop_line: int = 1;
+    consumption start_col: int = 1;
+    consumption stop_col: int = 1;
+    production dogPyr: float = 3413125;
+  }
+  actor n7_build_dog_pyr {
+    type: build_dog_pyr;
+    interface e32 -> gpyr;
+    interface e17 -> start_octave;
+    interface e18 -> stop_octave;
+    interface e19 -> start_layer;
+    interface e20 -> stop_layer;
+    interface e21 -> start_line;
+    interface e22 -> stop_line;
+    interface e68 -> start_col;
+    interface e69 -> stop_col;
+    interface dogPyr -> e64;
+  }
+  actortype ITERATOR_build_dog_pyr {
+    param parallelismLevel;
+    param nOctaves;
+    param nDogLayers;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    production start_octave: int = 4;
+    production stop_octave: int = 4;
+    production start_layer: int = 4;
+    production stop_layer: int = 4;
+    production start_line: int = 4;
+    production stop_line: int = 4;
+    production start_col: int = 4;
+    production stop_col: int = 4;
+  }
+  actor n8_ITERATOR_build_dog_pyr {
+    type: ITERATOR_build_dog_pyr;
+    interface start_octave -> e17;
+    interface stop_octave -> e18;
+    interface start_layer -> e19;
+    interface stop_layer -> e20;
+    interface start_line -> e21;
+    interface stop_line -> e22;
+    interface start_col -> e68;
+    interface stop_col -> e69;
+  }
+  actortype build_grd_rot_pyr {
+    param totSizeWithoutLayers;
+    param parallelismLevel;
+    param nLayers;
+    param nGpyrLayers;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    consumption gpyr: float = 16383000;
+    consumption start_octave: int = 1;
+    consumption stop_octave: int = 1;
+    consumption start_layer: int = 1;
+    consumption stop_layer: int = 1;
+    consumption start_line: int = 1;
+    consumption stop_line: int = 1;
+    consumption start_col: int = 1;
+    consumption stop_col: int = 1;
+    production grdPyr: float = 2047875;
+    production rotPyr: float = 2047875;
+  }
+  actor n9_build_grd_rot_pyr {
+    type: build_grd_rot_pyr;
+    interface e31 -> gpyr;
+    interface e23 -> start_octave;
+    interface e24 -> stop_octave;
+    interface e25 -> start_layer;
+    interface e26 -> stop_layer;
+    interface e27 -> start_line;
+    interface e28 -> stop_line;
+    interface e70 -> start_col;
+    interface e71 -> stop_col;
+    interface grdPyr -> e29;
+    interface rotPyr -> e30;
+  }
+  actortype ITERATOR_build_grd_rot_pyr {
+    param parallelismLevel;
+    param nOctaves;
+    param nLayers;
+    param image_width;
+    param image_height;
+    param imgDouble;
+    production start_octave: int = 4;
+    production stop_octave: int = 4;
+    production start_layer: int = 4;
+    production stop_layer: int = 4;
+    production start_line: int = 4;
+    production stop_line: int = 4;
+    production start_col: int = 4;
+    production stop_col: int = 4;
+  }
+  actor n10_ITERATOR_build_grd_rot_pyr {
+    type: ITERATOR_build_grd_rot_pyr;
+    interface start_octave -> e23;
+    interface stop_octave -> e24;
+    interface start_layer -> e25;
+    interface stop_layer -> e26;
+    interface start_line -> e27;
+    interface stop_line -> e28;
+    interface start_col -> e70;
+    interface stop_col -> e71;
+  }
+  actortype to_float {
+    param parallelismLevel;
+    param image_width;
+    param image_height;
+    param tot_image_size;
+    consumption uchar_img: char = 128000;
+    production float_img: float = 128000;
+  }
+  actor n11_to_float {
+    type: to_float;
+    interface image -> uchar_img;
+    interface float_img -> e34;
+  }
+  actortype BdGpyr_BROADCAST {
+    consumption gpyr: float = 16383000;
+    production forDogPyr: float = 65532000;
+    production forGrdRotPyr: float = 65532000;
+  }
+  actor n12_BdGpyr {
+    type: BdGpyr_BROADCAST;
+    interface e33 -> gpyr;
+    interface forDogPyr -> e32;
+    interface forGrdRotPyr -> e31;
+  }
+  actortype MERGE_gpyr {
+    param nGpyrLayers;
+    param imgDouble;
+    param nOctavesDownN;
+    param totSizeWithoutLayers;
+    param tot_image_size;
+    param parallelismLevel;
+    param image_width;
+    param image_height;
+    consumption gpyrs: float = 3072000;
+    consumption gpyrsUp2x: float = 12288000;
+    consumption gpyrsDown2x1: float = 768000;
+    consumption gpyrsDown2xN: float = 768000;
+    production gpyr: float = 16383000;
+  }
+  actor n13_MERGE_gpyr {
+    type: MERGE_gpyr;
+    interface e49 -> gpyrs;
+    interface e48 -> gpyrsUp2x;
+    interface e52 -> gpyrsDown2x1;
+    interface e54 -> gpyrsDown2xN;
+    interface gpyr -> e33;
+  }
+  actortype BdFloatImg_BROADCAST {
+    consumption float_img: float = 512000;
+    production forUpsample: float = 512000;
+    production forDirectGaussian: float = 3072000;
+    production forDownSample: float = 512000;
+  }
+  actor n14_BdFloatImg {
+    type: BdFloatImg_BROADCAST;
+    interface e34 -> float_img;
+    interface forUpsample -> e74;
+    interface forDirectGaussian -> e92;
+    interface forDownSample -> e39;
+  }
+  actortype upsample2x {
+    param image_height;
+    param imgDouble;
+    param image_width;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img: float = 128800;
+    consumption iter: int = 1;
+    production img2x: float = 512000;
+  }
+  actor n15_upsample2x {
+    type: upsample2x;
+    interface e75 -> img;
+    interface e76 -> iter;
+    interface img2x -> e37;
+  }
+  actortype downsample2xN {
+    param image_height;
+    param image_width;
+    param tot_image_size;
+    consumption fst_img: float = 128000;
+    consumption imgDownPrev: float = 32000;
+    consumption iter: int = 1;
+    production imgDown2x: float = 32000;
+  }
+  actor n16_downsample2xN {
+    type: downsample2xN;
+    interface e38 -> fst_img;
+    interface e1 -> imgDownPrev;
+    interface e56 -> iter;
+    interface imgDown2x -> e50;
+  }
+  actortype BdCoefs_BROADCAST {
+    consumption coefs: float = 126;
+    production rt2x1: float = 3024;
+    production rt2x2: float = 3024;
+    production rt1: float = 3024;
+    production rt2: float = 3024;
+    production seq1: float = 756;
+    production seqN: float = 3024;
+  }
+  actor n17_BdCoefs {
+    type: BdCoefs_BROADCAST;
+    interface e36 -> coefs;
+    interface rt2x1 -> e83;
+    interface rt2x2 -> e84;
+    interface rt1 -> e85;
+    interface rt2 -> e86;
+    interface seq1 -> e44;
+    interface seqN -> e63;
+  }
+  actortype BdSizes_BROADCAST {
+    consumption sizes: int = 6;
+    production rt2x1: int = 144;
+    production rt2x2: int = 144;
+    production rt1: int = 144;
+    production rt2: int = 144;
+    production seq1: int = 36;
+    production seqN: int = 144;
+  }
+  actor n18_BdSizes {
+    type: BdSizes_BROADCAST;
+    interface e35 -> sizes;
+    interface rt2x1 -> e81;
+    interface rt2x2 -> e82;
+    interface rt1 -> e79;
+    interface rt2 -> e80;
+    interface seq1 -> e43;
+    interface seqN -> e62;
+  }
+  actortype BdBlurUp2x_BROADCAST {
+    consumption img: float = 2048000;
+    production forBlurUp2x: float = 12288000;
+  }
+  actor n19_BdBlurUp2x {
+    type: BdBlurUp2x_BROADCAST;
+    interface e37 -> img;
+    interface forBlurUp2x -> e91;
+  }
+  actortype BdBlurDown2x1_BROADCAST {
+    consumption img: float = 128000;
+    production forRec: float = 512000;
+    production forBlur1: float = 768000;
+  }
+  actor n20_BdBlurDown2x1 {
+    type: BdBlurDown2x1_BROADCAST;
+    interface e40 -> img;
+    interface forRec -> e38;
+    interface forBlur1 -> e41;
+  }
+  actortype seq_blur1 {
+    param image_width;
+    param image_height;
+    param nGpyrLayers;
+    param gWmax;
+    param tot_image_size;
+    param image_maxWH;
+    consumption fst_img: float = 128000;
+    consumption imgBlurPrev: float = 128000;
+    consumption gaussian_coefs: float = 126;
+    consumption column_sizes: int = 6;
+    consumption iter: int = 1;
+    production imgBlurred: float = 128000;
+  }
+  actor n21_seq_blur1 {
+    type: seq_blur1;
+    interface e41 -> fst_img;
+    interface e2 -> imgBlurPrev;
+    interface e44 -> gaussian_coefs;
+    interface e43 -> column_sizes;
+    interface e46 -> iter;
+    interface imgBlurred -> e51;
+  }
+  actortype downsample2x1 {
+    param image_height;
+    param image_width;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption img2x: float = 128000;
+    production img: float = 32000;
+  }
+  actor n22_downsample2x1 {
+    type: downsample2x1;
+    interface e39 -> img2x;
+    interface img -> e40;
+  }
+  actortype seq_blurN {
+    param image_width;
+    param image_height;
+    param nGpyrLayers;
+    param gWmax;
+    param tot_image_size;
+    param image_maxWH;
+    consumption fst_img: float = 32000;
+    consumption imgBlurPrev: float = 32000;
+    consumption gaussian_coefs: float = 126;
+    consumption column_sizes: int = 6;
+    consumption iter: int = 1;
+    consumption octaveLevel: int = 1;
+    production imgBlurred: float = 32000;
+  }
+  actor n23_seq_blurN {
+    type: seq_blurN;
+    interface e42 -> fst_img;
+    interface e3 -> imgBlurPrev;
+    interface e63 -> gaussian_coefs;
+    interface e62 -> column_sizes;
+    interface e61 -> iter;
+    interface e57 -> octaveLevel;
+    interface imgBlurred -> e53;
+  }
+  actortype BdBlurDown2xN_BROADCAST {
+    consumption img: float = 32000;
+    production forBlurN: float = 192000;
+    production forRec: float = 32000;
+  }
+  actor n24_BdBlurDown2xN {
+    type: BdBlurDown2xN_BROADCAST;
+    interface e50 -> img;
+    interface forBlurN -> e42;
+    interface forRec -> e1;
+  }
+  actortype counterGpyrLayer {
+    param nGpyrLayers;
+    production iter: int = 6;
+  }
+  actor n25_counterGpyrLayer {
+    type: counterGpyrLayer;
+    interface iter -> e45;
+  }
+  actortype BdCounterGpyr_BROADCAST {
+    consumption iter: int = 1;
+    production for2x: int = 4;
+    production forDirectGaussian: int = 4;
+    production forBlur1: int = 1;
+    production for2x_2: int = 4;
+    production forDirectGaussian_2: int = 4;
+    production forBdOctave: int = 1;
+  }
+  actor n26_BdCounterGpyr {
+    type: BdCounterGpyr_BROADCAST;
+    interface e45 -> iter;
+    interface for2x -> e87;
+    interface forDirectGaussian -> e89;
+    interface forBlur1 -> e46;
+    interface for2x_2 -> e88;
+    interface forDirectGaussian_2 -> e90;
+    interface forBdOctave -> e66;
+  }
+  actortype counterOctaveDownN {
+    param nOctavesDownN;
+    production iter: int = 4;
+  }
+  actor n27_counterOctaveDownN {
+    type: counterOctaveDownN;
+    interface iter -> e55;
+  }
+  actortype BdGT_BROADCAST {
+    consumption imgBlurred: float = 512000;
+    production forRec: float = 512000;
+    production forMerge: float = 512000;
+  }
+  actor n28_BdGT {
+    type: BdGT_BROADCAST;
+    interface e77 -> imgBlurred;
+    interface forRec -> e4;
+    interface forMerge -> e49;
+  }
+  actortype BdGT_2x_BROADCAST {
+    consumption imgBlurred: float = 2048000;
+    production forRec: float = 2048000;
+    production forMerge: float = 2048000;
+  }
+  actor n29_BdGT_2x {
+    type: BdGT_2x_BROADCAST;
+    interface e78 -> imgBlurred;
+    interface forRec -> e5;
+    interface forMerge -> e48;
+  }
+  actortype BdBlurred1_BROADCAST {
+    consumption imgBlurred: float = 128000;
+    production forRec: float = 128000;
+    production forMerge: float = 128000;
+  }
+  actor n30_BdBlurred1 {
+    type: BdBlurred1_BROADCAST;
+    interface e51 -> imgBlurred;
+    interface forRec -> e2;
+    interface forMerge -> e52;
+  }
+  actortype BdBlurredN_BROADCAST {
+    consumption imgBlurred: float = 32000;
+    production forRec: float = 32000;
+    production forMerge: float = 32000;
+  }
+  actor n31_BdBlurredN {
+    type: BdBlurredN_BROADCAST;
+    interface e53 -> imgBlurred;
+    interface forRec -> e3;
+    interface forMerge -> e54;
+  }
+  actortype BdOctaveDown_BROADCAST {
+    consumption iter: int = 1;
+    production forDown: int = 1;
+    production forBlur: int = 6;
+  }
+  actor n32_BdOctaveDown {
+    type: BdOctaveDown_BROADCAST;
+    interface e55 -> iter;
+    interface forDown -> e56;
+    interface forBlur -> e57;
+  }
+  actortype MERGE_keypoints {
+    param nKeypointsMax;
+    param parallelismLevel;
+    param nLocalKptMax;
+    consumption keypoints_in: SiftKpt = 1404;
+    production keypoints_out: SiftKpt = 1400;
+    production nbKeypoints_out: int = 1;
+  }
+  actor n33_MERGE_keypoints {
+    type: MERGE_keypoints;
+    interface e58 -> keypoints_in;
+    interface keypoints_out -> keypoints;
+    interface nbKeypoints_out -> nbKeypoints;
+  }
+  actortype BdCounterGpyrXOctave_BROADCAST {
+    consumption iter: int = 6;
+    production forBlurN: int = 24;
+  }
+  actor n34_BdCounterGpyrXOctave {
+    type: BdCounterGpyrXOctave_BROADCAST;
+    interface e67 -> iter;
+    interface forBlurN -> e61;
+  }
+  actortype BdDoG_BROADCAST {
+    consumption dogPyr: float = 13652500;
+    production forDetection: float = 54610000;
+  }
+  actor n35_BdDoG {
+    type: BdDoG_BROADCAST;
+    interface e64 -> dogPyr;
+    interface forDetection -> e65;
+  }
+  actortype BarrierCounterGpyr {
+    param nGpyrLayers;
+    consumption iters_in: int = 6;
+    production iters_out: int = 6;
+  }
+  actor n36_BarrierCounterGpyr {
+    type: BarrierCounterGpyr;
+    interface e66 -> iters_in;
+    interface iters_out -> e67;
+  }
+  actortype SPLIT_upsample2x {
+    param image_width;
+    param imgDouble;
+    param image_height;
+    param parallelismLevel;
+    param tot_image_size;
+    consumption in: float = 512000;
+    production out: float = 515200;
+  }
+  actor n37_SPLIT_upsample2x {
+    type: SPLIT_upsample2x;
+    interface e74 -> in;
+    interface out -> e75;
+  }
+  actortype counterPLevels {
+    param parallelismLevel;
+    production iter: int = 4;
+  }
+  actor n38_counterPLevels {
+    type: counterPLevels;
+    interface iter -> e76;
+  }
+
+  actor n39_Blur2x {
+    type: blur2x;
+    interface e83 -> gauss_coefs1;
+    interface e91 -> imgOri;
+    interface e81 -> col_sizes1;
+    interface e5 -> iterPrev;
+    interface e87 -> iter_nb1;
+    interface e82 -> col_sizes2;
+    interface e84 -> gauss_coefs2;
+    interface e88 -> iter_nb2;
+    interface imgBlurred -> e78;
+  }
+
+  actor n40_Blur {
+    type: blur;
+    interface e85 -> gauss_coefs1;
+    interface e92 -> imgOri;
+    interface e79 -> col_sizes1;
+    interface e4 -> iterPrev;
+    interface e89 -> iter_nb1;
+    interface e90 -> iter_nb2;
+    interface e86 -> gauss_coefs2;
+    interface e80 -> col_sizes2;
+    interface imgBlurred -> e77;
+  }
+}
+
+
+dif main {
+  datatype {
+    SiftKpt = 556; // size in bytes;
+  }
+  parameter {
+    FilePathLength : int = 512; // 512
+    nKeypointsMaxUser : int = 1400; // 1400
+    image_width : int = 800; // 800
+    image_height : int = 640; // 640
+    DumpDescriptor : int = 0; // 0
+    descrWidth : int = 4; // 4
+    nBins : int = 128; // descrWidth*descrWidth*descrHistBins
+    nHistBins : int = 360; // (descrWidth + 2) * (descrWidth + 2) * (descrHistBins + 2)
+    tot_image_size : int = 512000; // image_width*image_height
+    descrHistBins : int = 8; // 8
+    parallelismLevel : int = 4; // 4
+    nLocalKptMax : int = 350; // max(1, floor(nKeypointsMaxUser/parallelismLevel))
+    nKeypointsMax : int = 1400; // parallelismLevel*nLocalKptMax
+  }
+
+  actortype BdFilename_BROADCAST {
+    consumption filename: char = 512;
+    production forRead: char = 512;
+    production forDraw: char = 512;
+    production forExport: char = 512;
+  }
+  actor n1_BdFilename {
+    type: BdFilename_BROADCAST;
+    interface e4 -> filename;
+    interface forRead -> e2;
+    interface forDraw -> e6;
+    interface forExport -> e11;
+  }
+  actortype read_pgm {
+    param FilePathLength;
+    param image_width;
+    param image_height;
+    param tot_image_size;
+    consumption filename: char = 512;
+    production img: char = 512000;
+  }
+  actor n2_read_pgm {
+    type: read_pgm;
+    interface e2 -> filename;
+    interface img -> e1;
+  }
+  actortype BdOriginalImage_BROADCAST {
+    consumption originalImage: char = 512000;
+    production forSift: char = 512000;
+    production forDump: char = 512000;
+  }
+  actor n3_BdOriginalImage {
+    type: BdOriginalImage_BROADCAST;
+    interface e1 -> originalImage;
+    interface forSift -> e3;
+    interface forDump -> e5;
+  }
+  actortype draw_keypoints_to_ppm_file {
+    param FilePathLength;
+    param image_height;
+    param image_width;
+    param nKeypointsMax;
+    param tot_image_size;
+    consumption keypoints: SiftKpt = 1400;
+    consumption nbKeypoints: int = 1;
+    consumption image: char = 512000;
+    consumption filename: char = 512;
+  }
+  actor n4_draw_keypoints_to_ppm_file {
+    type: draw_keypoints_to_ppm_file;
+    interface e9 -> keypoints;
+    interface e10 -> nbKeypoints;
+    interface e5 -> image;
+    interface e6 -> filename;
+  }
+
+  actor n5_SIFT {
+    type: Htop_sift;
+    interface e3 -> image;
+    interface keypoints -> e7;
+    interface nbKeypoints -> e8;
+  }
+  actortype filename1 {
+    param FilePathLength;
+    production filename: char = 512;
+  }
+  actor n6_filename1 {
+    type: filename1;
+    interface filename -> e4;
+  }
+  actortype BdKeypoints_BROADCAST {
+    consumption kpts: SiftKpt = 1400;
+    production forDraw: SiftKpt = 1400;
+    production forDump: SiftKpt = 1400;
+  }
+  actor n7_BdKeypoints {
+    type: BdKeypoints_BROADCAST;
+    interface e7 -> kpts;
+    interface forDraw -> e9;
+    interface forDump -> e13;
+  }
+  actortype BdNbKeypoints_BROADCAST {
+    consumption nbKpts: int = 1;
+    production forDraw: int = 1;
+    production forDump: int = 1;
+  }
+  actor n8_BdNbKeypoints {
+    type: BdNbKeypoints_BROADCAST;
+    interface e8 -> nbKpts;
+    interface forDraw -> e10;
+    interface forDump -> e12;
+  }
+  actortype export_keypoints_to_key_file {
+    param FilePathLength;
+    param nKeypointsMax;
+    param DumpDescriptor;
+    param nBins;
+    consumption filename: char = 512;
+    consumption keypoints: SiftKpt = 1400;
+    consumption nbKeypoints: int = 1;
+  }
+  actor n9_export_keypoints_to_key_file {
+    type: export_keypoints_to_key_file;
+    interface e11 -> filename;
+    interface e13 -> keypoints;
+    interface e12 -> nbKeypoints;
+  }
+}

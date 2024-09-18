@@ -1,0 +1,1 @@
+// RUN: iara-opt --iara-schedule $(dirname %s)/top.mlir > $(dirname %s)/schedule.mlir
