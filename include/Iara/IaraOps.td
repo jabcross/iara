@@ -56,7 +56,7 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
     }];
 }
 
-def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
     let summary = "A node in a dataflow graph.";
     let description = [{
         The `iara.node` operation is a node in a dataflow graph. It has a
@@ -96,6 +96,30 @@ def NodeOp : IaraOp<"node", [AttrSizedOperandSegments,DeclareOpInterfaceMethods<
     }];
 
 }
+
+def EdgeOp : IaraOp<"edge", []> {
+    let summary = [{An edge in a dataflow graph. Used to connect inputs and
+        outputs of nodes when there is a type mismatch, or to add extra edge
+        information.
+        }];
+    let description = [{
+        The `iara.edge` operation is used for non-syncrhonous dataflow edges,
+        when the tensor types do not match.
+
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins AnyType:$in);
+    let results = (outs AnyType:$out);
+    let assemblyFormat = [{
+      $in `:` type($in) `->` type($out)
+      attr-dict
+  }];
+}
+
 
 def InPortOp: IaraOp<"in", [] > {
     let summary = "An input port for a dataflow node.";

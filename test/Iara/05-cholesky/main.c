@@ -79,22 +79,31 @@ double *Ah[NB][NB];
 
 void kernel_split(double *out_0_0 BLOCKS) {
 
+#undef ITEM
+
 #define ITEM(i, j) assert(malloc_usable_size(out_##i##_##j) >= BS_BYTES);
 
   assert(malloc_usable_size(out_0_0) >= BS_BYTES);
   BLOCKS
 
+#undef ITEM
+
 #define ITEM(i, j) memcpy(out_##i##_##j, Ah[i][j], BS_BYTES);
   memcpy(out_0_0, Ah[0][0], BS_BYTES);
   BLOCKS
+
+#undef ITEM
 }
 
 #define ITEM(i, j) , double *in_##i##_##j
 
 void kernel_join(double *in_0_0 BLOCKS) {
+#undef ITEM
+
 #define ITEM(i, j) memcpy(Ah[i][j], in_##i##_##j, BS_BYTES);
   memcpy(Ah[0][0], in_0_0, BS_BYTES);
   BLOCKS
+#undef ITEM
 }
 
 void run();

@@ -21,6 +21,13 @@
   ],
   "configurations": [
     {
+      "name": "dif-to-iara",
+      "type": "debugpy",
+      "args": ["${workspaceFolder}/test/Iara/08-SIFT/topology.dif"],
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/dif-to-iara.py"
+    },
+    {
       "name": "(gdb) Attach",
       "type": "cppdbg",
       "request": "attach",

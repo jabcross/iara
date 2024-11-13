@@ -6,9 +6,9 @@ echo checking for dependencies...
 cat <<EOF
 This script will clone Polygeist in a sibling directory to IaRa, and LLVM as a submodule.
 Compiling LLVM may take a long time. This script is not appropriate if you're not setting up from a clean slate.
-Press any key to continue.
+Press enter to continue.
 EOF
-read
+read discard__
 
 echo Checking for build dependencies:
 for command in cmake ninja g++ mold gdb lldb ccache /usr/bin/time ; do
@@ -40,7 +40,7 @@ cd Polygeist
 pwd
 git pull origin main
 git fetch origin $POLYGEIST_COMMIT
-git checkout $POLYGEIST_COMMIT
+git checkout $POLYGEIST_COMMIT\
 /usr/bin/time sh -c 'git submodule update --init'
 
 /usr/bin/time -o llvm-cmake-and-build-time.txt sh -c '
