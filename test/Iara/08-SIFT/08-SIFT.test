@@ -1,1 +1,2 @@
-// RUN: iara-opt --iara-schedule $(dirname %s)/topology.mlir > $(dirname %s)/schedule.mlir
+// RUN: python $(dirname %s)/../../../scripts/dif-to-iara.py $(dirname %s)/topology.dif > $(dirname %s)/topology.mlir
+// RUN: iara-opt --iara-flatten --iara-schedule $(dirname %s)/topology.mlir > $(dirname %s)/schedule.mlir

@@ -421,7 +421,7 @@ class DIFParser:
             # IN ops
 
             for port in self.get_consumption_ports(block.name):
-                print(f'    %{port.name}_s = iara.in : tensor<{
+                print(f'    %{port.name}_i_i = iara.in : tensor<{
                       port.value}x{translate_type(port.type)}>')
 
             # NODE ops
@@ -432,12 +432,15 @@ class DIFParser:
             class ActorInputPort:
                 def __init__(self, actor: ActorOp) -> None:
                     self.actor: ActorOp = actor
-                    self.name: str | None = None
+                    self.port_name: str | None = None
+                    self.value_name: str | None = None
                     self.type: str | None = None
                     self.edge_op: EdgeOp | None = None
                     self.binding: tuple[str, str]
 
                 def get_ssa_val_name(self) -> str:
+                    if self.value_name is not None:
+                        return self.value_name
                     if isinstance(self.edge_op, EdgeOp):
                         return self.edge_op.name + "_d"
                     else:
@@ -447,12 +450,15 @@ class DIFParser:
             class ActorOutputPort:
                 def __init__(self, actor: ActorOp) -> None:
                     self.actor: ActorOp = actor
-                    self.name: str | None = None
+                    self.port_name: str | None = None
+                    self.value_name: str | None = None
                     self.type: str | None = None
                     self.edge_op: EdgeOp | None = None
                     self.binding: tuple | None
 
                 def get_ssa_val_name(self) -> str:
+                    if self.value_name is not None:
+                        return self.value_name
                     if isinstance(self.edge_op, EdgeOp):
                         return self.edge_op.name + "_s"
                     else:
@@ -469,14 +475,14 @@ class DIFParser:
 
                 def get_out_port_with_name(self, name: str) -> ActorOutputPort:
                     for i in self.out_ports:
-                        if i.name == name:
+                        if i.port_name == name:
                             return i
                     raise Exception(
                         f"output port {name} not found in actor {self.name}:{self.type}. dif actor: {self.dif_actor.parameters}")
 
                 def get_in_port_with_name(self, name: str) -> ActorInputPort:
                     for i in self.in_ports:
-                        if i.name == name:
+                        if i.port_name == name:
                             return i
                     raise Exception(
                         f"input port {name} not found in actor {self.name}:{self.type}. dif actor: {self.dif_actor.parameters}")
@@ -489,7 +495,7 @@ class DIFParser:
                 def format_input_ports(self) -> str:
                     if len(self.in_ports) == 0:
                         return ''
-                    return f' in {', '.join(("%"+str(in_port.name) for in_port in self.in_ports))}  : {', '.join((translate_type(in_port.type) for in_port in self.in_ports))} '
+                    return f' in {', '.join(("%"+str(in_port.get_ssa_val_name()) for in_port in self.in_ports))}  : {', '.join((translate_type(in_port.type) for in_port in self.in_ports))} '
 
                 def format_output_types(self) -> str:
                     if len(self.out_ports) == 0:
@@ -512,20 +518,20 @@ class DIFParser:
                     out_name = None
                     out_type = None
                     if isinstance(self.source_port, ActorOutputPort):
-                        in_name = self.name + '_s'
+                        in_name = self.source_port.get_ssa_val_name()
                         in_type = self.source_port.type
                     elif self.name in input_interfaces:
-                        in_name = self.name
+                        in_name = self.name + "_i_i"
                         in_type = f'tensor<{input_interfaces[self.name]["rate"]}x{
                             translate_type(input_interfaces[self.name]["type"])}>'
                     else:
                         assert False
 
                     if isinstance(self.drain_port, ActorInputPort):
-                        out_name = self.name + '_d'
+                        out_name = self.drain_port.get_ssa_val_name()
                         out_type = self.drain_port.type
                     elif self.name in output_interfaces:
-                        out_name = self.name
+                        out_name = self.name + '_o_i'
                         out_type = f'tensor<{output_interfaces[self.name]["rate"]}x{
                             translate_type(output_interfaces[self.name]["type"])}>'
                     else:
@@ -547,12 +553,12 @@ class DIFParser:
 
                 for input in self.get_consumption_ports(actor.type):
                     input_port: ActorInputPort = ActorInputPort(actor_op)
-                    input_port.name = input.name
+                    input_port.port_name = input.name
                     input_port.type = input.type
                     actor_op.in_ports.append(input_port)
                 for output in self.get_production_ports(actor.type):
                     output_port: ActorOutputPort = ActorOutputPort(actor_op)
-                    output_port.name = output.name
+                    output_port.port_name = output.name
                     output_port.type = output.type
                     actor_op.out_ports.append(output_port)
 
@@ -563,6 +569,7 @@ class DIFParser:
                             edges_by_name[edge_name] = EdgeOp(edge_name)
                         out_port: ActorOutputPort = actor_op.get_out_port_with_name(
                             lhs)
+                        out_port.value_name = edge_name+'_s'
                         out_port.binding = lhs, rhs
                         edges_by_name[edge_name].source_port = out_port
                         out_port.edge_op = edges_by_name[edge_name]
@@ -572,6 +579,7 @@ class DIFParser:
                             edges_by_name[edge_name] = EdgeOp(edge_name)
                         in_port: ActorInputPort = actor_op.get_in_port_with_name(
                             rhs)
+                        in_port.value_name = edge_name + '_d'
                         in_port.binding = lhs, rhs
                         edges_by_name[edge_name].drain_port = in_port
                         in_port.edge_op = edges_by_name[edge_name]
@@ -591,7 +599,7 @@ class DIFParser:
             for port in self.get_production_ports(block.name):
                 type = translate_type(f'tensor<{port.value}x{
                                       translate_type(port.type)}>')
-                print(f'    iara.out ( %{port.name} : {type} ) : {type}',)
+                print(f'    iara.out ( %{port.name}_o_i : {type} ) : {type}',)
 
             print(f'    iara.dep\n}} // end subgraph {block.name}')
 

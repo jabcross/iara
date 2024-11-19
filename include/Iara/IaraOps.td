@@ -24,7 +24,7 @@ include "mlir/IR/BuiltinTypeInterfaces.td"
 include "mlir/IR/OpBase.td"
 include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
-def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
+def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInterface]> {
     let summary = "A dataflow actor. Defines an interface. May define a subgraph.";
     let description = [{
         The `iara.graph` operation is a container for nodes. It has the same
@@ -53,6 +53,9 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator]> {
       bool isInoutInput(size_t idx);
       mlir::FunctionType getImplFunctionType();
       bool isKernel();
+      static ::mlir::RegionKind getRegionKind(unsigned index) {
+        return ::mlir::RegionKind::Graph;
+      }
     }];
 }
 
@@ -93,6 +96,7 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
         }
         bool isInoutInput(OpOperand &operand);
         bool isPureInInput(OpOperand &operand);
+
     }];
 
 }
