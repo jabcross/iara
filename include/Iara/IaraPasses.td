@@ -3,6 +3,14 @@
 
 include "mlir/Pass/PassBase.td"
 
+def IaraFlatten: Pass<"iara-flatten", "::mlir::ModuleOp"> {
+  let summary = "Flatten hierarchy of the module.";
+  let description = [{
+    Find hierarchical dataflow operations in the module and flatten them by inlining their contents.
+    Should end with a single actor named "main".
+  }];
+}
+
 def IaraSchedule: Pass<"iara-schedule", "::mlir::ModuleOp"> {
   let summary = "Schedule the dataflow operations in the module.";
   let description = [{

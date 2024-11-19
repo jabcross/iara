@@ -14,7 +14,9 @@
         "test/Iara/04-multithread/04-multithread.mlir",
         "test/Iara/05-cholesky/topology.mlir",
         "test/Iara/06-broadcast/06-broadcast.mlir",
-        "test/Iara/07-ownership/07-ownership.mlir"
+        "test/Iara/07-ownership/07-ownership.mlir",
+        "test/Iara/08-SIFT/topology.mlir",
+        "test/Iara/09-hierarchy/09-hierarchy.test"
       ],
       "description": "Which test to run"
     }
@@ -51,7 +53,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--iara-schedule", "${input:test}"],
+      "args": ["--iara-flatten", "--iara-schedule", "${input:test}"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [

@@ -503,7 +503,7 @@ class DIFParser:
                     return ' out: ' + ', '.join(f'{translate_type(out_port.type)}' for out_port in self.out_ports) + ' '
 
                 def format_op(self) -> str:
-                    return f'{self.format_result_ssa_values()}iara.node @{self.name}{
+                    return f'{self.format_result_ssa_values()}iara.node @{self.type}{
                         self.format_input_ports()}{self.format_output_types()}'
 
             class EdgeOp:

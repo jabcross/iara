@@ -11,6 +11,7 @@
 #include "Iara/Schedule/OpenMPScheduler.h"
 #include "Iara/Schedule/TaskScheduler.h"
 #include "llvm/Support/Casting.h"
+#include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -19,7 +20,6 @@
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
 
 namespace mlir::iara {
-#define GEN_PASS_DEF_IARASWITCHBARFOO
 #define GEN_PASS_DEF_IARASCHEDULE
 #include "Iara/IaraPasses.h.inc"
 
@@ -38,13 +38,14 @@ public:
   using impl::IaraScheduleBase<IaraSchedule>::IaraScheduleBase;
   void runOnOperation() final {
     auto module = getOperation();
+    module->dump();
     for (auto actor : module.getOps<ActorOp>()) {
       if (!actor.getOps<NodeOp>().empty()) {
         if (!actor->hasAttr("flat")) {
-          actor->emitRemark(
+          actor->emitError(
               "Actor has not been flattened. Run --iara-flatten first.");
           signalPassFailure();
-          continue;
+          return;
         }
 
         TaskScheduler task_scheduler{};

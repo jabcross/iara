@@ -3,3 +3,14 @@ build/
 .env
 compile_commands.json
 **/a.out
+test/Iara/05-cholesky/iara.out.mlir
+profile/**
+**/cachegrind.out.*
+**/vgcore.*
+.trunk/*
+**/perf.data*
+**/perf-data*
+**/perf.json
+iara-build-time.txt
+iara.out.ll
+iara.out.mlir

@@ -24,7 +24,7 @@ include "mlir/IR/BuiltinTypeInterfaces.td"
 include "mlir/IR/OpBase.td"
 include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
-def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInterface]> {
+def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInterface, IsolatedFromAbove]> {
     let summary = "A dataflow actor. Defines an interface. May define a subgraph.";
     let description = [{
         The `iara.graph` operation is a container for nodes. It has the same

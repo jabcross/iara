@@ -8,6 +8,7 @@ add_mlir_dialect_library(MLIRIara
         # IaraInterfaces.cpp
         Schedule/TaskScheduler.cpp
         Schedule/OpenMPScheduler.cpp
+        Flatten/Flatten.cpp
         ../Util/MlirUtil.cpp
 
         ADDITIONAL_HEADER_DIRS
