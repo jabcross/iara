@@ -1,4 +1,4 @@
-#include "Iara/Schedule/TaskScheduler.h"
+#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/MlirUtil.h"
 #include "Util/RangeUtil.h"
 #include "mlir/IR/TypeRange.h"
@@ -28,13 +28,22 @@ namespace mlir::iara {
 using namespace RangeUtil;
 
 bool TaskScheduler::checkSingleRate(ActorOp actor) {
-  assert(actor.getParameterTypes().empty() && actor->getOperands().empty() &&
-         actor.isFlat());
+  if (!(actor.getParameterTypes().empty() && actor->getOperands().empty() &&
+        actor.isFlat())) {
+    return false;
+  }
 
   // check that all nodes have a single rate
 
-  assert(llvm::all_of(actor.getOps<NodeOp>(),
-                      [](NodeOp node) { return node.getParams().empty(); }));
+  if (!(llvm::all_of(actor.getOps<NodeOp>(),
+                     [](NodeOp node) { return node.getParams().empty(); }))) {
+    return false;
+  }
+
+  if (llvm::count_if(actor.getOps<EdgeOp>(), [](EdgeOp) { return true; }) !=
+      0) {
+    return false;
+  };
 
   // todo: check all port connections
   return true;
@@ -216,7 +225,6 @@ struct TaskSchedule {
   }
 
   void solveOutputOwnerships(NodeOp node) {
-    // free dangling inouts
     // for (auto [in, out] : node.getInoutPairs()) {
     //   if (out.getUses().empty()) {
     //     auto new_block = createSuccessorTask(getTask(out.getOwner()));

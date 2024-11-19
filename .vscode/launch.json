@@ -16,7 +16,8 @@
         "test/Iara/06-broadcast/06-broadcast.mlir",
         "test/Iara/07-ownership/07-ownership.mlir",
         "test/Iara/08-SIFT/topology.mlir",
-        "test/Iara/09-hierarchy/09-hierarchy.test"
+        "test/Iara/09-hierarchy/09-hierarchy.test",
+        "test/Iara/10-non-single-rate/10-non-single-rate.test"
       ],
       "description": "Which test to run"
     }
@@ -53,7 +54,12 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--iara-flatten", "--iara-schedule", "${input:test}"],
+      "args": [
+        "--iara-flatten",
+        "--iara-collapse-edges",
+        "--iara-schedule",
+        "${input:test}"
+      ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [

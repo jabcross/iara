@@ -7,9 +7,8 @@
 //===----------------------------------------------------------------------===//
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
-#include "Iara/IaraPasses.h"
-#include "Iara/Schedule/OpenMPScheduler.h"
-#include "Iara/Schedule/TaskScheduler.h"
+#include "Iara/Passes/Schedule/OpenMPScheduler.h"
+#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/RangeUtil.h"
 #include "llvm/Support/Casting.h"
 #include <llvm/ADT/DenseMap.h>

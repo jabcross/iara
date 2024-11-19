@@ -1,4 +1,4 @@
-#include "Iara/Schedule/OpenMPScheduler.h"
+#include "Iara/Passes/Schedule/OpenMPScheduler.h"
 #include "Iara/IaraOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"

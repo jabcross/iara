@@ -8,8 +8,8 @@
 #include "Iara/IaraPasses.h"
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
-#include "Iara/Schedule/OpenMPScheduler.h"
-#include "Iara/Schedule/TaskScheduler.h"
+#include "Iara/Passes/Schedule/OpenMPScheduler.h"
+#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "llvm/Support/Casting.h"
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
@@ -40,7 +40,12 @@ public:
     auto module = getOperation();
     module->dump();
     for (auto actor : module.getOps<ActorOp>()) {
-      if (!actor.getOps<NodeOp>().empty()) {
+
+      // Only schedule top-level actors.
+      if (!actor.getOps<NodeOp>().empty() and
+          actor.getOps<InPortOp>().empty() and
+          actor.getOps<OutPortOp>().empty()) {
+
         if (!actor->hasAttr("flat")) {
           actor->emitError(
               "Actor has not been flattened. Run --iara-flatten first.");
@@ -49,6 +54,12 @@ public:
         }
 
         TaskScheduler task_scheduler{};
+
+        if (!task_scheduler.checkSingleRate(actor)) {
+          actor->emitError("Actor is not single rate (Not supported yet).");
+          signalPassFailure();
+          return;
+        }
 
         if (task_scheduler.convertToTasks(actor).failed()) {
           module.emitError("Failed to convert actor into task form");

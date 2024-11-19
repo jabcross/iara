@@ -1,4 +1,4 @@
-add_subdirectory(Schedule)
+add_subdirectory(Passes/Schedule)
 
 add_mlir_dialect_library(MLIRIara
         IaraTypes.cpp
@@ -6,9 +6,10 @@ add_mlir_dialect_library(MLIRIara
         IaraOps.cpp
         IaraPasses.cpp
         # IaraInterfaces.cpp
-        Schedule/TaskScheduler.cpp
-        Schedule/OpenMPScheduler.cpp
-        Flatten/Flatten.cpp
+        Passes/Schedule/TaskScheduler.cpp
+        Passes/Schedule/OpenMPScheduler.cpp
+        Passes/Flatten.cpp
+        Passes/CollapseEdges.cpp
         ../Util/MlirUtil.cpp
 
         ADDITIONAL_HEADER_DIRS
