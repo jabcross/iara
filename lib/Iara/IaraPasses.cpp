@@ -42,8 +42,7 @@ public:
     for (auto actor : module.getOps<ActorOp>()) {
 
       // Only schedule top-level actors.
-      if (!actor.getOps<NodeOp>().empty() and
-          actor.getOps<InPortOp>().empty() and
+      if (actor.getOps<InPortOp>().empty() and
           actor.getOps<OutPortOp>().empty()) {
 
         if (!actor->hasAttr("flat")) {
@@ -66,11 +65,10 @@ public:
           signalPassFailure();
           return;
         }
+
+        OpenMPScheduler omp_scheduler{};
+        omp_scheduler.convertIntoOpenMP(actor);
       }
-
-      OpenMPScheduler omp_scheduler{};
-
-      omp_scheduler.convertIntoOpenMP(actor);
     }
 
     if (TaskScheduler{}.removeLoweredActors(module).failed()) {

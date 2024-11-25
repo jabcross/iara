@@ -9,8 +9,11 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/YAMLParser.h>
 #include <mlir-c/IR.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Dialect.h>
@@ -40,8 +43,9 @@ bool TaskScheduler::checkSingleRate(ActorOp actor) {
     return false;
   }
 
-  if (llvm::count_if(actor.getOps<EdgeOp>(), [](EdgeOp) { return true; }) !=
-      0) {
+  if (not llvm::all_of(actor.getOps<EdgeOp>(), [](EdgeOp edge_op) {
+        return edge_op.getIn().getType() == edge_op.getOut().getType();
+      })) {
     return false;
   };
 
@@ -413,13 +417,28 @@ struct TaskSchedule {
 
     // Convert nodes into function calls
     for (auto node : actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>()) {
-      CREATE(func::CallOp, OpBuilder{node}, node->getLoc(), node.getImpl(), {},
-             node->getOperands());
+      auto call_op = CREATE(func::CallOp, OpBuilder{node}, node->getLoc(),
+                            node.getImpl(), {}, node->getOperands());
       node.erase();
     }
   }
-};
 
+  void addMissingFunctionDeclarations() {
+    auto module = actor->getParentOfType<ModuleOp>();
+    auto builder = OpBuilder{module};
+    builder.setInsertionPoint(this->actor);
+    this->actor->walk([&](func::CallOp call_op) {
+      if (!module.lookupSymbol(call_op.getCallee())) {
+        auto func = CREATE(func::FuncOp, builder, call_op->getLoc(),
+                           call_op.getCallee(),
+                           builder.getFunctionType(call_op.getOperandTypes(),
+                                                   call_op.getResultTypes()));
+        func->setAttr("sym_visibility", builder.getStringAttr("private"));
+        func->setAttr("emit_c_interface", builder.getUnitAttr());
+      }
+    });
+  }
+};
 LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
 
   TaskSchedule scheduler(actor);
@@ -437,6 +456,8 @@ LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
     scheduler.addDeallocs(node);
   }
   scheduler.bufferize();
+
+  scheduler.addMissingFunctionDeclarations();
 
   return success();
 }

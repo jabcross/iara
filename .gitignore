@@ -14,3 +14,4 @@ profile/**
 iara-build-time.txt
 iara.out.ll
 iara.out.mlir
+CMakeFiles/*

@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <iterator>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/Support/Casting.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -34,7 +36,7 @@ struct NullTypeOf<T, typename std::enable_if<std::is_convertible<
 template <class F> struct Filter {
   using type = F;
   F f;
-  Filter(F &&f) : f(f){};
+  Filter(F &&f) : f(f) {};
 };
 template <typename F> Filter(F) -> Filter<F>;
 template <class R, class F>
@@ -64,7 +66,19 @@ template <class R, class T> auto operator|(R &&range, OfType<T> &&) -> auto {
          Map([](auto &x) { return llvm::cast<T>(x); });
 }
 
-template <class C> struct Into {};
+template <class C = std::nullptr_t> struct Into {};
+
+template <class R> struct OwnedElementType {
+  using type = decltype(*std::begin(std::declval<R>()));
+};
+
+template <
+    unsigned Size, typename R,
+    template <typename element_type, unsigned> typename CT = llvm::SmallVector>
+CT<typename OwnedElementType<R>::type, Size>
+operator|(R &&Range, Into<std::nullptr_t> &&) {
+  return {std::begin(Range), std::end(Range)};
+};
 
 template <class R, class C> auto operator|(R &&range, Into<C> c) {
   return C{range};
@@ -102,7 +116,7 @@ auto operator|(std::optional<R> &&range, S &&stage)
 template <class F> struct Find {
   using type = F;
   F f;
-  Find(F &&f) : f(f){};
+  Find(F &&f) : f(f) {};
 };
 
 template <typename F> Find(F) -> Find<F>;

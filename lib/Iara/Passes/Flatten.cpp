@@ -11,6 +11,7 @@
 #include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/RangeUtil.h"
 #include "llvm/Support/Casting.h"
+#include <cstddef>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/SmallPtrSet.h>
@@ -102,7 +103,7 @@ public:
   }
 
   void flatten(ActorOp actor) {
-    for (auto node : actor.getOps<NodeOp>()) {
+    for (auto node : llvm::to_vector(actor.getOps<NodeOp>())) {
       flatten(actor->getParentOfType<ModuleOp>(), node);
     }
     actor->setAttr("flat", OpBuilder(actor).getUnitAttr());
@@ -110,9 +111,18 @@ public:
 
   // If successful, node will be erased.
   void flatten(ModuleOp module, NodeOp node) {
+    if (node->hasAttr("flat")) {
+      return;
+    }
+    if (node->hasAttr("kernel")) {
+      return;
+    }
     auto impl = node.getImpl();
     auto actor_op = module.lookupSymbol<ActorOp>(impl);
     if (!actor_op) {
+      return;
+    }
+    if (actor_op->hasAttr("kernel")) {
       return;
     }
 
@@ -152,7 +162,8 @@ public:
       return;
     }
 
-    for (auto [out_op, out_port] : llvm::zip(out_ops, node.getResults())) {
+    for (auto [out_op, out_port] :
+         llvm::to_vector(llvm::zip(out_ops, node.getResults()))) {
       out_port.replaceAllUsesWith(out_op.getValue());
       out_op.erase();
     }

@@ -1,0 +1,18 @@
+// RUN:   iara-opt --iara-flatten --iara-collapse-edges  %s
+
+// Two nodes
+
+iara.actor @a {
+  %0 = iara.in : tensor<1xf32>
+  %1 = iara.node @f in %0: tensor<1xf32> out : tensor<1xf32>
+  iara.out (%1: tensor<1xf32>): tensor<1xf32>
+  iara.dep
+} { }
+iara.actor @c  {
+  %0 = iara.node @foo out: tensor<1xf32>
+  %1 = iara.node @a in %0: tensor<1xf32> out : tensor<1xf32>
+  iara.node @bar in %1 : tensor<1xf32>
+  iara.dep
+} { }
+
+// CHECK: Hello World!

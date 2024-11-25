@@ -428,6 +428,10 @@ class DIFParser:
 
             actors_by_name: dict[str, ActorOp] = {}
             edges_by_name: dict[str, EdgeOp] = {}
+            edge_delays: dict[str, str] = {}
+
+            for delay_line in block.delays:
+                edge_delays[delay_line.name] = delay_line.value
 
             class ActorInputPort:
                 def __init__(self, actor: ActorOp) -> None:
@@ -511,6 +515,19 @@ class DIFParser:
                     self.name: str = name
                     self.source_port: ActorOutputPort | None = None
                     self.drain_port: ActorInputPort | None = None
+                    self.delay = None
+
+                def format_attrs(self) -> str:
+                    if self.name in edge_delays:
+                        value_str: str = edge_delays[self.name]
+                        try:
+                            # if int, delay is `value` default-constructed tokens
+                            value_int: int = int(value_str, 10)
+                        except ValueError:
+                            return ""
+                        return f' {{ delay = {value_int} }}'
+                    else:
+                        return ""
 
                 def format_op(self) -> str:
                     in_name = None
@@ -537,7 +554,7 @@ class DIFParser:
                     else:
                         assert False
                     assert isinstance(in_type, str)
-                    return f'%{out_name} = iara.edge %{in_name} : {translate_type(in_type)} -> {translate_type(out_type)}'
+                    return f'%{out_name} = iara.edge %{in_name} : {translate_type(in_type)} -> {translate_type(out_type)}{self.format_attrs()}'
 
             for actor in block.actors:
                 actor_op: ActorOp = ActorOp()
