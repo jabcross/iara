@@ -1,4 +1,4 @@
-// RUN:   iara-opt --iara-schedule %s \
+// RUN:   iara-opt --sdf-to-tasks  %s \
 // RUN: | mlir-to-llvmir.sh \
 // RUN: | clang -lomp -lpthread -xir - -xc "`dirname %s`/03-two-nodes.c" && ./a.out \
 // RUN: | FileCheck %s

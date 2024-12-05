@@ -1,4 +1,5 @@
 #include "Iara/Passes/Schedule/TaskScheduler.h"
+#include "Iara/IaraOps.h"
 #include "Util/MlirUtil.h"
 #include "Util/RangeUtil.h"
 #include "mlir/IR/TypeRange.h"
@@ -6,6 +7,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/YAMLParser.h>
 #include <mlir-c/IR.h>
@@ -17,6 +19,7 @@
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Dialect.h>
+#include <mlir/IR/IRMapping.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Value.h>
 #include <mlir/IR/ValueRange.h>
@@ -118,13 +121,10 @@ struct Task {
 };
 
 struct TaskSchedule {
-  ActorOp actor;
+  DAGOp dag;
   DenseMap<Value, memref::AllocOp> alloc_ops;
   DenseMap<Value, memref::DeallocOp> dealloc_ops;
   DenseSet<Value> ownership_handled; // if value is here, don't generate a free
-
-  ActorOp operator*() { return actor; }
-  TaskSchedule(ActorOp actor) : actor(actor) {}
 
   Task wrapIntoTask(Operation *op) {
     auto op_block = op->getBlock();
@@ -154,14 +154,6 @@ struct TaskSchedule {
         getTask(op).addDependent(getTask(user));
       }
     }
-  }
-
-  static TaskSchedule convertToTaskForm(ActorOp actor) {
-    TaskSchedule schedule{actor};
-    for (auto node : actor.getOps<NodeOp>()) {
-      schedule.setDeps(node);
-    }
-    return schedule;
   }
 
   Task createSuccessorTask(Task task) {
@@ -344,8 +336,16 @@ struct TaskSchedule {
     createDeallocNodes(values_to_deallocate, new_block, node.getLoc());
   }
 
-  MemRefType memrefTypeFromTensorType(RankedTensorType tensortype) {
-    return MemRefType::get(tensortype.getShape(), tensortype.getElementType());
+  MemRefType memrefTypeFromInputType(Type type) {
+    if (!type.isa<TensorType>()) {
+      type = RankedTensorType::get({1}, type);
+    }
+    if (auto tensortype = type.dyn_cast<RankedTensorType>()) {
+      return MemRefType::get(tensortype.getShape(),
+                             tensortype.getElementType());
+    }
+    llvm::errs() << "Not expecting typee: " << type << "\n";
+    llvm_unreachable("Unexpected type");
   }
 
   // If the use is an inout port, propagate through the corresponding output
@@ -369,16 +369,15 @@ struct TaskSchedule {
   // Should only be called on a pure output, as an inout output will write on
   // preexisting memory.
   void createAlloc(OpResult &pure_out, Task task) {
+    NodeOp node = cast<NodeOp>(pure_out.getOwner());
     auto builder = OpBuilder{pure_out.getOwner()}.atBlockTerminator(task.block);
     auto alloc_op =
         CREATE(memref::AllocOp, builder, pure_out.getOwner()->getLoc(),
-               memrefTypeFromTensorType(
-                   dyn_cast<RankedTensorType>(pure_out.getType())),
-               IntegerAttr());
+               memrefTypeFromInputType(pure_out.getType()), IntegerAttr());
     alloc_ops[pure_out] = alloc_op;
-    appendOperand(pure_out.getOwner(), alloc_op);
-    auto uses =
-        pure_out.getUses() | Pointers() | Into<SmallVector<OpOperand *>>();
+    // add inout argument
+    cast<NodeOp>(pure_out.getOwner()).getInoutMutable().append({alloc_op});
+    auto uses = pure_out.getUses() | Pointers() | IntoVector();
     for (auto &use : uses) {
       use->set(alloc_op);
       propagateInout(*use);
@@ -387,13 +386,13 @@ struct TaskSchedule {
 
   // Adds allocations, convert copy nodes into memcpys and dealloc nodes into
   // dealloc ops.
-  void bufferize() {
+  void bufferize(DAGOp dag) {
 
     auto getAllocTaskForBlock = memoize<Block *>([&](Block *block) -> Task {
       return createPredecessorTask(Task{block});
     });
 
-    auto nodes = actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
+    auto nodes = dag.getOps<NodeOp>() | IntoVector();
     for (auto node : nodes) {
       if (node.getPureOuts().empty())
         continue;
@@ -404,7 +403,7 @@ struct TaskSchedule {
     }
 
     // Convert placeholder copies into CopyOps.
-    for (auto node : actor.getOps<NodeOp>() | //
+    for (auto node : dag.getOps<NodeOp>() | //
                          Filter([](NodeOp node) {
                            return node.getImpl() == "__iara_copy__";
                          }) |
@@ -414,35 +413,30 @@ struct TaskSchedule {
              node->getOperand(0), node.getOperand(1));
       node->erase();
     }
-
-    // Convert nodes into function calls
-    for (auto node : actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>()) {
-      auto call_op = CREATE(func::CallOp, OpBuilder{node}, node->getLoc(),
-                            node.getImpl(), {}, node->getOperands());
-      node.erase();
-    }
-  }
-
-  void addMissingFunctionDeclarations() {
-    auto module = actor->getParentOfType<ModuleOp>();
-    auto builder = OpBuilder{module};
-    builder.setInsertionPoint(this->actor);
-    this->actor->walk([&](func::CallOp call_op) {
-      if (!module.lookupSymbol(call_op.getCallee())) {
-        auto func = CREATE(func::FuncOp, builder, call_op->getLoc(),
-                           call_op.getCallee(),
-                           builder.getFunctionType(call_op.getOperandTypes(),
-                                                   call_op.getResultTypes()));
-        func->setAttr("sym_visibility", builder.getStringAttr("private"));
-        func->setAttr("emit_c_interface", builder.getUnitAttr());
-      }
-    });
   }
 };
+
 LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
 
-  TaskSchedule scheduler(actor);
-  auto nodes = actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>();
+  // Nothing to do for kernels or interfaced actors.
+  if (actor.isKernelDeclaration()) {
+    return success();
+  }
+  if (actor.hasInterface()) {
+    return success();
+  }
+
+  if (not checkSingleRate(actor)) {
+    actor.emitError("Actor ") << actor.getSymName() << " is not single-rate.";
+    return failure();
+  }
+
+  auto dag =
+      CREATE(DAGOp, OpBuilder(actor), actor->getLoc(), actor.getSymName());
+  TaskSchedule scheduler;
+  IRMapping mapping;
+  actor.getBody().cloneInto(&dag.getBody(), mapping);
+  auto nodes = dag.getOps<NodeOp>() | IntoVector{};
   for (auto node : nodes) {
     scheduler.wrapIntoTask(node);
   }
@@ -455,54 +449,34 @@ LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
   for (auto node : nodes) {
     scheduler.addDeallocs(node);
   }
-  scheduler.bufferize();
 
-  scheduler.addMissingFunctionDeclarations();
-
-  return success();
-}
-
-LogicalResult TaskScheduler::removeLoweredActors(ModuleOp module) {
-  llvm::StringMap<ActorOp> actors;
-  llvm::StringMap<func::FuncOp> funcs;
-
-  for (auto actor : module.getOps<ActorOp>()) {
-    actors[actor.getSymName()] = actor;
-  }
-  for (auto func : module.getOps<func::FuncOp>()) {
-    funcs[func.getSymName()] = func;
-  }
-
-  for (auto &[name, actor] : actors) {
-    if (funcs.contains(name)) {
-      actor->erase();
-    } else {
-      return failure();
-    }
-  }
-  return success();
-}
-
-func::FuncOp TaskScheduler::convertIntoSequential(ActorOp actor) {
-  OpBuilder builder{actor};
-  builder.setInsertionPointToEnd(actor->getBlock());
-  auto func_op =
-      createEmptyVoidFunctionWithBody(builder, "__iara_run__", actor->getLoc());
-  func_op.getFunctionBody().takeBody(actor->getRegion(0));
+  scheduler.bufferize(dag);
   actor.erase();
-  auto new_block = builder.createBlock(&func_op.getBody().front());
-  builder.atBlockEnd(new_block).create<func::ReturnOp>(actor->getLoc());
-  for (auto op :
-       func_op.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
-    if (llvm::isa<DepOp>(op))
-      continue;
-    op->moveBefore(&new_block->back());
-  }
-  for (auto block : func_op.getBody().getBlocks() | Pointers{} | Drop(1) |
-                        Into<SmallVector<Block *>>()) {
-    block->erase();
-  }
-  return func_op;
+
+  return success();
 }
+
+// func::FuncOp TaskScheduler::convertIntoSequential(ActorOp actor) {
+//   OpBuilder builder{actor};
+//   builder.setInsertionPointToEnd(actor->getBlock());
+//   auto func_op =
+//       createEmptyVoidFunctionWithBody(builder, "__iara_run__",
+//       actor->getLoc());
+//   func_op.getFunctionBody().takeBody(actor->getRegion(0));
+//   actor.erase();
+//   auto new_block = builder.createBlock(&func_op.getBody().front());
+//   builder.atBlockEnd(new_block).create<func::ReturnOp>(actor->getLoc());
+//   for (auto op :
+//        func_op.getOps() | Pointers{} | Into<SmallVector<Operation *>>()) {
+//     if (llvm::isa<DepOp>(op))
+//       continue;
+//     op->moveBefore(&new_block->back());
+//   }
+//   for (auto block : func_op.getBody().getBlocks() | Pointers{} | Drop(1) |
+//                         Into<SmallVector<Block *>>()) {
+//     block->erase();
+//   }
+//   return func_op;
+// }
 
 } // namespace mlir::iara

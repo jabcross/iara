@@ -1,4 +1,4 @@
-// RUN: iara-opt --iara-schedule %s | FileCheck %s
+// RUN: iara-opt --sdf-to-tasks  %s | FileCheck %s
 
 // Single node
 

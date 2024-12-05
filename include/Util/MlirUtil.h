@@ -1,6 +1,9 @@
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 
 namespace mlir {
+
+size_t getTypeSize(Type type);
+
 func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
                                              Location loc);
 OpOperand &appendOperand(Operation *op, Value val);

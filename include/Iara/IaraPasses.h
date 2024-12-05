@@ -16,11 +16,15 @@
 
 namespace mlir {
 namespace iara {
+namespace passes {
+
 #define GEN_PASS_DECL
 #include "Iara/IaraPasses.h.inc"
 
 #define GEN_PASS_REGISTRATION
 #include "Iara/IaraPasses.h.inc"
+
+} // namespace passes
 } // namespace iara
 } // namespace mlir
 

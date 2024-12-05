@@ -1,4 +1,4 @@
-// RUN:   iara-opt --iara-flatten --iara-schedule %s \
+// RUN:   iara-opt --flatten --sdf-to-tasks  %s \
 // RUN: | mlir-to-llvmir.sh \
 // RUN: | clang++ -lomp -xir - -xc++ "`dirname %s`/04-multithread.cpp" && ./a.out \
 // RUN: | FileCheck %s

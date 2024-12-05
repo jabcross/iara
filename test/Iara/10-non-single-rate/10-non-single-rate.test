@@ -1,4 +1,4 @@
-// RUN:   iara-opt --iara-flatten --iara-collapse-edges --iara-schedule  %s
+// RUN:   iara-opt --flatten --sdf-to-tasks  %s
 
 // Two nodes
 

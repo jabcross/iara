@@ -15,7 +15,6 @@
         "test/Iara/05-cholesky/05-cholesky.test",
         "test/Iara/06-broadcast/06-broadcast.test",
         "test/Iara/07-ownership/07-ownership.test",
-        "test/Iara/08-SIFT/topology.test",
         "test/Iara/09-hierarchy/09-hierarchy.test",
         "test/Iara/10-non-single-rate/10-non-single-rate.test"
       ],
@@ -55,9 +54,9 @@
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
-        "--iara-flatten",
-        "--iara-collapse-edges",
-        "--iara-schedule",
+        "--flatten",
+        "--collapse-edges",
+        "--sdf-to-tasks",
         "${input:test}"
       ],
       "stopAtEntry": false,
@@ -88,6 +87,37 @@
         }
       ]
     },
+    {
+      "name": "SIFT",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--flatten",
+        "--collapse-edges",
+        "--sdf-to-tasks",
+        "test/Iara/08-SIFT/build/topology.mlir"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "CMake: build",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+
     {
       "type": "gdb",
       "request": "launch",

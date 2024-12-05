@@ -1,2 +1,3 @@
-// RUN: python $(dirname %s)/../../../scripts/dif-to-iara.py $(dirname %s)/topology.dif > $(dirname %s)/topology.mlir
-// RUN: iara-opt --iara-flatten --iara-schedule $(dirname %s)/topology.mlir > $(dirname %s)/schedule.mlir
+// RUN: mkdir -p $(dirname %s)/build
+// python $(dirname %s)/../../../scripts/dif-to-iara.py $(dirname %s)/topology.dif > $(dirname %s)/build/topology.mlir
+// RUN: iara-opt --flatten --sdf-to-tasks $(dirname %s)/build/topology.mlir > $(dirname %s)/build/schedule.mlir

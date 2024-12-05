@@ -33,14 +33,14 @@
 
 using namespace RangeUtil;
 
-namespace mlir::iara {
-#define GEN_PASS_DEF_IARACOLLAPSEEDGES
+namespace mlir::iara::passes {
+#define GEN_PASS_DEF_COLLAPSEEDGESPASS
 #include "Iara/IaraPasses.h.inc"
 
 namespace {
 
-class IaraCollapseEdges
-    : public impl::IaraCollapseEdgesBase<IaraCollapseEdges> {
+class CollapseEdgesPass
+    : public impl::CollapseEdgesPassBase<CollapseEdgesPass> {
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<IaraDialect, memref::MemRefDialect, mlir::func::FuncDialect,
@@ -48,7 +48,7 @@ public:
                     mlir::math::MathDialect, mlir::linalg::LinalgDialect,
                     mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect>();
   }
-  using impl::IaraCollapseEdgesBase<IaraCollapseEdges>::IaraCollapseEdgesBase;
+  using impl::CollapseEdgesPassBase<CollapseEdgesPass>::CollapseEdgesPassBase;
 
   void runOnOperation() final {
     auto module = getOperation();
@@ -67,4 +67,4 @@ public:
 };
 
 } // namespace
-} // namespace mlir::iara
+} // namespace mlir::iara::passes

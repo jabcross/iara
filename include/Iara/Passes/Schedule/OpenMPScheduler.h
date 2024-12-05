@@ -8,7 +8,7 @@
 namespace mlir::iara {
 
 struct OpenMPScheduler {
-  func::FuncOp convertIntoOpenMP(ActorOp actor);
+  func::FuncOp convertIntoOpenMP(DAGOp dag);
 };
 } // namespace mlir::iara
 

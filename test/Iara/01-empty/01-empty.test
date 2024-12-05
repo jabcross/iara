@@ -1,6 +1,6 @@
 // Empty graph
 
-// RUN: iara-opt --iara-schedule %s | FileCheck %s
+// RUN: iara-opt --flatten --collapse-edges --sdf-to-tasks %s | FileCheck %s
 
 // CHECK-LABEL: func.func @main()
 iara.actor @main  {

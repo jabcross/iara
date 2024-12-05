@@ -1,7 +1,23 @@
 #include "Util/MlirUtil.h"
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinTypes.h>
 
 namespace mlir {
+
+size_t getTypeSize(Type type) {
+  if (auto int_type = type.dyn_cast<IntegerType>()) {
+    return int_type.getWidth() / 8;
+  }
+  if (auto float_type = type.dyn_cast<FloatType>()) {
+    return float_type.getWidth() / 8;
+  }
+  if (auto ranked_tensor_type = type.dyn_cast<RankedTensorType>()) {
+    return ranked_tensor_type.getNumElements() *
+           getTypeSize(ranked_tensor_type.getElementType());
+  }
+  llvm_unreachable("unhandled type");
+}
+
 func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
                                              Location loc) {
   auto rv =

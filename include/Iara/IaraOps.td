@@ -24,10 +24,10 @@ include "mlir/IR/BuiltinTypeInterfaces.td"
 include "mlir/IR/OpBase.td"
 include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
-def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInterface, IsolatedFromAbove]> {
+def ActorOp : IaraOp<"actor", [Symbol, NoTerminator, RegionKindInterface, IsolatedFromAbove]> {
     let summary = "A dataflow actor. Defines an interface. May define a subgraph.";
     let description = [{
-        The `iara.graph` operation is a container for nodes. It has the same
+        The `iara.actor` operation is a container for nodes. It has the same
         interface as a kernel operation (in/out nodes, parameters).
 
         Example:
@@ -42,7 +42,10 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInte
     let hasRegionVerifier = 1;
 
     let extraClassDeclaration = [{
-        bool isFlat();
+      bool isFlat() { return (*this)->hasAttr("flat"); }
+      bool isInTaskForm() { return (*this)->hasAttr("task-form"); }
+      bool isKernelDeclaration() { return (*this)->hasAttr("kernel"); }
+      bool hasInterface();
       ::llvm::SmallVector<::mlir::Type> getParameterTypes();
       ::llvm::SmallVector<::mlir::Type> getAllInputTypes();
       ::llvm::SmallVector<::mlir::Type> getPureInTypes();
@@ -52,11 +55,26 @@ def ActorOp : IaraOp<"actor", [Symbol, SingleBlock, NoTerminator, RegionKindInte
       // is the input indexed by `idx` inout?
       bool isInoutInput(size_t idx);
       mlir::FunctionType getImplFunctionType();
-      bool isKernel();
       static ::mlir::RegionKind getRegionKind(unsigned index) {
         return ::mlir::RegionKind::Graph;
       }
     }];
+}
+
+def DAGOp : IaraOp<"dag", [IsolatedFromAbove]> {
+let summary = "A DAG of blocks, with dependencies determined by `dep` operations";
+    let description = [{
+        The `iara.dag` operation represents task dependencies with block arguments and `dep` operations. It does not allow cycles.
+
+        Example:
+
+        ```mlir
+        TODO
+        ```
+    }];
+    let arguments = (ins FlatSymbolRefAttr:$sym_name);
+    let regions = (region AnyRegion:$body);
+    let assemblyFormat = [{ $body attr-dict }];
 }
 
 def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -96,7 +114,8 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
         }
         bool isInoutInput(OpOperand &operand);
         bool isPureInInput(OpOperand &operand);
-
+        func::CallOp convertToCallOp();
+        bool signatureMatches(ActorOp actor);
     }];
 
 }
@@ -122,6 +141,10 @@ def EdgeOp : IaraOp<"edge", []> {
       $in `:` type($in) `->` type($out)
       attr-dict
   }];
+      let extraClassDeclaration = [{
+      // Returns the producer rate divided by the consumer rate.
+       util::Rational getFlowRatio();
+    }];
 }
 
 

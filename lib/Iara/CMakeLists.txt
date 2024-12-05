@@ -4,12 +4,13 @@ add_mlir_dialect_library(MLIRIara
         IaraTypes.cpp
         IaraDialect.cpp
         IaraOps.cpp
-        IaraPasses.cpp
         # IaraInterfaces.cpp
         Passes/Schedule/TaskScheduler.cpp
         Passes/Schedule/OpenMPScheduler.cpp
-        Passes/Flatten.cpp
-        Passes/CollapseEdges.cpp
+        Passes/FlattenPass.cpp
+        Passes/CollapseEdgesPass.cpp
+        Passes/LowerToOpenMPPass.cpp
+        Passes/LowerToTasksPass.cpp
         ../Util/MlirUtil.cpp
 
         ADDITIONAL_HEADER_DIRS

@@ -9,8 +9,10 @@
 #ifndef IARA_IARAOPS_H
 #define IARA_IARAOPS_H
 
+#include "Util/rational.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"

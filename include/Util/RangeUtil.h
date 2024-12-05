@@ -68,6 +68,12 @@ template <class R, class T> auto operator|(R &&range, OfType<T> &&) -> auto {
 
 template <class C = std::nullptr_t> struct Into {};
 
+struct IntoVector {};
+
+template <class R> auto operator|(R &&range, IntoVector) -> auto {
+  return llvm::to_vector(range);
+}
+
 template <class R> struct OwnedElementType {
   using type = decltype(*std::begin(std::declval<R>()));
 };
@@ -171,5 +177,44 @@ auto memoize(F fn) {
   };
 }
 } // namespace RangeUtil
+
+// Allow optional ranges to be used in range-based for loops.
+namespace std {
+
+template <class _Container>
+auto begin(std::optional<_Container> &opt) -> typename _Container::iterator {
+  if (opt)
+    return std::begin(opt.value());
+  else
+    return {};
+}
+
+template <class _Container>
+auto end(std::optional<_Container> &opt) -> typename _Container::iterator {
+  if (opt)
+    return std::end(opt.value());
+  else
+    return {};
+}
+
+template <class _Container>
+auto cbegin(std::optional<_Container> &opt) ->
+    typename _Container::const_iterator {
+  if (opt)
+    return std::cbegin(opt.value());
+  else
+    return {};
+}
+
+template <class _Container>
+auto cend(std::optional<_Container> &opt) ->
+    typename _Container::const_iterator {
+  if (opt)
+    return std::cend(opt.value());
+  else
+    return {};
+}
+
+} // namespace std
 
 #endif

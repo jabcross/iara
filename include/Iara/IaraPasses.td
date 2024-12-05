@@ -3,25 +3,32 @@
 
 include "mlir/Pass/PassBase.td"
 
-def IaraFlatten: Pass<"iara-flatten", "::mlir::ModuleOp"> {
+def FlattenPass: Pass<"flatten", "::mlir::ModuleOp"> {
   let summary = "Flatten hierarchy of the module.";
   let description = [{
     Find hierarchical dataflow operations in the module and flatten them by inlining their contents.
-    Should end with a single actor named "main".
   }];
 }
 
-def IaraCollapseEdges: Pass<"iara-collapse-edges", "::mlir::ModuleOp"> {
+def CollapseEdgesPass: Pass<"collapse-edges", "::mlir::ModuleOp"> {
   let summary = "Collapse edges in the module.";
   let description = [{
     Removes edges when the type is the same and there is no delay.
   }];
 }
 
-def IaraSchedule: Pass<"iara-schedule", "::mlir::ModuleOp"> {
-  let summary = "Schedule the dataflow operations in the module.";
+def LowerToTasksPass: Pass<"sdf-to-tasks", "::mlir::ModuleOp"> {
+  let summary = "Converts SDF dataflow to task DAG, generating memory management code.";
   let description = [{
-    Schedule the dataflow operations in the module. Outputs standard MLIR.
+    Converts dataflow to task DAG, generating memory management code.
+    Actor ops are converted to DAG ops.
+  }];
+}
+
+def LowerToOpenMPPass: Pass<"tasks-to-openmp", "::mlir::ModuleOp"> {
+  let summary = "Converts tasks to OpenMP, outputting upstream MLIR.";
+  let description = [{
+    Converts tasks to OpenMP, outputting upstream MLIR.
   }];
 }
 

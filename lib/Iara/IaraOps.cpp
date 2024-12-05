@@ -8,7 +8,9 @@
 
 #include "Iara/IaraOps.h"
 #include "Iara/IaraDialect.h"
+#include "Util/MlirUtil.h"
 #include "Util/RangeUtil.h"
+#include "Util/rational.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpImplementation.h"
@@ -36,7 +38,6 @@
 using namespace RangeUtil;
 
 namespace mlir::iara {
-bool ActorOp::isFlat() { return (*this)->hasAttr("flat"); }
 
 llvm::SmallVector<Type> ActorOp::getParameterTypes() {
   return getParams() | Map([](auto param) {
@@ -78,6 +79,11 @@ mlir::FunctionType ActorOp::getImplFunctionType() {
   tensor_types.append(getParameterTypes());
   tensor_types.append(getPureInTypes());
   tensor_types.append(getAllOutputTypes());
+  for (auto &type : tensor_types) {
+    if (!isa<TensorType>(type))
+      type = RankedTensorType::get({1}, type);
+  }
+
   assert(llvm::all_of(tensor_types, [](Type t) { return isa<TensorType>(t); }));
   auto memref_types = tensor_types | Map([](auto type) {
                         auto tensor_type = cast<TensorType>(type);
@@ -87,8 +93,6 @@ mlir::FunctionType ActorOp::getImplFunctionType() {
                       Into<SmallVector<Type>>();
   return builder.getFunctionType(memref_types, TypeRange{});
 }
-
-bool ActorOp::isKernel() { return (*this)->hasAttr("kernel"); }
 
 LogicalResult ActorOp::verifyRegions() {
   int inouts = 0;
@@ -102,6 +106,18 @@ LogicalResult ActorOp::verifyRegions() {
   if (inouts > outs)
     return failure();
   return success();
+}
+
+bool ActorOp::hasInterface() {
+  for (auto _ : getParams()) {
+    return true;
+  }
+  for (Operation &op : getOps()) {
+    if (isa<InPortOp>(&op) or isa<OutPortOp>(&op)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool NodeOp::isInoutInput(OpOperand &operand) {
@@ -120,10 +136,50 @@ bool NodeOp::isPureInInput(OpOperand &operand) {
   return false;
 }
 
+func::CallOp NodeOp::convertToCallOp() {
+  auto call_op = CREATE(func::CallOp, OpBuilder{*this}, getLoc(), getImpl(), {},
+                        getOperands());
+  erase();
+  return call_op;
+}
+
+bool NodeOp::signatureMatches(ActorOp actor) {
+  auto actor_inputs = actor.getAllInputTypes();
+  SmallVector<Value> node_inputs{getIn()};
+  for (auto i : getInout())
+    node_inputs.push_back(i);
+  if (actor_inputs.size() != node_inputs.size()) {
+    return false;
+  }
+  for (auto [a, b] : llvm::zip(actor_inputs, node_inputs)) {
+    if (a != b.getType())
+      return false;
+  }
+
+  auto actor_outputs = actor.getAllOutputTypes();
+  SmallVector<Value> node_outputs{getOut()};
+
+  if (actor_outputs.size() != node_outputs.size())
+    return false;
+
+  for (auto [a, b] : llvm::zip(actor_outputs, node_outputs)) {
+    if (a != b.getType()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 ::mlir::LogicalResult
 NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
   // Todo: better verification
   return success();
+}
+
+util::Rational EdgeOp::getFlowRatio() {
+  return util::Rational(getTypeSize(getIn().getType()),
+                        getTypeSize(getOut().getType()));
 }
 
 } // namespace mlir::iara

@@ -1,4 +1,4 @@
-// RUN:   iara-opt --iara-schedule %s \
+// RUN:   iara-opt --flatten --sdf-to-tasks %s \
 // RUN: | mlir-opt --convert-vector-to-scf \
 // RUN:            --convert-linalg-to-loops \
 // RUN:            --lower-affine \

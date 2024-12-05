@@ -10,6 +10,7 @@
 #include <iterator>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
@@ -27,26 +28,18 @@
 namespace mlir::iara {
 using namespace RangeUtil;
 
-func::FuncOp OpenMPScheduler::convertIntoOpenMP(ActorOp actor) {
-  if (actor.isKernel()) {
-    auto impl_name = actor.getSymName();
-    OpBuilder builder{actor};
-    auto decl = builder.create<func::FuncOp>(
-        actor.getLoc(), TypeRange{}, ValueRange{}, ArrayRef<NamedAttribute>{});
-
-    decl->setAttr("sym_name", builder.getStringAttr(impl_name));
-    decl->setAttr("sym_visibility", builder.getStringAttr("private"));
-    decl->setAttr("function_type", TypeAttr::get(actor.getImplFunctionType()));
-    decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
-    return decl;
+func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
+  for (auto node_op : llvm::to_vector(dag.getOps<NodeOp>())) {
+    // Convert nodes into function calls
+    node_op.convertToCallOp();
   }
 
-  OpBuilder builder{actor};
-  builder = builder.atBlockEnd(actor->getBlock());
-  auto func_op = createEmptyVoidFunctionWithBody(builder, actor.getSymName(),
-                                                 actor->getLoc());
+  OpBuilder builder{dag};
+  builder = builder.atBlockEnd(dag->getBlock());
+  auto func_op =
+      createEmptyVoidFunctionWithBody(builder, dag.getSymName(), dag->getLoc());
 
-  func_op.getFunctionBody().takeBody(actor->getRegion(0));
+  func_op.getFunctionBody().takeBody(dag->getRegion(0));
 
   auto ops = func_op.getOps() | Pointers() | Into<SmallVector<Operation *>>();
 

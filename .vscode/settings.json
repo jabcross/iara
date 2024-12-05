@@ -10,5 +10,6 @@
   "C_Cpp.inlayHints.autoDeclarationTypes.enabled": false,
   "python.analysis.extraPaths": [
     "/home/jabcross/repos/Polygeist/llvm-project/llvm/utils/lit"
-  ]
+  ],
+  "dotnetAcquisitionExtension.enableTelemetry": false
 }

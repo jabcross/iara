@@ -1,18 +1,36 @@
-// RUN:   iara-opt --iara-flatten --iara-collapse-edges  %s
-
+// RUN: mkdir -p `dirname %s`/build
+// RUN: rm -f `dirname %s`/build/*
+// RUN:   iara-opt --flatten --sdf-to-tasks >`dirname %s`/build/schedule.mlir  %s
+// RUN: mlir-to-llvmir.sh < `dirname %s`/build/schedule.mlir > `dirname %s`/build/schedule.ll
+// RUN: clang++ -DDIM=3 -DNB=3 -lomp -xir `dirname %s`/build/schedule.ll -xc "`dirname %s`/main.c" -o `dirname %s`/build/a.out
+// RUN: `dirname %s`/build/a.out > `dirname %s`/build/output.txt
+// RUN: FileCheck %s < `dirname %s`/build/output.txt
 // Two nodes
 
-iara.actor @a {
-  %0 = iara.in : tensor<1xf32>
-  %1 = iara.node @f in %0: tensor<1xf32> out : tensor<1xf32>
-  iara.out (%1: tensor<1xf32>): tensor<1xf32>
-  iara.dep
-} { }
-iara.actor @c  {
-  %0 = iara.node @foo out: tensor<1xf32>
-  %1 = iara.node @a in %0: tensor<1xf32> out : tensor<1xf32>
-  iara.node @bar in %1 : tensor<1xf32>
-  iara.dep
-} { }
+iara.actor @foo {
+  iara.out: i32
+} {kernel}
 
-// CHECK: Hello World!
+iara.actor @bar {
+  iara.in: i32
+}{kernel}
+
+iara.actor @f {
+  %0 = iara.in : i32
+  iara.out: i32
+}{kernel}
+
+iara.actor @a {
+  %0 = iara.in : i32
+  %1 = iara.node @f in %0: i32 out : i32
+  iara.out (%1: i32): i32
+  iara.dep
+}
+iara.actor @c  {
+  %0 = iara.node @foo out: i32
+  %1 = iara.node @a in %0: i32 out : i32
+  iara.node @bar in %1 : i32
+  iara.dep
+}
+
+// CHECK: 30

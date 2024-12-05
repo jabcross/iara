@@ -33,13 +33,13 @@
 
 using namespace RangeUtil;
 
-namespace mlir::iara {
-#define GEN_PASS_DEF_IARAFLATTEN
+namespace mlir::iara::passes {
+#define GEN_PASS_DEF_FLATTENPASS
 #include "Iara/IaraPasses.h.inc"
 
 namespace {
 
-class IaraFlatten : public impl::IaraFlattenBase<IaraFlatten> {
+class FlattenPass : public impl::FlattenPassBase<FlattenPass> {
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<IaraDialect, memref::MemRefDialect, mlir::func::FuncDialect,
@@ -47,7 +47,7 @@ public:
                     mlir::math::MathDialect, mlir::linalg::LinalgDialect,
                     mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect>();
   }
-  using impl::IaraFlattenBase<IaraFlatten>::IaraFlattenBase;
+  using impl::FlattenPassBase<FlattenPass>::FlattenPassBase;
 
   bool hasRecursion() {
 
@@ -123,6 +123,17 @@ public:
       return;
     }
     if (actor_op->hasAttr("kernel")) {
+      return;
+    }
+    if (!node.signatureMatches(actor_op)) {
+      node->emitError("Signature of node does not match actor");
+      signalPassFailure();
+      return;
+    }
+    if (actor_op.getOps<NodeOp>().empty()) {
+      node->emitError("Actor does not have any nodes (did you forget to tag it "
+                      "with 'kernel'?)");
+      signalPassFailure();
       return;
     }
 
@@ -201,4 +212,4 @@ public:
 };
 
 } // namespace
-} // namespace mlir::iara
+} // namespace mlir::iara::passes
