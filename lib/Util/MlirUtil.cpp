@@ -1,21 +1,70 @@
 #include "Util/MlirUtil.h"
+#include "Iara/IaraOps.h"
+#include <llvm/ADT/StringExtras.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/StringSwitch.h>
+#include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/raw_ostream.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/MLIRContext.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <sstream>
 
 namespace mlir {
 
-size_t getTypeSize(Type type) {
-  if (auto int_type = type.dyn_cast<IntegerType>()) {
-    return int_type.getWidth() / 8;
+namespace iara {
+
+namespace mlir_util {
+
+size_t getTypeTokenCount(Type type) {
+  if (auto ranked_tensor_type =
+          llvm::dyn_cast_if_present<RankedTensorType>(type)) {
+    return ranked_tensor_type.getNumElements();
   }
-  if (auto float_type = type.dyn_cast<FloatType>()) {
-    return float_type.getWidth() / 8;
+  return 1;
+}
+
+// returns the size of the type in bytes
+size_t getTypeSize(Value value) {
+  auto dl = mlir::DataLayout::closest(value.getDefiningOp());
+  if (auto tensor = llvm::dyn_cast<TensorType>(value.getType())) {
+    return tensor.getNumElements() * dl.getTypeSize(tensor.getElementType());
   }
-  if (auto ranked_tensor_type = type.dyn_cast<RankedTensorType>()) {
-    return ranked_tensor_type.getNumElements() *
-           getTypeSize(ranked_tensor_type.getElementType());
+  return dl.getTypeSize(value.getType());
+}
+
+// returns the size of the type in bytes
+size_t getTypeSize(Type type, DataLayout dl) {
+  if (auto tensor = llvm::dyn_cast<TensorType>(type)) {
+    return tensor.getNumElements() * dl.getTypeSize(tensor.getElementType());
   }
-  llvm_unreachable("unhandled type");
+  return dl.getTypeSize(type);
+}
+
+std::string stringifyType(Type type) {
+  std::string vanilla_name;
+  auto vanilla_name_s = llvm::raw_string_ostream(vanilla_name);
+  type.print(vanilla_name_s);
+  std::string safe_name;
+  char c = vanilla_name[0];
+  if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_') {
+    safe_name += c;
+  } else {
+    safe_name += llvm::toHex(c);
+  }
+
+  for (auto c : StringRef(vanilla_name).drop_front(1)) {
+    if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
+        (c >= '0' and c <= '9') or c == '_') {
+      safe_name += c;
+    } else {
+      safe_name += llvm::toHex(c);
+    }
+  }
+  return {safe_name};
 }
 
 func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
@@ -25,7 +74,6 @@ func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
   builder.atBlockEnd(rv.addEntryBlock()).create<func::ReturnOp>(loc);
   return rv;
 }
-
 OpOperand &appendOperand(Operation *op, Value val) {
   SmallVector<Value> operands = op->getOperands();
   operands.push_back(val);
@@ -39,11 +87,38 @@ void moveBlockAfter(Block *to_move, Block *after_this) {
     return;
   }
   // It's the last block of the region.
-  auto builder = OpBuilder{after_this->getParentOp()};
   auto region = after_this->getParent();
   auto &block = region->emplaceBlock();
   to_move->moveBefore(&block);
   block.erase();
 }
+
+void viewGraph(Operation *op) { op->getParentRegion()->viewGraph(); }
+
+// Generates an int constant for the given function and value
+Value getIntConstant(func::FuncOp func, IntegerAttr val) {
+  auto builder = OpBuilder(func).atBlockBegin(&func.getBlocks().front());
+  auto rv = CREATE(arith::ConstantOp, builder, func->getLoc(), val);
+  return rv.getResult();
+}
+
+Value getIntConstant(func::FuncOp func, size_t value) {
+  auto builder = OpBuilder(func);
+  return getIntConstant(
+      func, builder.getIntegerAttr(builder.getIntegerType(64), value));
+}
+
+StringRef getCTypeName(mlir::Type type) {
+  auto ctx = type.getContext();
+  if (type == IntegerType::get(ctx, 64))
+    return "int64_t";
+  if (type == IntegerType::get(ctx, 32))
+    return "int32_t";
+  llvm_unreachable("unimplemented");
+}
+
+} // namespace mlir_util
+
+} // namespace iara
 
 } // namespace mlir

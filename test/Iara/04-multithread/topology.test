@@ -1,0 +1,32 @@
+// RUN: mkdir -p "`dirname %s`/build"
+// RUN: cd "`dirname %s`/build"
+// RUN: iara-opt --flatten --sdf-to-tasks  %s > schedule.mlir
+// RUN: mlir-to-llvmir.sh schedule.mlir
+// RUN: clang++ -g -lomp -lpthread -fuse-ld=mold\
+// RUN:    -xir schedule.ll \
+// RUN:    -xc++ "`dirname %s`/04-multithread.cpp" \
+// RUN:     $IARA_DIR/runtime/IaraRuntime.cpp \
+// RUN:    -I. -I$IARA_DIR/include
+// RUN: ./a.out > output.txt
+// RUN: FileCheck %s < output.txt
+
+// multithread
+
+iara.actor @a {
+  iara.out : tensor<1xi64>
+}
+iara.actor @b {
+  iara.out : tensor<1xi64>
+}
+iara.actor @c {
+  %1 = iara.in : tensor<1xi64>
+  %2 = iara.in : tensor<1xi64>
+}
+
+iara.actor @run  {
+  %1 = iara.node @a out : tensor<1xi64>
+  %2 = iara.node @b out : tensor<1xi64>
+  iara.node @c in %1, %2 : tensor<1xi64> , tensor<1xi64>
+}
+
+// CHECK: Ran

@@ -1,7 +1,5 @@
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
-#include "Iara/Passes/Schedule/OpenMPScheduler.h"
-#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/RangeUtil.h"
 #include "llvm/Support/Casting.h"
 #include <cstddef>
@@ -14,6 +12,7 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
+#include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
@@ -24,6 +23,7 @@
 #include <mlir/IR/IRMapping.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Visitors.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 
 using namespace RangeUtil;
@@ -41,7 +41,8 @@ public:
     registry.insert<IaraDialect, memref::MemRefDialect, mlir::func::FuncDialect,
                     arith::ArithDialect, func::FuncDialect, LLVM::LLVMDialect,
                     mlir::math::MathDialect, mlir::linalg::LinalgDialect,
-                    mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect>();
+                    mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect,
+                    mlir::DLTIDialect>();
   }
   using impl::LowerToOpenMPPassBase<LowerToOpenMPPass>::LowerToOpenMPPassBase;
 
@@ -63,9 +64,10 @@ public:
                                                  ArrayRef<NamedAttribute>{});
 
         decl->setAttr("sym_name", builder.getStringAttr(impl_name));
-        decl->setAttr("sym_visibility", builder.getStringAttr("private"));
         decl->setAttr("function_type",
                       TypeAttr::get(actor.getImplFunctionType()));
+
+        decl->setAttr("sym_visibility", builder.getStringAttr("private"));
         decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
         actor->erase();
         continue;

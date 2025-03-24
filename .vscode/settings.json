@@ -1,5 +1,5 @@
 {
-  "workbench.colorTheme": "Visual Studio Dark - C++",
+  "workbench.colorTheme": "Default Dark+",
   "cmake.configureOnOpen": false,
   "cmake.buildTask": true,
   "cmake.environment": {
@@ -11,5 +11,8 @@
   "python.analysis.extraPaths": [
     "/home/jabcross/repos/Polygeist/llvm-project/llvm/utils/lit"
   ],
-  "dotnetAcquisitionExtension.enableTelemetry": false
+  "dotnetAcquisitionExtension.enableTelemetry": false,
+  "clang-tidy.blacklist": ["scripts/.*"],
+  "clangd.checkUpdates": true,
+  "clang-format.assumeFilename": ".clang-format"
 }

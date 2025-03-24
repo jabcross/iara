@@ -21,6 +21,6 @@ add_lit_testsuite(check-iara "Running the iara regression tests"
         ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS ${IARA_TEST_DEPENDS}
         )
-set_target_properties(check-iara PROPERTIES FOLDER "Tests")
+set_target_properties(check-iara PROPERTIES FOLDER "test/Iara")
 
 add_lit_testsuites(IARA ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${IARA_TEST_DEPENDS})

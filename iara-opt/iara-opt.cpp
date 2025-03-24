@@ -19,6 +19,7 @@
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
   mlir::iara::passes::registerPasses();
+  mlir::iara::passes::registerLowerToTasksPass();
   // TODO: Register iara passes here.
 
   mlir::DialectRegistry registry;

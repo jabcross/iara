@@ -18,7 +18,7 @@ from lit.llvm.subst import FindTool
 # name: The name of this test suite.
 config.name = "IARA"
 
-config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
+config.test_format = lit.formats.ShTest("0")
 
 # suffixes: A list of file extensions to treat as test files.
 config.suffixes = [".test"]
@@ -32,7 +32,8 @@ config.test_exec_root = os.path.join(config.iara_obj_root, "test")
 config.substitutions.append(("%PATH%", config.environment["PATH"]))
 config.substitutions.append(("%shlibext", config.llvm_shlib_ext))
 
-llvm_config.with_system_environment(["HOME", "INCLUDE", "LIB", "TMP", "TEMP"])
+llvm_config.with_system_environment(
+    ["HOME", "INCLUDE", "LIB", "TMP", "TEMP", "IARA_DIR"])
 
 llvm_config.use_default_substitutions()
 

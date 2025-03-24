@@ -158,8 +158,8 @@ struct TaskSchedule {
 
   Task createSuccessorTask(Task task) {
     auto builder = OpBuilder{task.block->getParentOp()};
-    auto new_dep = CREATE(DepOp, builder.atBlockEnd(task.block),
-                          task.block->getParentOp()->getLoc(), BlockRange{});
+    auto new_dep = CREATE\({}, DepOp, builder.atBlockEnd(task.block),
+                           task.block->getParentOp()->getLoc(), BlockRange{});
     auto new_block = task.block->splitBlock(new_dep);
     task.addDependent(Task{new_block});
     return new_block;

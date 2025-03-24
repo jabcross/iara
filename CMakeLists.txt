@@ -3,9 +3,10 @@ project(iara-dialect LANGUAGES CXX C)
 
 set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 
-set(CMAKE_CXX_STANDARD 23 CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD 26 CACHE STRING "C++ standard to conform to")
 
 add_compile_options("-fcoroutines")
+add_compile_definitions("IARA_DEBUG")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   find_package(MLIR REQUIRED CONFIG)

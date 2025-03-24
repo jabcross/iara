@@ -1,0 +1,26 @@
+// RUN: mkdir -p "`dirname %s`/build"
+// RUN: cd "`dirname %s`/build"
+// RUN: iara-opt --flatten --sdf-to-tasks  %s > schedule.mlir
+// RUN: mlir-to-llvmir.sh schedule.mlir
+// RUN: clang++ -g -lomp -lpthread -fuse-ld=mold\
+// RUN:    -xir schedule.ll \
+// RUN:    -xc "`dirname %s`/03-two-nodes.c" \
+// RUN:    -xc++ $IARA_DIR/runtime/IaraRuntime.cpp \
+// RUN:    -I. -I$IARA_DIR/include
+// RUN: ./a.out > output.txt
+// RUN: FileCheck %s < output.txt
+
+// Two nodes
+
+iara.actor @a {
+  iara.out : tensor<1xi32>
+}
+iara.actor @b {
+  %1 = iara.in : tensor<1xi32>
+}
+iara.actor @run  {
+  %1 = iara.node @a out : tensor<1xi32>
+  iara.node @b in %1 : tensor<1xi32>
+}
+
+// CHECK: Hello World!

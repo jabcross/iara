@@ -7,8 +7,6 @@
 //===----------------------------------------------------------------------===//
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraOps.h"
-#include "Iara/Passes/Schedule/OpenMPScheduler.h"
-#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/RangeUtil.h"
 #include "llvm/Support/Casting.h"
 #include <cstddef>
@@ -17,6 +15,7 @@
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h>
@@ -25,10 +24,12 @@
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
 #include <mlir/Dialect/Math/IR/Math.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/IRMapping.h>
 #include <mlir/IR/Location.h>
+#include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
 
 using namespace RangeUtil;
@@ -45,7 +46,7 @@ public:
     registry.insert<IaraDialect, memref::MemRefDialect, mlir::func::FuncDialect,
                     arith::ArithDialect, func::FuncDialect, LLVM::LLVMDialect,
                     mlir::math::MathDialect, mlir::linalg::LinalgDialect,
-                    mlir::omp::OpenMPDialect, mlir::tensor::TensorDialect>();
+                    mlir::tensor::TensorDialect>();
   }
   using impl::FlattenPassBase<FlattenPass>::FlattenPassBase;
 
@@ -114,15 +115,12 @@ public:
     if (node->hasAttr("flat")) {
       return;
     }
-    if (node->hasAttr("kernel")) {
-      return;
-    }
     auto impl = node.getImpl();
     auto actor_op = module.lookupSymbol<ActorOp>(impl);
     if (!actor_op) {
       return;
     }
-    if (actor_op->hasAttr("kernel")) {
+    if (actor_op.isKernelDeclaration()) {
       return;
     }
     if (!node.signatureMatches(actor_op)) {
@@ -131,9 +129,9 @@ public:
       return;
     }
     if (actor_op.getOps<NodeOp>().empty()) {
-      node->emitError("Actor does not have any nodes (did you forget to tag it "
-                      "with 'kernel'?)");
+      node->emitError("Actor does not have any nodes (is this a declaration?)");
       signalPassFailure();
+      llvm_unreachable("should have been caught by signature check");
       return;
     }
 
@@ -199,14 +197,24 @@ public:
 
     llvm::SmallVector<std::pair<int, ActorOp>> actor_depths;
 
+    SmallVector<ActorOp> decls;
+
     for (auto actor : module.getOps<ActorOp>()) {
-      actor_depths.push_back({getDepth(actor), actor});
+      if (actor.isKernelDeclaration()) {
+        decls.push_back(actor);
+      } else {
+        actor_depths.push_back({getDepth(actor), actor});
+      }
     }
 
     llvm::sort(actor_depths);
 
     for (auto [depth, actor] : actor_depths) {
       flatten(actor);
+    }
+
+    for (auto actor : decls) {
+      actor->erase();
     }
   }
 };

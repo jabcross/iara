@@ -1,44 +1,96 @@
+#ifndef MLIR_IARA_MLIR_UTIL_H
+#define MLIR_IARA_MLIR_UTIL_H
+#include "OpCreateHelper.h"
+#include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/OperationSupport.h>
+#include <mlir/IR/Types.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <mlir/Support/LLVM.h>
+#include <source_location>
 
-namespace mlir {
+namespace mlir::iara::mlir_util {
 
-size_t getTypeSize(Type type);
+size_t getTypeTokenCount(Type type);
+size_t getTypeSize(Value value);
+size_t getTypeSize(Type type, DataLayout dl);
+
+std::string stringifyType(Type type);
 
 func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
                                              Location loc);
 OpOperand &appendOperand(Operation *op, Value val);
 void moveBlockAfter(Block *to_move, Block *after_this);
+void viewGraph(Operation *op);
 
-} // namespace mlir
+// Follows a linear chain of uses until an operation of the given type is
+// found. Returns null if a fork, dead end or cycle is found.
+template <class T> T followChainUntilNext(Value val) {
+  if (!val.hasOneUse()) {
+    return nullptr;
+  }
+  llvm::DenseSet<Operation *> visited;
+  Operation *op = *val.getUsers().begin();
 
-template <class OpTy> struct CreateHelper {
-  mlir::OpBuilder builder;
-  mlir::Location loc;
+  while (op != nullptr) {
+    if (visited.contains(op)) {
+      return nullptr;
+    }
+    if (auto rv = llvm::dyn_cast<T>(op)) {
+      return rv;
+    }
+    auto users = llvm::to_vector(op->getUsers());
+    if (users.size() != 1) {
+      return nullptr;
+    }
+    visited.insert(op);
+    op = users[0];
+  }
+  llvm_unreachable("Should return inside while loop");
+  return nullptr;
+}
 
-private:
-  CreateHelper() = delete;
-  CreateHelper(CreateHelper &&) = delete;
-  CreateHelper(CreateHelper const &) = delete;
+// Follows a linear chain of uses backwards until an operation of the given
+// type is found. Returns null if a join, dead end or cycle is found.
+template <class T> T followChainUntilPrevious(Value val) {
+  llvm::DenseSet<Operation *> visited;
+  Operation *op = val.getDefiningOp();
 
-public:
-  CreateHelper(mlir::OpBuilder builder, mlir::Location loc)
-      : builder(builder), loc(loc) {}
-};
+  while (op != nullptr) {
+    if (visited.contains(op)) {
+      return nullptr;
+    }
+    if (auto rv = llvm::dyn_cast<T>(op)) {
+      return rv;
+    }
+    if (op->getNumOperands() != 1) {
+      return nullptr;
+    }
+    visited.insert(op);
+    op = op->getOperand(0).getDefiningOp();
+  }
+  llvm_unreachable("Should return inside while loop");
+  return nullptr;
+}
 
-// clang-format off
-#define CREATE_OP(__type, Builder, Loc) [&]() {                                \
-    using __TYPE = __type;                                                     \
-    CreateHelper<__type> __builder{Builder, Loc};                              \
-    OperationState __s{__builder.loc, __type::getOperationName()};             \
-    __type::build(__builder.builder, __s,
+// Generates an int constant for the given function and value
+mlir::Value getIntConstant(func::FuncOp func, IntegerAttr val);
 
-#define END_OP );                                                              \
-  return dyn_cast<__TYPE>(__builder.builder.create(__s));                      \
-  }                                                                            \
-  ()
+mlir::Value getIntConstant(func::FuncOp func, size_t value);
 
-// Help with op autocompletion. Takes op type, builder, location and then
-// YourOp::build() arguments. Works fine with clangd.
-#define CREATE(__type, __builder, __loc, ... ) CREATE_OP(__type, __builder, __loc) __VA_ARGS__ END_OP
+// generate C name for this type (for use on C header codegen)
+StringRef getCTypeName(mlir::Type type);
 
-// clang-format on
+} // namespace mlir::iara::mlir_util
+
+#endif

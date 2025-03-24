@@ -1,5 +1,30 @@
 {
   "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "test",
+      "type": "pickString",
+      "options": [
+        "01-empty",
+        "02-single-node",
+        "03-two-nodes",
+        "04-multithread",
+        "05-cholesky",
+        "06-broadcast",
+        "07-ownership",
+        "09-hierarchy",
+        "10-multi-rate",
+        "11-forward-delay"
+      ],
+      "description": "Which test to run"
+    },
+    {
+      "id": "remember_test",
+      "type": "command",
+      "command": "extension.commandvariable.remember",
+      "args": { "key": "pickedTest" }
+    }
+  ],
   "tasks": [
     {
       "type": "cmake",
@@ -17,6 +42,9 @@
       "type": "cmake",
       "label": "CMake: test",
       "command": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/build"
+      },
       "targets": ["check-iara"],
       "group": {
         "kind": "test",
@@ -29,6 +57,18 @@
       "label": "Make SIFT topology",
       "type": "shell",
       "command": "bash -c 'cd ${workspaceFolder} ; scripts/build.sh && mkdir -p test/Iara/08-SIFT/build && python scripts/dif-to-iara.py test/Iara/08-SIFT/topology.dif > test/Iara/08-SIFT/build/topology.mlir' "
+    },
+    {
+      "label": "LIT test",
+      "type": "shell",
+      "command": "scripts/run_lit_test.sh test/Iara/${input:remember_test} --ignore-result",
+      "options": {
+        "env": {
+          "MOLD_PATH": "/usr/bin/mold",
+          "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
+        }
+      },
+      "problemMatcher": ["$gcc"]
     }
   ]
 }

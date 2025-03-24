@@ -1,5 +1,3 @@
-add_subdirectory(Passes/Schedule)
-
 add_mlir_dialect(IaraOps iara)
 add_mlir_doc(IaraDialect IaraDialect Iara/ -gen-dialect-doc)
 add_mlir_doc(IaraOps IaraOps Iara/ -gen-op-doc)

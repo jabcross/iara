@@ -9,6 +9,7 @@
 #ifndef IARA_IARAOPS_H
 #define IARA_IARAOPS_H
 
+#include "Iara/IaraDialect.h"
 #include "Util/rational.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -25,5 +26,15 @@
 
 #define GET_OP_CLASSES
 #include "Iara/IaraOps.h.inc"
+
+namespace mlir::iara {
+
+// Follow an inout edge backwards, or return null.
+EdgeOp followInoutEdgeBackwards(EdgeOp edge);
+
+// Follow an inout edge forwards, or return null.
+EdgeOp followInoutEdgeForwards(EdgeOp edge);
+
+} // namespace mlir::iara
 
 #endif // IARA_IARAOPS_H

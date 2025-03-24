@@ -6,34 +6,40 @@
   "inputs": [
     {
       "id": "test",
-      "type": "pickString",
-      "options": [
-        "test/Iara/01-empty/01-empty.test",
-        "test/Iara/02-single-node/02-single-node.test",
-        "test/Iara/03-two-nodes/03-two-nodes.test",
-        "test/Iara/04-multithread/04-multithread.test",
-        "test/Iara/05-cholesky/05-cholesky.test",
-        "test/Iara/06-broadcast/06-broadcast.test",
-        "test/Iara/07-ownership/07-ownership.test",
-        "test/Iara/09-hierarchy/09-hierarchy.test",
-        "test/Iara/10-non-single-rate/10-non-single-rate.test"
-      ],
-      "description": "Which test to run"
+      "type": "command",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "options": [
+          "01-empty",
+          "02-single-node",
+          "03-two-nodes",
+          "04-multithread",
+          "05-cholesky",
+          "06-broadcast",
+          "07-ownership",
+          "09-hierarchy",
+          "10-multi-rate",
+          "11-forward-delay"
+        ],
+        "description": "Which test to run",
+        "key": "pickedTest"
+      }
     }
   ],
   "configurations": [
     {
-      "name": "dif-to-iara",
-      "type": "debugpy",
-      "args": ["${workspaceFolder}/test/Iara/08-SIFT/topology.dif"],
+      "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/scripts/dif-to-iara.py"
+      "name": "Launch",
+      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build/a.out",
+      "args": [],
+      "cwd": "${workspaceFolder}/test/Iara/03-two-nodes/build/"
     },
     {
       "name": "(gdb) Attach",
       "type": "cppdbg",
       "request": "attach",
-      "program": "${workspaceFolder}/test/Iara/05-cholesky/a.out",
+      "program": "enter program name, for example ${workspaceFolder}/a.out",
       "MIMode": "gdb",
       "setupCommands": [
         {
@@ -48,16 +54,49 @@
         }
       ]
     },
+
     {
-      "name": "GDB generic test",
+      "name": "(gdb) Runtime test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/Iara/${input:test}/build/a.out",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build/",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "LIT test",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+
+    {
+      "name": "dif-to-iara",
+      "type": "debugpy",
+      "args": ["${workspaceFolder}/test/Iara/08-SIFT/topology.dif"],
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/dif-to-iara.py"
+    },
+    {
+      "name": "(gdb) Compiler test",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
         "--flatten",
-        "--collapse-edges",
         "--sdf-to-tasks",
-        "${input:test}"
+        "test/Iara/${input:test}/topology.test"
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
@@ -94,7 +133,6 @@
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
         "--flatten",
-        "--collapse-edges",
         "--sdf-to-tasks",
         "test/Iara/08-SIFT/build/topology.mlir"
       ],
@@ -125,6 +163,14 @@
       "target": "a.out",
       "cwd": "${workspaceRoot}/test/Iara/05-cholesky",
       "valuesFormatting": "parseText"
+    },
+    {
+      "name": "(ctest) Launch",
+      "type": "cppdbg",
+      "cwd": "${cmake.testWorkingDirectory}",
+      "request": "launch",
+      "program": "${cmake.testProgram}",
+      "args": ["${cmake.testArgs}"]
     }
   ]
 }

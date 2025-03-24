@@ -4,6 +4,7 @@
 
 pthread_mutex_t mutex;
 
+extern "C" {
 void run();
 
 void a(int val[1]) {
@@ -27,4 +28,5 @@ int main() {
   pthread_mutex_init(&mutex, NULL);
   run();
   return 0;
+}
 }

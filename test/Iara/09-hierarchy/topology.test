@@ -24,13 +24,11 @@ iara.actor @a {
   %0 = iara.in : i32
   %1 = iara.node @f in %0: i32 out : i32
   iara.out (%1: i32): i32
-  iara.dep
 }
 iara.actor @c  {
   %0 = iara.node @foo out: i32
   %1 = iara.node @a in %0: i32 out : i32
   iara.node @bar in %1 : i32
-  iara.dep
 }
 
 // CHECK: 30

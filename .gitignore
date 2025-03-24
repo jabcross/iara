@@ -15,3 +15,5 @@ iara-build-time.txt
 iara.out.ll
 iara.out.mlir
 CMakeFiles/*
+typescript
+.*/edge_data.inc.h

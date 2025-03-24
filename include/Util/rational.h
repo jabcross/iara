@@ -42,10 +42,6 @@ struct Rational {
     return Rational{num * other.denom, denom * other.num};
   }
 
-  std::partial_ordering operator<=>(Rational const &other) const {
-    return ((*this) - other).normalized().num <=> 0;
-  }
-
   bool operator==(Rational const &other) const {
     auto this_norm = this->normalized();
     auto other_norm = other.normalized();
@@ -61,6 +57,8 @@ struct Rational {
 
     return Rational{sign * std::abs(num) / gcd, std::abs(denom) / gcd};
   }
+
+  Rational reciprocal() const { return Rational(denom, num); }
 };
 
 } // namespace util

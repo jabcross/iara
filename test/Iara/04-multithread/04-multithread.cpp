@@ -20,6 +20,8 @@ extern "C" void b(size_t val[1]) {
 extern "C" void c(size_t a[1], size_t b[1]) {
   if (a[0] != b[0]) {
     printf("Ran in different threads.\n");
+  } else {
+    printf("Ran in same thread.\n");
   }
 }
 

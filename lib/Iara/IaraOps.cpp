@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Iara/IaraOps.h"
 #include "Iara/IaraDialect.h"
+#include "Iara/IaraOps.h"
 #include "Util/MlirUtil.h"
 #include "Util/RangeUtil.h"
 #include "Util/rational.h"
@@ -22,10 +22,13 @@
 #include <assert.h>
 #include <functional>
 #include <iterator>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h>
 #include <mlir/IR/AttrTypeSubElements.h>
+#include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Value.h>
@@ -36,8 +39,17 @@
 #include "Iara/IaraOps.cpp.inc"
 
 using namespace RangeUtil;
+using namespace mlir::iara::mlir_util;
 
 namespace mlir::iara {
+
+bool ActorOp::isEmpty() {
+  for (Operation &op : this->getOps()) {
+    if (llvm::isa<NodeOp, EdgeOp>(&op))
+      return false;
+  }
+  return true;
+}
 
 llvm::SmallVector<Type> ActorOp::getParameterTypes() {
   return getParams() | Map([](auto param) {
@@ -71,6 +83,19 @@ llvm::SmallVector<Type> ActorOp::getAllOutputTypes() {
 };
 bool ActorOp::isInoutInput(size_t idx) {
   return idx >= getPureInTypes().size();
+}
+bool ActorOp::isKernelDeclaration() {
+  if ((*this)->hasAttr("kernel-decl"))
+    return true;
+  if ((*this)->hasAttr("kernel-def"))
+    return false;
+  auto nodes = (*this).getOps<NodeOp>() | IntoVector();
+  if (nodes.empty()) {
+    (*this)->setAttr("kernel-decl", OpBuilder(*this).getUnitAttr());
+    return true;
+  }
+  (*this)->setAttr("kernel-def", OpBuilder(*this).getUnitAttr());
+  return false;
 }
 
 mlir::FunctionType ActorOp::getImplFunctionType() {
@@ -121,11 +146,20 @@ bool ActorOp::hasInterface() {
 }
 
 bool NodeOp::isInoutInput(OpOperand &operand) {
+  assert(operand.getOwner() == getOperation());
   for (auto opd : this->getInout()) {
     if (opd == operand.get())
       return true;
   }
   return false;
+}
+
+bool NodeOp::isInoutOutput(OpResult &result) {
+  assert(result.getOwner() == getOperation());
+  if (result.getResultNumber() < getInout().size()) {
+    return false;
+  }
+  return true;
 }
 
 bool NodeOp::isPureInInput(OpOperand &operand) {
@@ -136,11 +170,69 @@ bool NodeOp::isPureInInput(OpOperand &operand) {
   return false;
 }
 
+llvm::SmallVector<Value> NodeOp::getAllInputs() {
+  SmallVector<Value> rv;
+  for (auto i : getIn()) {
+    rv.push_back(i);
+  }
+  for (auto i : getInout()) {
+    rv.push_back(i);
+  }
+  return rv;
+}
+
+llvm::SmallVector<mlir::Value> NodeOp::getAllOutputs() {
+  return getOut() | Into<llvm::SmallVector<Value>>();
+}
+
+// Returns the operand that corresponds to this output, if they form an inout
+// pair. Null otherwise.
+Value NodeOp::getMatchingInoutInput(Value output) {
+  for (auto [in, out] : getInoutPairs()) {
+    if (out == output)
+      return in;
+  }
+  return nullptr;
+}
+
+// Returns the result that corresponds to this input, if they form an inout
+// pair. Null otherwise.
+Value NodeOp::getMatchingInoutOutput(Value input) {
+  for (auto [in, out] : getInoutPairs()) {
+    if (in == input)
+      return out;
+  }
+  return nullptr;
+}
+
 func::CallOp NodeOp::convertToCallOp() {
   auto call_op = CREATE(func::CallOp, OpBuilder{*this}, getLoc(), getImpl(), {},
                         getOperands());
   erase();
   return call_op;
+}
+
+FunctionType NodeOp::getImplFunctionType() {
+  auto builder = OpBuilder(*this);
+  SmallVector<Type> types;
+  for (auto v : getIn()) {
+    types.push_back(v.getType());
+  }
+  for (auto v : getInout()) {
+    types.push_back(v.getType());
+  }
+  for (auto v : getPureOuts()) {
+    types.push_back(v.getType());
+  }
+
+  auto memref_types =
+      llvm::to_vector(types | Map([](Type type) {
+                        auto tensor = cast<RankedTensorType>(type);
+                        return cast<Type>(MemRefType::get(
+                            tensor.getShape(), tensor.getElementType()));
+                      }));
+
+  return builder.getFunctionType(memref_types, {});
 }
 
 bool NodeOp::signatureMatches(ActorOp actor) {
@@ -171,15 +263,63 @@ bool NodeOp::signatureMatches(ActorOp actor) {
   return true;
 }
 
+bool NodeOp::isAlloc() { return getImpl() == "iara_runtime_alloc"; }
+
+bool NodeOp::isDealloc() { return getImpl() == "iara_runtime_dealloc"; }
+
 ::mlir::LogicalResult
 NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
   // Todo: better verification
   return success();
 }
 
+// Input rate in bytes
+int64_t EdgeOp::getProdRate() { return mlir_util::getTypeSize(getIn()); }
+
+// Output rate in bytes
+int64_t EdgeOp::getConsRate() { return mlir_util::getTypeSize(getOut()); }
+
+// Delay in bytes
+int64_t EdgeOp::getDelay() {
+  auto attr = (*this)->getAttr("delay_size");
+  auto int_attr = llvm::dyn_cast_if_present<mlir::IntegerAttr>(attr);
+  if (int_attr)
+    return int_attr.getInt();
+  return 0;
+};
+
 util::Rational EdgeOp::getFlowRatio() {
-  return util::Rational(getTypeSize(getIn().getType()),
-                        getTypeSize(getOut().getType()));
+  return util::Rational(mlir_util::getTypeSize(getIn()),
+                        mlir_util::getTypeSize(getOut()));
+}
+
+NodeOp EdgeOp::getProducerNode() {
+  return llvm::dyn_cast_if_present<NodeOp>(getIn().getDefiningOp());
+}
+NodeOp EdgeOp::getConsumerNode() {
+  auto users = llvm::to_vector(getOut().getUsers());
+  if (users.size() != 1)
+    llvm_unreachable("Should have a consumer");
+  return llvm::dyn_cast<NodeOp>(users[0]);
+}
+
+// Follow an inout edge backwards, or return null.
+EdgeOp followInoutEdgeBackwards(EdgeOp edge) {
+  auto prev_node = edge.getProducerNode();
+  if (auto in_port = prev_node.getMatchingInoutInput(edge.getIn())) {
+    return followChainUntilPrevious<EdgeOp>(in_port);
+  }
+  return nullptr;
+}
+
+// Follow an inout edge forwards, or return null.
+EdgeOp followInoutEdgeForwards(EdgeOp edge) {
+
+  auto next_node = edge.getConsumerNode();
+  if (auto out_port = next_node.getMatchingInoutOutput(edge.getOut())) {
+    return followChainUntilNext<EdgeOp>(out_port);
+  }
+  return nullptr;
 }
 
 } // namespace mlir::iara

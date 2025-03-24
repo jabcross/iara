@@ -44,7 +44,8 @@ def ActorOp : IaraOp<"actor", [Symbol, NoTerminator, RegionKindInterface, Isolat
     let extraClassDeclaration = [{
       bool isFlat() { return (*this)->hasAttr("flat"); }
       bool isInTaskForm() { return (*this)->hasAttr("task-form"); }
-      bool isKernelDeclaration() { return (*this)->hasAttr("kernel"); }
+      bool isEmpty();
+      bool isKernelDeclaration();
       bool hasInterface();
       ::llvm::SmallVector<::mlir::Type> getParameterTypes();
       ::llvm::SmallVector<::mlir::Type> getAllInputTypes();
@@ -59,22 +60,6 @@ def ActorOp : IaraOp<"actor", [Symbol, NoTerminator, RegionKindInterface, Isolat
         return ::mlir::RegionKind::Graph;
       }
     }];
-}
-
-def DAGOp : IaraOp<"dag", [IsolatedFromAbove]> {
-let summary = "A DAG of blocks, with dependencies determined by `dep` operations";
-    let description = [{
-        The `iara.dag` operation represents task dependencies with block arguments and `dep` operations. It does not allow cycles.
-
-        Example:
-
-        ```mlir
-        TODO
-        ```
-    }];
-    let arguments = (ins FlatSymbolRefAttr:$sym_name);
-    let regions = (region AnyRegion:$body);
-    let assemblyFormat = [{ $body attr-dict }];
 }
 
 def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -113,9 +98,17 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
             return getResults().drop_front(getInout().size());
         }
         bool isInoutInput(OpOperand &operand);
+        bool isInoutOutput(OpResult &result);
         bool isPureInInput(OpOperand &operand);
+        llvm::SmallVector<mlir::Value> getAllInputs();
+        llvm::SmallVector<mlir::Value> getAllOutputs();
+        Value getMatchingInoutInput(Value result);
+        Value getMatchingInoutOutput(Value operand);
         func::CallOp convertToCallOp();
+        FunctionType getImplFunctionType();
         bool signatureMatches(ActorOp actor);
+        bool isAlloc();
+        bool isDealloc();
     }];
 
 }
@@ -141,9 +134,14 @@ def EdgeOp : IaraOp<"edge", []> {
       $in `:` type($in) `->` type($out)
       attr-dict
   }];
-      let extraClassDeclaration = [{
+    let extraClassDeclaration = [{
       // Returns the producer rate divided by the consumer rate.
        util::Rational getFlowRatio();
+       int64_t getProdRate();
+       int64_t getConsRate();
+       int64_t getDelay();
+       NodeOp getProducerNode();
+       NodeOp getConsumerNode();
     }];
 }
 
@@ -177,28 +175,5 @@ def OutPortOp: IaraOp<"out",  [AttrSizedOperandSegments] > {
     let assemblyFormat = [{  (`(` $value^ `:` type($value) `)`  )? ( `<` $dyn_sizes^ `>`)? `:` $type attr-dict }];
 }
 
-def DepOp: IaraOp<"dep", [Terminator]> {
-    let summary = "A logical dependency block";
-    let description = [{
-        The `iara.dep` operation terminates a block and declares which blocks depend on this block.
-        Example:
-
-        ```mlir
-        TODO
-        ```
-    }];
-    let successors = (successor VariadicSuccessor<AnySuccessor>:$deps);
-    let assemblyFormat = [{ $deps  attr-dict }];
-}
-
-// def NodeOp : IaraOp<"node", [AttrSizedOperandSegments, DeclareOpInterfaceMethods<SymbolUserOpInterface>] > {
-
-
-//     let arguments = (ins FlatSymbolRefAttr:$impl, Variadic<AnyType>:$params, Variadic<AnyType> :$in, Variadic<AnyType> :$i_inout);
-//     let results = (outs Variadic<AnyType>:$out, Variadic<AnyType> :$o_inout);
-
-//     let assemblyFormat = [{ $impl oilist( `params` $params | `in`  $in | `inout`  $inout ) attr-dict }];
-
-// }
 
 #endif // IARA_OPS

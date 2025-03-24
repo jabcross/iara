@@ -35,7 +35,12 @@ def IaraDialect : Dialect {
 // Base iara operation definition.
 //===----------------------------------------------------------------------===//
 
+
+def IaraOpTrait: NativeOpTrait<"IaraOp"> {
+    string cppNamespace = "::mlir::iara";
+}
+
 class IaraOp<string mnemonic, list<Trait> traits = []> :
-        Op<IaraDialect, mnemonic, traits>;
+        Op<IaraDialect, mnemonic, !listconcat([IaraOpTrait], traits)>;
 
 #endif // IARA_DIALECT
