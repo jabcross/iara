@@ -19,7 +19,8 @@
           "07-ownership",
           "09-hierarchy",
           "10-multi-rate",
-          "11-forward-delay"
+          "11-forward-delay",
+          "12-average3"
         ],
         "description": "Which test to run",
         "key": "pickedTest"
@@ -27,6 +28,75 @@
     }
   ],
   "configurations": [
+    {
+      "name": "total-firings-calculator",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/total-firings-calculator.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build",
+      "args": "total_firings.input.txt",
+      "python": "${workspaceFolder}/scripts/pyenv/bin/python"
+    },
+    {
+      "name": "(gdb) Compiler test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": ["--flatten", "--sdf-to-tasks", "../topology.test"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build",
+      "environment": [
+        {
+          "name": "POLYGEIST_MLIR_CLANG_BIN",
+          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
+        },
+        {
+          "name": "LLVM_PROJECT",
+          "value": "${workspaceFolder}/../Polygeist/llvm-project"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "CMake: build",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) Runtime test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/Iara/${input:test}/build/a.out",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build/",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "LIT test",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
     {
       "type": "lldb",
       "request": "launch",
@@ -56,76 +126,13 @@
     },
 
     {
-      "name": "(gdb) Runtime test",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/test/Iara/${input:test}/build/a.out",
-      "args": [],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build/",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "gdb",
-      "preLaunchTask": "LIT test",
-      "setupCommands": [
-        {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        },
-        {
-          "description": "Set Disassembly Flavor to Intel",
-          "text": "-gdb-set disassembly-flavor intel",
-          "ignoreFailures": true
-        }
-      ]
-    },
-
-    {
       "name": "dif-to-iara",
       "type": "debugpy",
       "args": ["${workspaceFolder}/test/Iara/08-SIFT/topology.dif"],
       "request": "launch",
       "program": "${workspaceFolder}/scripts/dif-to-iara.py"
     },
-    {
-      "name": "(gdb) Compiler test",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": [
-        "--flatten",
-        "--sdf-to-tasks",
-        "test/Iara/${input:test}/topology.test"
-      ],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}",
-      "environment": [
-        {
-          "name": "POLYGEIST_MLIR_CLANG_BIN",
-          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
-        },
-        {
-          "name": "LLVM_PROJECT",
-          "value": "${workspaceFolder}/../Polygeist/llvm-project"
-        }
-      ],
-      "externalConsole": false,
-      "MIMode": "gdb",
-      "preLaunchTask": "CMake: build",
-      "setupCommands": [
-        {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        },
-        {
-          "description": "Set Disassembly Flavor to Intel",
-          "text": "-gdb-set disassembly-flavor intel",
-          "ignoreFailures": true
-        }
-      ]
-    },
+
     {
       "name": "SIFT",
       "type": "cppdbg",

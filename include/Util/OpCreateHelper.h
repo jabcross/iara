@@ -17,7 +17,8 @@
   #define IARA_DEBUG_LOC_PARAM
 #endif
 
-// Help with op autocompletion and debugging. Adds a debubg_Parameters:
+// Help with op autocompletion and debugging.
+// Parameters:
 // - debug loc (empty initializer list = std:::source_location::current())
 // - op type
 // - builder

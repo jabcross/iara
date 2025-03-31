@@ -1,5 +1,5 @@
-#include "Util/MlirUtil.h"
 #include "Iara/IaraOps.h"
+#include "Util/MlirUtil.h"
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
@@ -96,16 +96,17 @@ void moveBlockAfter(Block *to_move, Block *after_this) {
 void viewGraph(Operation *op) { op->getParentRegion()->viewGraph(); }
 
 // Generates an int constant for the given function and value
-Value getIntConstant(func::FuncOp func, IntegerAttr val) {
-  auto builder = OpBuilder(func).atBlockBegin(&func.getBlocks().front());
-  auto rv = CREATE(arith::ConstantOp, builder, func->getLoc(), val);
+Value getIntConstant(Block *block, IntegerAttr val) {
+  auto builder = OpBuilder::atBlockBegin(block);
+  auto rv =
+      CREATE(arith::ConstantOp, builder, block->getParentOp()->getLoc(), val);
   return rv.getResult();
 }
 
-Value getIntConstant(func::FuncOp func, size_t value) {
-  auto builder = OpBuilder(func);
+Value getIntConstant(Block *block, int64_t value) {
+  auto builder = OpBuilder(block->getParentOp()->getContext());
   return getIntConstant(
-      func, builder.getIntegerAttr(builder.getIntegerType(64), value));
+      block, builder.getIntegerAttr(builder.getIntegerType(64), value));
 }
 
 StringRef getCTypeName(mlir::Type type) {

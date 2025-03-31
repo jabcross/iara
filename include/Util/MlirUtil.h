@@ -13,8 +13,10 @@
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Location.h>
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/OperationSupport.h>
 #include <mlir/IR/Types.h>
+#include <mlir/IR/Value.h>
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 #include <source_location>
@@ -84,12 +86,59 @@ template <class T> T followChainUntilPrevious(Value val) {
 }
 
 // Generates an int constant for the given function and value
-mlir::Value getIntConstant(func::FuncOp func, IntegerAttr val);
+mlir::Value getIntConstant(Block *block, IntegerAttr val);
 
-mlir::Value getIntConstant(func::FuncOp func, size_t value);
+mlir::Value getIntConstant(Block *block, int64_t value);
 
 // generate C name for this type (for use on C header codegen)
 StringRef getCTypeName(mlir::Type type);
+
+template <class ValueType> struct MLIRTypeOf {};
+template <> struct MLIRTypeOf<int64_t> {
+  IntegerType get(MLIRContext *ctx) { return IntegerType::get(ctx, 64); }
+};
+
+class AttrAccessor {
+public:
+  Operation *op;
+  StringRef attr_name;
+
+  Attribute get() { return op->getAttr(attr_name); }
+
+  void operator=(AttrAccessor) = delete;
+  void operator=(AttrAccessor &) = delete;
+  void operator=(AttrAccessor &&) = delete;
+
+  IntegerAttr operator=(int64_t value) {
+    auto attr = OpBuilder{op}.getI64IntegerAttr(value);
+    op->setAttr(attr_name, attr);
+    return attr;
+  }
+
+  bool operator==(const char *string) {
+    StringAttr attr = llvm::dyn_cast_if_present<StringAttr>(get());
+    return attr && (attr.getValue() == string);
+  };
+
+  Attribute operator=(Attribute value) {
+    op->setAttr(attr_name, value);
+    return value;
+  }
+
+  operator Attribute() { return get(); }
+
+  operator bool() { return bool(op->getAttr(attr_name)); }
+
+  explicit operator int64_t() {
+    return op->getAttrOfType<IntegerAttr>(attr_name).getInt();
+  };
+
+  explicit operator StringRef() {
+    return op->getAttrOfType<StringAttr>(attr_name).getValue();
+  }
+
+  Attribute operator*() { return get(); }
+};
 
 } // namespace mlir::iara::mlir_util
 

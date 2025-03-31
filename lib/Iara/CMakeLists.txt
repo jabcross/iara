@@ -7,6 +7,7 @@ add_mlir_dialect_library(MLIRIara
         Passes/LowerToTasksPass.cpp
         Passes/Schedule/BufferSizeCalculator.cpp
         Passes/Schedule/StaticDataCodegen.cpp
+        Passes/Schedule/TotalFiringsCalculator.cpp
         ../Util/MlirUtil.cpp
 
         ADDITIONAL_HEADER_DIRS

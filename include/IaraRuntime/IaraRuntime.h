@@ -48,6 +48,7 @@ struct NodeData {
   std::string func_name;
 #else
   void (*func_call)(int64_t cons_it, uint8_t **input_buffers);
+  uint8_t *init_buffer;
 #endif
 };
 
@@ -65,10 +66,9 @@ struct EdgeData {
   int64_t cons_input_port_index;
   int64_t buffer_size_with_delays;
   int64_t buffer_size_without_delays;
-
-#ifdef IARA_RUNTIME
-  uint8_t *init_buffer;
-#endif
+  int64_t total_delay_size;
+  char *delay_buffer;
+  char *copyback_buffer;
 
   inline bool isAlloc() const { return prod_rate == -1; }
   inline bool isDealloc() const { return cons_rate == -1; }
@@ -94,8 +94,16 @@ template <size_t N> struct IaraRuntimeContext {
 struct StaticData {
   int64_t num_nodes;
   int64_t num_edges;
+  int64_t num_buffers;
   NodeData *nodes;
   EdgeData *edges;
+};
+
+struct MemRef {
+  uint8_t *alloc_pointer;
+  int64_t alloc_size;
+  uint8_t *offset;
+  int64_t size;
 };
 
 } // namespace iara::runtime

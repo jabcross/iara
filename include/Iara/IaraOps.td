@@ -139,7 +139,6 @@ def EdgeOp : IaraOp<"edge", []> {
        util::Rational getFlowRatio();
        int64_t getProdRate();
        int64_t getConsRate();
-       int64_t getDelay();
        NodeOp getProducerNode();
        NodeOp getConsumerNode();
     }];

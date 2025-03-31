@@ -2,7 +2,7 @@
 Minimize
 Size_of_buffer_with_delays: 4 alpha1
 Subject To
-alphas_0: 4 alpha0 - 4 alpha1 = -4
+alphas_0: 4 alpha0 - 4 alpha1 = 0
 betas_0: 4 beta0 - 4 beta1 = 0
 remove_trivial_case_of_alpha_1_=_0: alpha1 >= 1
 remove_trivial_case_of_beta_1_=_0: beta1 >= 1

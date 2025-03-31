@@ -56,29 +56,25 @@ public:
                     mlir::DLTIDialect>();
   }
 
-  void generateHeaderFile(mlir::OpBuilder &func_builder, llvm::StringRef path,
-                          llvm::SmallVector<NodeOp> &nodes,
-                          llvm::SmallVector<EdgeOp> &edges);
+  void codegenHeaderFile(mlir::OpBuilder &func_builder, llvm::StringRef path,
+                         llvm::SmallVector<NodeOp> &nodes,
+                         llvm::SmallVector<EdgeOp> &edges);
 
   DenseMap<std::pair<Type, size_t>, func::FuncOp> broadcast_impls;
-
-  StringAttr FORWARD, BACKWARD;
 
   enum class Direction { Forward, Backward };
 
   SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node);
 
   NodeOp getMatchingDealloc(NodeOp alloc_node);
+  NodeOp getMatchingAlloc(NodeOp dealloc_node);
 
-  LogicalResult annotateTotalFirings(ActorOp actor);
+  // LogicalResult annotateTotalFirings(ActorOp actor);
   func::FuncOp codegenBroadcastImpl(Value value, int64_t size);
   LogicalResult expandToBroadcast(OpResult &value);
   LogicalResult expandImplicitEdges(ActorOp actor);
-  LogicalResult annotateNodeIDs(ActorOp actor);
-  int64_t calculateRemainingDelays(EdgeOp edge);
+  LogicalResult annotateIDs(ActorOp actor);
   int64_t getConsPortIndex(EdgeOp edge);
-  int64_t getBufferSizeWithDelays(EdgeOp edge);
-  int64_t getBufferSizeWithoutDelays(EdgeOp edge);
   LogicalResult allocateContiguousBuffer(EdgeOp edge);
   LogicalResult allocateContiguousBuffers(ActorOp actor);
   LogicalResult annotateEdgeInfo(ActorOp actor);
@@ -93,16 +89,16 @@ public:
   SmallVector<NodeOp> createDeallocations(ValueRange values);
   void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes);
   LogicalResult generateAllocAndFreeNodes(ActorOp actor);
+  LogicalResult calculateTotalFirings(ActorOp actor);
   func::FuncOp getFuncDecl(func::CallOp call, bool use_llvm_pointers = false);
-  void generateAllocFiring(NodeOp node, int64_t iteration_lb,
-                           int64_t iteration_ub, OpBuilder builder);
-  void generateInitialFirings(NodeOp node, OpBuilder builder);
+  void generateAllocFiring(NodeOp node, OpBuilder builder);
+  void codegenInitialFirings(NodeOp node, OpBuilder builder);
   int64_t getTotalInputBytes(NodeOp node);
   std::string getTaskFuncName(NodeOp node, OpBuilder func_builder);
-  std::string codegenFirstBuffer(EdgeOp edge);
   LogicalResult codegenRuntimeInit(OpBuilder builder);
   LogicalResult codegenRuntimeFunction(ActorOp actor);
   LogicalResult taskify(ActorOp actor);
+
   void runOnOperation() final override;
 };
 

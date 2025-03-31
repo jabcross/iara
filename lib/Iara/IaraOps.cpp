@@ -279,15 +279,6 @@ int64_t EdgeOp::getProdRate() { return mlir_util::getTypeSize(getIn()); }
 // Output rate in bytes
 int64_t EdgeOp::getConsRate() { return mlir_util::getTypeSize(getOut()); }
 
-// Delay in bytes
-int64_t EdgeOp::getDelay() {
-  auto attr = (*this)->getAttr("delay_size");
-  auto int_attr = llvm::dyn_cast_if_present<mlir::IntegerAttr>(attr);
-  if (int_attr)
-    return int_attr.getInt();
-  return 0;
-};
-
 util::Rational EdgeOp::getFlowRatio() {
   return util::Rational(mlir_util::getTypeSize(getIn()),
                         mlir_util::getTypeSize(getOut()));

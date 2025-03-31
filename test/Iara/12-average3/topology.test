@@ -1,0 +1,41 @@
+// RUN: mkdir -p "`dirname %s`/build"
+// RUN: cd "`dirname %s`/build"
+// RUN: iara-opt --flatten --sdf-to-tasks  %s > schedule.mlir
+// RUN: mlir-to-llvmir.sh schedule.mlir
+// RUN: clang++ -g -lomp -lpthread -fuse-ld=mold\
+// RUN:    -xir schedule.ll \
+// RUN:    -xc++ "`dirname %s`/kernels.cpp" \
+// RUN:     $IARA_DIR/runtime/IaraRuntime.cpp \
+// RUN:    -I. -I$IARA_DIR/include -DIARA_RUNTIME_DEBUG
+// RUN: ./a.out > output.txt
+// RUN: FileCheck %s < output.txt
+
+// forward delay
+
+// Two nodes
+
+iara.actor @a {
+    iara.out : tensor<4xf32>
+}
+
+iara.actor @b {
+    iara.in : f32
+    iara.in : tensor<2xf32>
+    iara.out : f32
+    iara.out : tensor<2xf32>
+}
+
+iara.actor @c {
+    iara.in : f32
+}
+
+
+iara.actor @run  {
+  %0 = iara.node @a out: tensor<4xf32>
+  %e1 = iara.edge %0 : tensor<4xf32> -> f32
+  %1,%2 = iara.node @b in %e1, %3 : f32, tensor<2xf32> out: f32, tensor<2xf32>
+  %3 = iara.edge %2 : tensor<2xf32> -> tensor<2xf32> {delay = array<i32: 0, 0>}
+  iara.node @c in %1: f32
+} { }
+
+// CHECK: 0 1 2 3 4
