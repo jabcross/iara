@@ -25,7 +25,7 @@
 // - op location
 // - YourOp::build() arguments
 #define CREATE(___type, ___builder, ___loc, ...)                               \
-  [&](IARA_DEBUG_LOC_PARAM) {                                                  \
+  [&](IARA_DEBUG_LOC_PARAM) -> ___type {                                       \
     using ___TYPE = ___type;                                                   \
     OperationState ___STATE{___loc, ___TYPE::getOperationName()};              \
     OpBuilder ___BUILDER = ___builder;                                         \

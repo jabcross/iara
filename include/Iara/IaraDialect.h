@@ -10,14 +10,14 @@
 #define IARA_IARADIALECT_H
 
 #include "Util/MlirUtil.h"
-#include "mlir/Bytecode/BytecodeOpInterface.h"
-#include "mlir/IR/Dialect.h"
 #include <cstring>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/Bytecode/BytecodeOpInterface.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/Dialect.h>
 #include <mlir/IR/Operation.h>
 
 namespace mlir::iara {

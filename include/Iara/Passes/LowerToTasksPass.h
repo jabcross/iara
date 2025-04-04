@@ -70,18 +70,18 @@ public:
   NodeOp getMatchingAlloc(NodeOp dealloc_node);
 
   // LogicalResult annotateTotalFirings(ActorOp actor);
-  func::FuncOp codegenBroadcastImpl(Value value, int64_t size);
+  func::FuncOp codegenBroadcastImpl(Value value, i64 size);
   LogicalResult expandToBroadcast(OpResult &value);
   LogicalResult expandImplicitEdges(ActorOp actor);
   LogicalResult annotateIDs(ActorOp actor);
-  int64_t getConsPortIndex(EdgeOp edge);
+  i64 getConsPortIndex(EdgeOp edge);
   LogicalResult allocateContiguousBuffer(EdgeOp edge);
   LogicalResult allocateContiguousBuffers(ActorOp actor);
   LogicalResult annotateEdgeInfo(ActorOp actor);
   LogicalResult checkNoReverseInoutEdges(ActorOp actor);
   func::FuncOp createTaskFunc(NodeOp node, StringRef name, OpBuilder builder);
   EdgeOp createEdgeAdaptor(Value produced, Type consumed);
-  int64_t getIntAttrValue(Operation *op, StringRef name);
+  i64 getIntAttrValue(Operation *op, StringRef name);
   void populateAllocEdgeAttrs(EdgeOp edge);
   void populateDeallocEdgeAttrs(EdgeOp edge);
   SmallVector<Value> createAllocations(ValueRange values);
@@ -93,7 +93,7 @@ public:
   func::FuncOp getFuncDecl(func::CallOp call, bool use_llvm_pointers = false);
   void generateAllocFiring(NodeOp node, OpBuilder builder);
   void codegenInitialFirings(NodeOp node, OpBuilder builder);
-  int64_t getTotalInputBytes(NodeOp node);
+  i64 getTotalInputBytes(NodeOp node);
   std::string getTaskFuncName(NodeOp node, OpBuilder func_builder);
   LogicalResult codegenRuntimeInit(OpBuilder builder);
   LogicalResult codegenRuntimeFunction(ActorOp actor);

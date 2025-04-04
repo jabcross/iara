@@ -105,7 +105,7 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
         Value getMatchingInoutInput(Value result);
         Value getMatchingInoutOutput(Value operand);
         func::CallOp convertToCallOp();
-        FunctionType getImplFunctionType();
+        FunctionType getKernelFunctionType();
         bool signatureMatches(ActorOp actor);
         bool isAlloc();
         bool isDealloc();
@@ -137,8 +137,8 @@ def EdgeOp : IaraOp<"edge", []> {
     let extraClassDeclaration = [{
       // Returns the producer rate divided by the consumer rate.
        util::Rational getFlowRatio();
-       int64_t getProdRate();
-       int64_t getConsRate();
+       i64 getProdRate();
+       i64 getConsRate();
        NodeOp getProducerNode();
        NodeOp getConsumerNode();
     }];

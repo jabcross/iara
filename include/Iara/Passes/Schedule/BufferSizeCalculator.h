@@ -10,7 +10,6 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 
-llvm::FailureOr<
-    std::pair<llvm::SmallVector<int64_t>, llvm::SmallVector<int64_t>>>
-calculateBufferSize(llvm::SmallVector<int64_t> &rates,
-                    llvm::SmallVector<int64_t> &delays);
+llvm::FailureOr<std::pair<llvm::SmallVector<i64>, llvm::SmallVector<i64>>>
+calculateBufferSize(llvm::SmallVector<i64> &rates,
+                    llvm::SmallVector<i64> &delays);

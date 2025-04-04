@@ -2,16 +2,15 @@
 
 template <class T> using Vec = llvm::SmallVector<T>;
 
-llvm::FailureOr<
-    std::pair<llvm::SmallVector<int64_t>, llvm::SmallVector<int64_t>>>
-calculateBufferSize(llvm::SmallVector<int64_t> &rates,
-                    llvm::SmallVector<int64_t> &delays) {
+llvm::FailureOr<std::pair<llvm::SmallVector<i64>, llvm::SmallVector<i64>>>
+calculateBufferSize(llvm::SmallVector<i64> &rates,
+                    llvm::SmallVector<i64> &delays) {
   // WIP: Using slow script.
   // TODO: reimplement using presburger hermite normal form.
 
   assert(rates.size() == delays.size() + 1);
 
-  Vec<int64_t> alpha{}, beta{};
+  Vec<i64> alpha{}, beta{};
   std::string command;
   llvm::raw_string_ostream ss(command);
   auto iara_dir = std::getenv("IARA_DIR");
@@ -68,7 +67,7 @@ calculateBufferSize(llvm::SmallVector<int64_t> &rates,
   auto lines = llvm::split(output, "\n") | RangeUtil::IntoVector();
 
   {
-    int64_t val;
+    i64 val;
     while (!lines[0].consumeInteger(10, val)) {
       alpha.push_back(val);
       lines[0] = lines[0].drop_while([](char c) { return c == ' '; });

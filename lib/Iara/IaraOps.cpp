@@ -212,9 +212,13 @@ func::CallOp NodeOp::convertToCallOp() {
   return call_op;
 }
 
-FunctionType NodeOp::getImplFunctionType() {
+FunctionType NodeOp::getKernelFunctionType() {
   auto builder = OpBuilder(*this);
   SmallVector<Type> types;
+
+  for (auto p : getParams()) {
+    types.push_back(p.getType());
+  }
   for (auto v : getIn()) {
     types.push_back(v.getType());
   }
@@ -274,10 +278,10 @@ NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
 }
 
 // Input rate in bytes
-int64_t EdgeOp::getProdRate() { return mlir_util::getTypeSize(getIn()); }
+i64 EdgeOp::getProdRate() { return mlir_util::getTypeSize(getIn()); }
 
 // Output rate in bytes
-int64_t EdgeOp::getConsRate() { return mlir_util::getTypeSize(getOut()); }
+i64 EdgeOp::getConsRate() { return mlir_util::getTypeSize(getOut()); }
 
 util::Rational EdgeOp::getFlowRatio() {
   return util::Rational(mlir_util::getTypeSize(getIn()),

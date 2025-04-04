@@ -103,7 +103,7 @@ Value getIntConstant(Block *block, IntegerAttr val) {
   return rv.getResult();
 }
 
-Value getIntConstant(Block *block, int64_t value) {
+Value getIntConstant(Block *block, i64 value) {
   auto builder = OpBuilder(block->getParentOp()->getContext());
   return getIntConstant(
       block, builder.getIntegerAttr(builder.getIntegerType(64), value));
@@ -112,10 +112,25 @@ Value getIntConstant(Block *block, int64_t value) {
 StringRef getCTypeName(mlir::Type type) {
   auto ctx = type.getContext();
   if (type == IntegerType::get(ctx, 64))
-    return "int64_t";
+    return "i64";
   if (type == IntegerType::get(ctx, 32))
     return "int32_t";
   llvm_unreachable("unimplemented");
+}
+
+func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers) {
+  auto module = call->getParentOfType<ModuleOp>();
+  auto builder = OpBuilder(module).atBlockBegin(module.getBody());
+
+  if (auto func = module.lookupSymbol<func::FuncOp>(call.getCallee()))
+    return func;
+
+  auto rv = CREATE(
+      func::FuncOp, builder, module.getLoc(), call.getCallee(),
+      builder.getFunctionType(call->getOperandTypes(), call->getResultTypes()));
+  rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
+  rv.setVisibility(mlir::SymbolTable::Visibility::Private);
+  return rv;
 }
 
 } // namespace mlir_util

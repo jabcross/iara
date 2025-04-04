@@ -4,7 +4,9 @@ add_mlir_dialect_library(MLIRIara
         IaraOps.cpp
         # IaraInterfaces.cpp
         Passes/FlattenPass.cpp
-        Passes/LowerToTasksPass.cpp
+        # Passes/LowerToTasksPass.cpp
+        Passes/FIFOScheduler/DynamicFIFOScheduler.cpp
+        Passes/FIFOScheduler/DynamicFIFO.cpp
         Passes/Schedule/BufferSizeCalculator.cpp
         Passes/Schedule/StaticDataCodegen.cpp
         Passes/Schedule/TotalFiringsCalculator.cpp

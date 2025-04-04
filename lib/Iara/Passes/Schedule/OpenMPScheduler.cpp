@@ -86,8 +86,8 @@ func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
 
   // Convert blocks into tasks
 
-  DenseMap<Block *, DenseSet<int64_t>> input_deps, output_deps;
-  DenseMap<Block *, int64_t> indices;
+  DenseMap<Block *, DenseSet<i64>> input_deps, output_deps;
+  DenseMap<Block *, i64> indices;
 
   for (auto [idx, block_ref] :
        llvm::enumerate(func_op.getFunctionBody().getBlocks())) {
@@ -122,7 +122,7 @@ func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
 
   auto const_builder = OpBuilder{parallel_op};
   Operation *last_const = nullptr;
-  auto getConstant = memoize<int64_t>([&](int64_t val) {
+  auto getConstant = memoize<i64>([&](i64 val) {
     if (last_const)
       const_builder.setInsertionPointAfter(last_const);
     auto rv =
@@ -135,7 +135,7 @@ func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
   Operation *last_ptr = nullptr;
   pointer_builder.setInsertionPointAfter(getConstant(1));
 
-  auto getFakePointer = memoize<int64_t>([&](int64_t val) -> LLVM::IntToPtrOp {
+  auto getFakePointer = memoize<i64>([&](i64 val) -> LLVM::IntToPtrOp {
     if (last_ptr)
       pointer_builder.setInsertionPointAfter(last_ptr);
     auto rv = pointer_builder.create<LLVM::IntToPtrOp>(

@@ -48,7 +48,7 @@ std::string codegenFirstBuffer(LowerToTasksPass *_this, NodeOp node) {
         if (&val != &arrref.back()) {
           list_s << ", ";
         } else {
-          list_s << " // Delay of edge " << (int64_t)current_edge["edge_id"]
+          list_s << " // Delay of edge " << (i64)current_edge["edge_id"]
                  << "\n      ";
         }
       }
@@ -59,7 +59,7 @@ std::string codegenFirstBuffer(LowerToTasksPass *_this, NodeOp node) {
         if (i < e - 1) {
           list_s << ", ";
         } else {
-          list_s << " // Delay of edge " << (int64_t)current_edge["edge_id"]
+          list_s << " // Delay of edge " << (i64)current_edge["edge_id"]
                  << "\n      ";
         }
       }
@@ -69,7 +69,7 @@ std::string codegenFirstBuffer(LowerToTasksPass *_this, NodeOp node) {
     current_edge = followInoutEdgeBackwards(current_edge);
   }
 
-  rvs << "(uint8_t*)(" << getCTypeName(elem_type) << "[" << counter
+  rvs << "(byte*)(" << getCTypeName(elem_type) << "[" << counter
       << "]){\n      ";
   rvs << list;
   rvs << "}";
@@ -86,7 +86,7 @@ std::string codegenFirstBuffer(LowerToTasksPass *_this, NodeOp node) {
   auto elem_type = getElementTypeOrSelf(edge.getIn().getType());
 
   if (elem_type == mlir::IntegerType::get(node->getContext(), 64)) {
-    return codegenFirstBuffer<int64_t>(_this, node);
+    return codegenFirstBuffer<i64>(_this, node);
   } else if (elem_type == mlir::IntegerType::get(node->getContext(), 32)) {
     return codegenFirstBuffer<int32_t>(_this, node);
   } else {
@@ -113,11 +113,11 @@ void LowerToTasksPass::codegenHeaderFile(mlir::OpBuilder &func_builder,
   llvm::DenseMap<NodeOp, std::string> node_names;
   llvm::DenseMap<NodeOp, llvm::SmallVector<EdgeOp>> node_successors;
 
-  int64_t num_buffers = 0;
+  i64 num_buffers = 0;
 
   for (auto node : nodes) {
     if (node.isDealloc()) {
-      num_buffers += (int64_t)node["total_firings"];
+      num_buffers += (i64)node["total_firings"];
     }
     for (auto output : node.getAllOutputs()) {
       auto successor = mlir_util::followChainUntilNext<EdgeOp>(output);
@@ -128,14 +128,13 @@ void LowerToTasksPass::codegenHeaderFile(mlir::OpBuilder &func_builder,
     node_names[node] = getTaskFuncName(node, func_builder);
     if (node_names[node].empty())
       continue;
-    include << "extern \"C\" void " << node_names[node]
-            << "(int64_t, uint8_t **);\n";
+    include << "extern \"C\" void " << node_names[node] << "(i64, byte **);\n";
   }
 
   include << "const char*[] iara_runtime_delay_buffers = {\n";
 
   int delay_buffer_index = 0;
-  DenseMap<NodeOp, int64_t> node_to_delay_index;
+  DenseMap<NodeOp, i64> node_to_delay_index;
   for (auto node : nodes) {
     node_to_delay_index[node] = delay_buffer_index++;
     include << "  " << ::codegenFirstBuffer(this, node);
@@ -164,7 +163,7 @@ void LowerToTasksPass::codegenHeaderFile(mlir::OpBuilder &func_builder,
     include << "    .total_firings = "
             << node->getAttrOfType<IntegerAttr>("total_firings").getInt()
             << ",\n";
-    include << "    .output_edges = (int64_t[]){";
+    include << "    .output_edges = (i64[]){";
     for (auto &s : node_successors[node]) {
       include << s->getAttrOfType<IntegerAttr>("edge_id").getInt();
       if (s != node_successors[node].back()) {
@@ -206,34 +205,34 @@ void LowerToTasksPass::codegenHeaderFile(mlir::OpBuilder &func_builder,
     auto cons_alpha = edge->getAttrOfType<IntegerAttr>("cons_alpha").getInt();
     auto cons_beta = edge->getAttrOfType<IntegerAttr>("cons_beta").getInt();
 
-    include << "    .prod_rate = " << (int64_t)edge["prod_rate"]
+    include << "    .prod_rate = " << (i64)edge["prod_rate"]
             << ",\n"; // in bytes, -1 for alloc node
-    include << "    .prod_alpha = " << (int64_t)edge["prod_alpha"] << ",\n";
-    include << "    .prod_beta = " << (int64_t)edge["prod_beta"] << ",\n";
-    include << "    .prod_id = " << (int64_t)edge.getProducerNode()["node_id"]
+    include << "    .prod_alpha = " << (i64)edge["prod_alpha"] << ",\n";
+    include << "    .prod_beta = " << (i64)edge["prod_beta"] << ",\n";
+    include << "    .prod_id = " << (i64)edge.getProducerNode()["node_id"]
             << ",\n";
-    include << "    .cons_rate = " << (int64_t)edge["cons_rate"]
+    include << "    .cons_rate = " << (i64)edge["cons_rate"]
             << ",\n"; // in bytes, -1 for dealloc node
     include << "    .cons_alpha = " << cons_alpha << ",\n";
     include << "    .cons_beta = " << cons_beta << ",\n";
-    include << "    .cons_id = " << (int64_t)edge.getConsumerNode()["node_id"]
+    include << "    .cons_id = " << (i64)edge.getConsumerNode()["node_id"]
             << ",\n";
-    include << "    .this_delay = " << (int64_t)edge["delay_bytes"] << ",\n";
-    include << "    .remaining_delay = " << (int64_t)edge["remaining_delay"]
+    include << "    .this_delay = " << (i64)edge["delay_bytes"] << ",\n";
+    include << "    .remaining_delay = " << (i64)edge["remaining_delay"]
             << ",\n";
     include << "    .cons_input_port_index=  " << getConsPortIndex(edge)
             << ",\n";
     include << "    .buffer_size_with_delays=  "
-            << (int64_t)edge["buffer_size_with_delays"] << ",\n";
+            << (i64)edge["buffer_size_with_delays"] << ",\n";
     include << "    .buffer_size_without_delays =  "
-            << (int64_t)edge["buffer_size_without_delays"] << "\n";
-    include << "    .total_delay_size =  " << (int64_t)edge["total_delay_size"]
+            << (i64)edge["buffer_size_without_delays"] << "\n";
+    include << "    .total_delay_size =  " << (i64)edge["total_delay_size"]
             << ",\n";
     auto alloc = getMatchingAlloc(edge.getConsumerNode());
     include << "    .delay_buffer =  iara_runtime_delay_buffers["
             << node_to_delay_index[alloc] << "],\n";
-    include << "    .copyback_buffer =  (char["
-            << (int64_t)edge["total_delay_size"] << "]){0}\n";
+    include << "    .copyback_buffer =  (char[" << (i64)edge["total_delay_size"]
+            << "]){0}\n";
     include << "  }";
     if (edge != edges.back()) {
       include << ",";

@@ -10,7 +10,7 @@ namespace util {
 
 // Rational number representation. Keeps precision between successive
 // multiplications/divisions, as long as both numerator and denominator can fit
-// into int64_t.
+// into i64.
 //
 // Addition, subtraction and comparison take O(log N) time, as the LCM of
 // the denominators must be taken.
@@ -18,12 +18,12 @@ namespace util {
 // Normalization consists of making the ratio irreducible and the denominator
 // positive. It should be called manually before the number is stored.
 struct Rational {
-  int64_t num;
-  int64_t denom;
+  i64 num;
+  i64 denom;
 
   Rational() : num(0), denom(1) {}
-  Rational(int64_t from) : num(from), denom(1) {}
-  Rational(int64_t num, int64_t denom) : num(num), denom(denom) {}
+  Rational(i64 from) : num(from), denom(1) {}
+  Rational(i64 num, i64 denom) : num(num), denom(denom) {}
 
   Rational operator+(Rational const &other) const {
     auto lcm = std::lcm(denom, other.denom);

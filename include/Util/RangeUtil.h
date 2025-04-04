@@ -220,8 +220,8 @@ auto operator|(R &&range, Find<F> &&find)
 
 struct Count {};
 
-template <class R> auto operator|(R &&range, Count count) -> int64_t {
-  int64_t rv = 0;
+template <class R> auto operator|(R &&range, Count count) -> i64 {
+  i64 rv = 0;
   for (auto _i : range) {
     std::ignore = _i;
     rv++;

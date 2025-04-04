@@ -28,14 +28,14 @@ mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
 
   auto nodes = actor.getOps<NodeOp>() | IntoVector();
 
-  DenseMap<int64_t, NodeOp> nodeById{};
+  DenseMap<i64, NodeOp> nodeById{};
 
   Vec<NodeOp> alloc_nodes;
 
   input_file << nodes.size() << "\n";
   for (auto node : nodes) {
-    nodeById[(int64_t)node["node_id"]] = node;
-    input_file << (int64_t)node["node_id"] << " ";
+    nodeById[(i64)node["node_id"]] = node;
+    input_file << (i64)node["node_id"] << " ";
     if (node.isAlloc()) {
       alloc_nodes.push_back(node);
     }
@@ -44,18 +44,18 @@ mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
     } else {
       for (auto input : node.getAllInputs()) {
         auto edge = followChainUntilPrevious<EdgeOp>(input);
-        input_file << (int64_t)edge["cons_alpha"] << " "
-                   << (int64_t)edge["cons_beta"] << " ";
+        input_file << (i64)edge["cons_alpha"] << " " << (i64)edge["cons_beta"]
+                   << " ";
       }
       input_file << "\n";
     }
   }
   input_file << alloc_nodes.size() << "\n";
   for (auto node : alloc_nodes) {
-    input_file << (int64_t)node["node_id"] << " ";
+    input_file << (i64)node["node_id"] << " ";
     auto edge = followChainUntilNext<EdgeOp>(node->getResult(0));
     while (edge != nullptr) {
-      input_file << (int64_t)edge.getConsumerNode()["node_id"] << " ";
+      input_file << (i64)edge.getConsumerNode()["node_id"] << " ";
       edge = followInoutEdgeForwards(edge);
     }
     input_file << "\n";
@@ -118,7 +118,7 @@ mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
 
   for (auto [node, line] : llvm::zip_equal(nodes, lines)) {
     auto [id_str, total_firings_str] = line.split(" ");
-    int64_t id, total_firings;
+    i64 id, total_firings;
     if (id_str.consumeInteger(10, id) or
         total_firings_str.consumeInteger(10, total_firings)) {
       llvm::errs() << "Failure consuming integers from string <" << line

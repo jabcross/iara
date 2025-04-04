@@ -25,9 +25,9 @@ DependencyDict *iara_runtime_dependency_dicts;
 // calculates which iterations of the consumer depend on a a given iteration of
 // the producer
 struct Bounds {
-  int64_t first, last;
-  Bounds(int64_t first, int64_t last) : first(first), last(last) {}
-  Bounds(int64_t single) : first(single), last(single) {}
+  i64 first, last;
+  Bounds(i64 first, i64 last) : first(first), last(last) {}
+  Bounds(i64 single) : first(single), last(single) {}
   auto begin() { return first; }
   auto end() { return last + 1; }
 
@@ -35,10 +35,10 @@ struct Bounds {
     return {std::max(first, other.first), std::min(last, other.last)};
   }
 
-  int64_t size() { return std::max(0l, last - first + 1); }
+  i64 size() { return std::max(0l, last - first + 1); }
 };
 
-int64_t getTotalBytes(const EdgeData &edge, int64_t cons_it) {
+i64 getTotalBytes(const EdgeData &edge, i64 cons_it) {
   if (edge.isDealloc()) {
     if (cons_it == 0) {
       return edge.buffer_size_with_delays;
@@ -51,7 +51,7 @@ int64_t getTotalBytes(const EdgeData &edge, int64_t cons_it) {
 // Calculates the buffer generation, given a producer firing number.
 // Zero for the first allocation (with delays), and increments for subsequent
 // ones.
-int64_t get_buffer_generation(EdgeData const &edge, int64_t prod_iteration) {
+i64 get_buffer_generation(EdgeData const &edge, i64 prod_iteration) {
   assert(edge.prod_rate != -1);
   if (prod_iteration < edge.prod_alpha)
     return 0;
@@ -60,8 +60,8 @@ int64_t get_buffer_generation(EdgeData const &edge, int64_t prod_iteration) {
 
 // returns buffer epoch (0 if first execution(that runs with delays), >0 if
 // after delays) and offset in bytes from start of buffer.
-static std::pair<int64_t, Bounds>
-get_buffer_offset_cons(EdgeData const &edge, int64_t cons_iteration) {
+static std::pair<i64, Bounds> get_buffer_offset_cons(EdgeData const &edge,
+                                                     i64 cons_iteration) {
   assert(not edge.isDealloc());
   if (cons_iteration < edge.cons_alpha) {
     auto lb = edge.remaining_delay + cons_iteration * edge.cons_rate;
@@ -74,8 +74,8 @@ get_buffer_offset_cons(EdgeData const &edge, int64_t cons_iteration) {
 
 // returns buffer epoch (0 if first execution(that runs with delays), >0 if
 // after delays) and offset in bytes from start of buffer.
-static std::pair<int64_t, Bounds>
-get_buffer_offset_prod(EdgeData const &edge, int64_t prod_iteration) {
+static std::pair<i64, Bounds> get_buffer_offset_prod(EdgeData const &edge,
+                                                     i64 prod_iteration) {
   assert(not edge.isAlloc());
   if (prod_iteration < edge.prod_alpha) {
     auto lb = edge.remaining_delay + edge.this_delay +
@@ -89,9 +89,9 @@ get_buffer_offset_prod(EdgeData const &edge, int64_t prod_iteration) {
 
 // Maps a range of producer iteration numbers to a range of consumer firing
 // numbers. Assumes not alloc or free.
-static inline Bounds prod_to_cons(EdgeData const &edge, int64_t prod_it) {
+static inline Bounds prod_to_cons(EdgeData const &edge, i64 prod_it) {
 
-  int64_t all_delays, iter_this_buffer, buffer_epoch;
+  i64 all_delays, iter_this_buffer, buffer_epoch;
 
   if (prod_it < edge.prod_alpha) {
     all_delays = edge.this_delay + edge.remaining_delay;
@@ -106,7 +106,7 @@ static inline Bounds prod_to_cons(EdgeData const &edge, int64_t prod_it) {
   auto first_byte = all_delays + iter_this_buffer * edge.prod_rate;
   auto last_byte = all_delays + (iter_this_buffer + 1) * edge.prod_rate - 1;
 
-  int64_t cons_lb, cons_ub;
+  i64 cons_lb, cons_ub;
 
   if (buffer_epoch == 0) {
     cons_lb = (first_byte - edge.remaining_delay) / edge.cons_rate;
@@ -128,7 +128,7 @@ static inline Bounds prod_to_cons(EdgeData const &edge, int64_t prod_it) {
   return rv;
 }
 
-void iara_runtime_dealloc(int64_t iter, int64_t edge_id, uint8_t **buffer) {
+void iara_runtime_dealloc(i64 iter, i64 edge_id, byte **buffer) {
   free(buffer[0]);
 
   iara_deallocd_buffers--;
@@ -137,11 +137,11 @@ void iara_runtime_dealloc(int64_t iter, int64_t edge_id, uint8_t **buffer) {
   }
 };
 
-void free_pointer_buffer(uint8_t **buffers) { free(buffers); }
+void free_pointer_buffer(byte **buffers) { free(buffers); }
 
 // assumes not alloc or free
-uint8_t *get_root_from_written_offset(int64_t prod_iteration, EdgeData &edge,
-                                      uint8_t *written_offset) {
+byte *get_root_from_written_offset(i64 prod_iteration, EdgeData &edge,
+                                   byte *written_offset) {
   if (prod_iteration < edge.prod_alpha) {
     return written_offset - edge.prod_rate * prod_iteration - edge.this_delay -
            edge.remaining_delay;
@@ -156,15 +156,14 @@ uint8_t *get_root_from_written_offset(int64_t prod_iteration, EdgeData &edge,
 // given range fits within the same buffer. The callback function is called
 // with the accumulated offsets to be passed as arguments to the kernel
 // function when an iteration has all its dependencies resolved.
-void iara_runtime_processDependency(int64_t prod_iteration, int64_t edge_id,
-                                    uint8_t *written_offset);
+void iara_runtime_processDependency(i64 prod_iteration, i64 edge_id,
+                                    byte *written_offset);
 
-void trigger_firing(NodeData const &cons_node, int64_t cons_it,
-                    uint8_t **offsets) {
+void trigger_firing(NodeData const &cons_node, i64 cons_it, byte **offsets) {
   {
 #ifdef IARA_RUNTIME_DEBUG
     fprintf(stderr, "running node (%ld)\n",
-            int64_t(&cons_node - iara_runtime_static_data.nodes)),
+            i64(&cons_node - iara_runtime_static_data.nodes)),
         cons_it;
     fflush(stderr);
 #endif
@@ -185,10 +184,10 @@ void trigger_firing(NodeData const &cons_node, int64_t cons_it,
   }
 }
 
-void semaphore(const NodeData &cons_node, const EdgeData &edge, int64_t cons_id,
-               int64_t cons_it, int64_t bytes_deducted,
-               int64_t input_index /* -1 if no need to set an argument */,
-               uint8_t *offset) {
+void semaphore(const NodeData &cons_node, const EdgeData &edge, i64 cons_id,
+               i64 cons_it, i64 bytes_deducted,
+               i64 input_index /* -1 if no need to set an argument */,
+               byte *offset) {
 
   // try to satisfy the dependence
   auto &cons_data = iara_runtime_dependency_dicts[edge.cons_id];
@@ -214,8 +213,8 @@ void semaphore(const NodeData &cons_node, const EdgeData &edge, int64_t cons_id,
         fflush(stderr);
 #endif
 
-        new_iter->second.arguments = (uint8_t **)malloc(
-            (size_t)cons_node.input_port_count * sizeof(uint8_t *));
+        new_iter->second.arguments = (byte **)malloc(
+            (size_t)cons_node.input_port_count * sizeof(byte *));
         iter = new_iter;
         cons_data.mutex.unlock();
         cons_data.mutex.lock_shared();
@@ -267,8 +266,8 @@ void semaphore(const NodeData &cons_node, const EdgeData &edge, int64_t cons_id,
   }
 }
 
-void process_alloc_dependency(int64_t prod_iteration, int64_t edge_id,
-                              uint8_t *buffer_root) {
+void process_alloc_dependency(i64 prod_iteration, i64 edge_id,
+                              byte *buffer_root) {
   // #pragma omp task nowait
   {
 
@@ -280,17 +279,16 @@ void process_alloc_dependency(int64_t prod_iteration, int64_t edge_id,
 
     assert(edge.isAlloc());
     assert(buffer_root != NULL);
-    int64_t buffer_size = (prod_iteration == 0)
-                              ? edge.buffer_size_with_delays
-                              : edge.buffer_size_without_delays;
+    i64 buffer_size = (prod_iteration == 0) ? edge.buffer_size_with_delays
+                                            : edge.buffer_size_without_delays;
 
 #ifdef IARA_RUNTIME_DEBUG
     fprintf(
         stderr,
         "Processing alloc edge %ld, iteration %ld, cons_id %ld, buffer_root "
         "%lx, buffer size %ld\n",
-        edge_id, prod_iteration, edge_data[edge_id].cons_id,
-        (uint64_t)buffer_root, buffer_size);
+        edge_id, prod_iteration, edge_data[edge_id].cons_id, (ui64)buffer_root,
+        buffer_size);
     fflush(stderr);
 #endif
 
@@ -311,8 +309,8 @@ void process_alloc_dependency(int64_t prod_iteration, int64_t edge_id,
   }
 }
 
-void process_delay_copy_back(int64_t prod_iteration, int64_t edge_id,
-                             uint8_t *written_offset) {
+void process_delay_copy_back(i64 prod_iteration, i64 edge_id,
+                             byte *written_offset) {
   auto &edge = iara_runtime_static_data.edges[edge_id];
   auto &prod = iara_runtime_static_data.nodes[edge.prod_id];
 
@@ -341,8 +339,8 @@ void process_delay_copy_back(int64_t prod_iteration, int64_t edge_id,
   }
 }
 
-void process_dealloc_dependency(int64_t prod_iteration, int64_t edge_id,
-                                uint8_t *written_offset) {
+void process_dealloc_dependency(i64 prod_iteration, i64 edge_id,
+                                byte *written_offset) {
   // #pragma omp task nowait
   {
     EdgeData *edge_data = iara_runtime_static_data.edges;
@@ -358,15 +356,15 @@ void process_dealloc_dependency(int64_t prod_iteration, int64_t edge_id,
             "Processing dealloc edge %ld, iteration %ld, cons_id %ld, "
             "buffer_root %lx\n",
             edge_id, prod_iteration, edge_data[edge_id].cons_id,
-            (uint64_t)written_offset);
+            (ui64)written_offset);
     fflush(stderr);
 #endif
 
     assert(edge.prod_rate != 0);
 
-    int64_t cons_it;
+    i64 cons_it;
     bool is_first_of_buffer = false;
-    int64_t expected_bytes;
+    i64 expected_bytes;
 
     if (prod_iteration < edge.prod_alpha) {
       cons_it = 0;
@@ -389,8 +387,8 @@ void process_dealloc_dependency(int64_t prod_iteration, int64_t edge_id,
   }
 }
 
-void process_conventional_dependency(int64_t prod_iteration, int64_t edge_id,
-                                     uint8_t *written_offset) {
+void process_conventional_dependency(i64 prod_iteration, i64 edge_id,
+                                     byte *written_offset) {
   // #pragma omp task nowait
   {
     EdgeData *edge_data = iara_runtime_static_data.edges;
@@ -399,7 +397,7 @@ void process_conventional_dependency(int64_t prod_iteration, int64_t edge_id,
     NodeData *node_data = iara_runtime_static_data.nodes;
     NodeData &cons_node = node_data[edge.cons_id];
 
-    uint8_t *buffer_root =
+    byte *buffer_root =
         get_root_from_written_offset(prod_iteration, edge, written_offset);
     assert(buffer_root != NULL);
 
@@ -408,7 +406,7 @@ void process_conventional_dependency(int64_t prod_iteration, int64_t edge_id,
             "Processing conventional edge %ld, iteration %ld, cons_id %ld, "
             "buffer_root %lx\n",
             edge_id, prod_iteration, edge_data[edge_id].cons_id,
-            (uint64_t)buffer_root);
+            (ui64)buffer_root);
     fflush(stderr);
 #endif
 
@@ -458,8 +456,8 @@ void process_conventional_dependency(int64_t prod_iteration, int64_t edge_id,
   }
 }
 
-void iara_runtime_processDependency(int64_t prod_iteration, int64_t edge_id,
-                                    uint8_t *written_offset) {
+void iara_runtime_processDependency(i64 prod_iteration, i64 edge_id,
+                                    byte *written_offset) {
   auto edge = iara_runtime_static_data.edges[edge_id];
   assert(!edge.isAlloc() && "Alloc nodes don't have dependencies");
 
@@ -471,14 +469,14 @@ void iara_runtime_processDependency(int64_t prod_iteration, int64_t edge_id,
   process_conventional_dependency(prod_iteration, edge_id, written_offset);
 }
 
-void iara_runtime_copy_delays(int64_t node_id, uint8_t *buffer) {
+void iara_runtime_copy_delays(i64 node_id, byte *buffer) {
   auto &node = iara_runtime_static_data.nodes[node_id];
   auto &edge = iara_runtime_static_data.edges[node.output_edges[0]];
   memcpy(buffer, node.init_buffer, edge.this_delay + edge.remaining_delay);
 }
 
-void iara_runtime_schedule_delays(int64_t prod_id, int64_t input_index,
-                                  uint8_t *buffer_base) {
+void iara_runtime_schedule_delays(i64 prod_id, i64 input_index,
+                                  byte *buffer_base) {
   auto &prod_node = iara_runtime_static_data.nodes[prod_id];
   auto &edge =
       iara_runtime_static_data.edges[prod_node.output_edges[input_index]];
@@ -488,7 +486,7 @@ void iara_runtime_schedule_delays(int64_t prod_id, int64_t input_index,
 
   auto &cons_node = iara_runtime_static_data.nodes[edge.cons_id];
   auto remaining_edge_delay = edge.this_delay;
-  int64_t cons_it = 0;
+  i64 cons_it = 0;
   while (remaining_edge_delay > 0) {
     auto provided_bytes = std::min(remaining_edge_delay, edge.cons_rate);
     semaphore(cons_node, edge, edge.cons_id, cons_it, provided_bytes,
@@ -508,7 +506,7 @@ void iara_wait_graph_iteration() {
 
 // Executes an alloc actor. Runs with priority 0 (allocations won't happen if
 // there is processing to be done)
-extern "C" void iara_runtime_alloc(int64_t node_id) {
+extern "C" void iara_runtime_alloc(i64 node_id) {
 #ifdef IARA_RUNTIME_DEBUG
   fprintf(stderr, "Allocating node %ld\n", node_id);
   fflush(stderr);
@@ -520,15 +518,15 @@ extern "C" void iara_runtime_alloc(int64_t node_id) {
   for (auto i = 0; i < node.total_firings; ++i) {
     // #pragma omp task nowait priority(0)
     {
-      uint8_t *buffer;
+      byte *buffer;
       if (i == 0) {
-        buffer = (uint8_t *)malloc(edge.buffer_size_with_delays);
+        buffer = (byte *)malloc(edge.buffer_size_with_delays);
         // todo: optimize this
         iara_runtime_copy_delays(node_id, buffer);
         iara_runtime_schedule_delays(edge.cons_id, edge.cons_input_port_index,
                                      buffer);
       } else {
-        buffer = (uint8_t *)malloc(edge.buffer_size_without_delays);
+        buffer = (byte *)malloc(edge.buffer_size_without_delays);
       }
       process_alloc_dependency(i, node.output_edges[0], buffer);
     }
@@ -568,14 +566,14 @@ extern "C" void iara_runtime_init() {
   }
 }
 
-/*     int64_t token_range_lower_bound = edge.this_delay +
+/*     i64 token_range_lower_bound = edge.this_delay +
    edge.remaining_delay
-   + first_prod_iteration * edge.prod_rate; int64_t
+   + first_prod_iteration * edge.prod_rate; i64
    token_range_lower_bound_last_prod_firing = edge.this_delay +
    edge.remaining_delay + last_prod_iteration * edge.prod_rate;
 
-    int64_t alpha_gen = 0;
-    int64_t beta_gen = 0;
+    i64 alpha_gen = 0;
+    i64 beta_gen = 0;
 
     if (first_prod_iteration >= edge.prod_alpha) {
       alpha_gen = 1;
@@ -591,7 +589,7 @@ extern "C" void iara_runtime_init() {
       beta_gen = _div.quot;
     }
 
-    int64_t token_range_upper_bound_inclusive =
+    i64 token_range_upper_bound_inclusive =
         token_range_lower_bound_last_prod_firing + edge.prod_rate - 1;
 
     size_t this_buffer_it =

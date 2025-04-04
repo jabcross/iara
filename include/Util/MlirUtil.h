@@ -1,6 +1,9 @@
 #ifndef MLIR_IARA_MLIR_UTIL_H
 #define MLIR_IARA_MLIR_UTIL_H
 #include "OpCreateHelper.h"
+#include "Util/types.h"
+#include <cstdint>
+#include <functional>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
@@ -88,13 +91,13 @@ template <class T> T followChainUntilPrevious(Value val) {
 // Generates an int constant for the given function and value
 mlir::Value getIntConstant(Block *block, IntegerAttr val);
 
-mlir::Value getIntConstant(Block *block, int64_t value);
+mlir::Value getIntConstant(Block *block, i64 value);
 
 // generate C name for this type (for use on C header codegen)
 StringRef getCTypeName(mlir::Type type);
 
 template <class ValueType> struct MLIRTypeOf {};
-template <> struct MLIRTypeOf<int64_t> {
+template <> struct MLIRTypeOf<i64> {
   IntegerType get(MLIRContext *ctx) { return IntegerType::get(ctx, 64); }
 };
 
@@ -109,7 +112,7 @@ public:
   void operator=(AttrAccessor &) = delete;
   void operator=(AttrAccessor &&) = delete;
 
-  IntegerAttr operator=(int64_t value) {
+  IntegerAttr operator=(i64 value) {
     auto attr = OpBuilder{op}.getI64IntegerAttr(value);
     op->setAttr(attr_name, attr);
     return attr;
@@ -125,11 +128,9 @@ public:
     return value;
   }
 
-  operator Attribute() { return get(); }
-
   operator bool() { return bool(op->getAttr(attr_name)); }
 
-  explicit operator int64_t() {
+  explicit operator i64() {
     return op->getAttrOfType<IntegerAttr>(attr_name).getInt();
   };
 
@@ -137,8 +138,22 @@ public:
     return op->getAttrOfType<StringAttr>(attr_name).getValue();
   }
 
+  operator Attribute() {
+    if (op->hasAttr(attr_name))
+      return op->getAttr(attr_name);
+    return Attribute();
+  }
+
   Attribute operator*() { return get(); }
 };
+
+template <class T> auto asAttr(MLIRContext *context, T t);
+
+template <> inline auto asAttr<i64>(MLIRContext *context, i64 value) {
+  return IntegerAttr::get(IntegerType::get(context, 64), value);
+}
+
+func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers);
 
 } // namespace mlir::iara::mlir_util
 

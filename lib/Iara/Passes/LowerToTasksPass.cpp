@@ -162,7 +162,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
 //     break;
 //   }
 
-//   SmallVector<int64_t> denominators = {1};
+//   SmallVector<i64> denominators = {1};
 
 //   total_firings[stack.back()] = {1};
 //   while (not stack.empty()) {
@@ -199,7 +199,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
 //   // All iteration numbers must be integers. Multiply all by lcm of
 //   // denominators.
 
-//   int64_t mult = std::reduce(denominators.begin(), denominators.end(), 1,
+//   i64 mult = std::reduce(denominators.begin(), denominators.end(), 1,
 //                              [](auto a, auto b) { return std::lcm(a, b); });
 
 //   for (auto [node, firings] : total_firings) {
@@ -212,7 +212,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
 //   return success();
 // }
 
-// func::FuncOp LowerToTasksPass::codegenBroadcastImpl(Value value, int64_t
+// func::FuncOp LowerToTasksPass::codegenBroadcastImpl(Value value, i64
 // size) {
 //   std::string name = llvm::formatv("iara_broadcast_{0}x{1}", size,
 //                                    mlir_util::stringifyType(value.getType()));
@@ -348,20 +348,20 @@ LogicalResult canonicalizeTypes(ActorOp actor) {
 }
 
 LogicalResult LowerToTasksPass::annotateIDs(ActorOp actor) {
-  int64_t edge_id_counter = 0;
+  i64 edge_id_counter = 0;
   {
     for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
       edge["edge_id"] = edge_id_counter;
     }
   }
 
-  int64_t node_id_counter = 0;
+  i64 node_id_counter = 0;
   for (auto node : actor.getOps<NodeOp>()) {
     node["node_id"] = node_id_counter;
     node_id_counter++;
     if (node.isDealloc()) {
       auto edge = followChainUntilPrevious<EdgeOp>(node.getIn()[0]);
-      auto edge_id = (int64_t)edge["edge_id"];
+      auto edge_id = (i64)edge["edge_id"];
       auto id_op = getIntConstant(edge->getBlock(), edge_id);
       node.getParamsMutable()[0].set(id_op);
     }
@@ -370,22 +370,22 @@ LogicalResult LowerToTasksPass::annotateIDs(ActorOp actor) {
   return success();
 }
 
-int64_t calculateRemainingDelayBytes(EdgeOp edge) {
-  int64_t rv = 0;
+i64 calculateRemainingDelayBytes(EdgeOp edge) {
+  i64 rv = 0;
   auto next = edge;
   while ((next = followInoutEdgeForwards(next))) {
-    rv += (int64_t)next["delay_bytes"];
+    rv += (i64)next["delay_bytes"];
   }
   return rv;
 }
 
-int64_t LowerToTasksPass::getConsPortIndex(EdgeOp edge) {
+i64 LowerToTasksPass::getConsPortIndex(EdgeOp edge) {
   return edge->getUses().begin()->getOperandNumber();
 }
 
 struct BufferSizeInfo {
-  int64_t total_size;
-  int64_t delays_only;
+  i64 total_size;
+  i64 delays_only;
 };
 
 BufferSizeInfo getBufferSizeWithDelays(EdgeOp edge) {
@@ -395,15 +395,15 @@ BufferSizeInfo getBufferSizeWithDelays(EdgeOp edge) {
   }
   rv.delays_only = edge["delay_bytes"] + calculateRemainingDelayBytes(edge);
   rv.total_size =
-      rv.delays_only + (int64_t)edge["prod_rate"] * (int64_t)edge["prod_alpha"];
+      rv.delays_only + (i64)edge["prod_rate"] * (i64)edge["prod_alpha"];
   return rv;
 }
 
-int64_t getBufferSizeWithoutDelays(EdgeOp edge) {
+i64 getBufferSizeWithoutDelays(EdgeOp edge) {
   while (auto prev_edge = followInoutEdgeBackwards(edge)) {
     edge = prev_edge;
   }
-  return (int64_t)edge["prod_rate"] * (int64_t)edge["prod_beta"];
+  return (i64)edge["prod_rate"] * (i64)edge["prod_beta"];
 }
 
 LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
@@ -415,20 +415,20 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
     edge = previousInoutEdge;
   }
 
-  SmallVector<int64_t> rates, delays;
+  SmallVector<i64> rates, delays;
 
   // auto getRepetitionNumber = [](Operation *op) {
   //   return op->getAttr("repetition_number").cast<IntegerAttr>().getInt();
   // };
 
   rates.push_back(edge.getProdRate());
-  delays.push_back((int64_t)edge["delay_bytes"]);
+  delays.push_back((i64)edge["delay_bytes"]);
   rates.push_back(edge.getConsRate());
 
   {
     auto next_edge = edge;
     while ((next_edge = followInoutEdgeForwards(next_edge))) {
-      delays.push_back((int64_t)next_edge["delay_bytes"]);
+      delays.push_back((i64)next_edge["delay_bytes"]);
       rates.push_back(next_edge.getConsRate());
     }
   }
@@ -442,7 +442,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
 
   auto [alpha, beta] = result.value();
 
-  // auto has_delays = llvm::any_of(delays, [](int64_t d) { return d > 0; });
+  // auto has_delays = llvm::any_of(delays, [](i64 d) { return d > 0; });
 
   auto builder = OpBuilder(edge);
 
@@ -451,7 +451,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
     auto forward_edge = edge;
     int i = 0;
     while (forward_edge) {
-      auto this_delay = (int64_t)forward_edge["delay_bytes"];
+      auto this_delay = (i64)forward_edge["delay_bytes"];
       auto remaining_delay = calculateRemainingDelayBytes(forward_edge);
       forward_edge["remaining_delay"] = remaining_delay;
       forward_edge["prod_rate"] = forward_edge.getProdRate();
@@ -490,13 +490,13 @@ template <class T> using IL = std::initializer_list<T>;
 LogicalResult LowerToTasksPass::annotateEdgeInfo(ActorOp actor) {
   // run bfs on graph
 
-  auto getRank = [](Operation *op) -> std::optional<int64_t> {
+  auto getRank = [](Operation *op) -> std::optional<i64> {
     auto attr = op->getAttrOfType<IntegerAttr>("rank");
     if (attr)
       return {attr.getInt()};
     return {};
   };
-  auto setRank = [](Operation *op, int64_t value) {
+  auto setRank = [](Operation *op, i64 value) {
     op->setAttr("rank", OpBuilder{op}.getI64IntegerAttr(value));
   };
 
@@ -542,7 +542,7 @@ LogicalResult LowerToTasksPass::annotateEdgeInfo(ActorOp actor) {
       llvm_unreachable("Unexpected delay attr type");
     }
     if (auto delay_elems = *edge["delay_elems"]) {
-      edge["delay_bytes"] = (int64_t)edge["delay_elems"] *
+      edge["delay_bytes"] = (i64)edge["delay_elems"] *
                             getTypeSize(getElementTypeOrSelf(edge.getIn()),
                                         DataLayout::closest(edge));
     }
@@ -611,7 +611,7 @@ LogicalResult insertCopy(EdgeOp edge) {
   new_edge_1["delay_elems"] = 0;
   new_edge_1["delay_bytes"] = 0;
 
-  new_edge_2["rank"] = (int64_t)edge["rank"] + 1;
+  new_edge_2["rank"] = (i64)edge["rank"] + 1;
   new_edge_2->setAttr("backwards_edge", UnitAttr::get(edge->getContext()));
   new_edge_2["delay"] = *edge["delay"];
   new_edge_2["delay_elems"] = *edge["delay_elems"];
@@ -641,15 +641,32 @@ LogicalResult LowerToTasksPass::checkNoReverseInoutEdges(ActorOp actor) {
 // of pointers to pass to the kernel implementation.
 func::FuncOp LowerToTasksPass::createTaskFunc(NodeOp node, StringRef name,
                                               OpBuilder builder) {
-  auto kernel_impl_type = node.getImplFunctionType();
+  auto kernel_impl_type = node.getKernelFunctionType();
 
   auto llvm_pointer_type = LLVM::LLVMPointerType::get(builder.getContext());
   // auto num_inputs = kernel_impl_type.getNumInputs();
 
+  Vec<Type> task_input_types = {builder.getI64Type(), builder.getI64Type()};
+
+  assert(node.getIn().empty());
+  assert(node.getOut().size() == node.getInout().size());
+
+  for (auto param : node.getParams()) {
+    task_input_types.push_back(param.getType());
+  }
+
+  for (auto i : node.getInout()) {
+    if (auto ranked_tensor = dyn_cast<RankedTensorType>(i)) {
+      task_input_types.push_back(MemRefType::get(
+          ranked_tensor.getShape(), ranked_tensor.getElementType()));
+    } else {
+      llvm_unreachable("All ports should be tensors by this point.");
+    }
+  }
+
   auto task_func = CREATE(
       func::FuncOp, builder.atBlockBegin(getOperation().getBody()),
-      node->getLoc(), name,
-      builder.getFunctionType({builder.getI64Type(), llvm_pointer_type}, {}));
+      node->getLoc(), name, builder.getFunctionType(task_input_types, {}));
 
   task_func.setVisibility(mlir::SymbolTable::Visibility::Public);
   task_func->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
@@ -663,14 +680,19 @@ func::FuncOp LowerToTasksPass::createTaskFunc(NodeOp node, StringRef name,
 
   for (auto [operand_index, kernel_input] :
        llvm::enumerate(kernel_impl_type.getInputs())) {
-    auto offset_pointer =
-        CREATE(LLVM::GEPOp, task_builder, node->getLoc(), llvm_pointer_type,
-               llvm_pointer_type, buffers, {int(operand_index)});
-    auto operand_val = CREATE(LLVM::LoadOp, task_builder, node.getLoc(),
-                              llvm_pointer_type, offset_pointer);
+    if (auto memref = dyn_cast<MemRefType>(kernel_input)) {
+      auto offset_pointer =
+          CREATE(LLVM::GEPOp, task_builder, node->getLoc(), llvm_pointer_type,
+                 llvm_pointer_type, buffers, {int(operand_index)});
+      auto operand_val = CREATE(LLVM::LoadOp, task_builder, node.getLoc(),
+                                llvm_pointer_type, offset_pointer);
 
-    // kernel_operands.push_back(cast_to_memref.getResult(0));
-    kernel_operands.push_back(operand_val.getResult());
+      // kernel_operands.push_back(cast_to_memref.getResult(0));
+      kernel_operands.push_back(operand_val.getResult());
+    } else {
+      // parameter; populate with global
+      llvm_unreachable("unimplemented");
+    }
   }
 
   // auto impl_func = CREATE(func::ConstantOp, task_builder,
@@ -697,7 +719,7 @@ EdgeOp LowerToTasksPass::createEdgeAdaptor(Value produced, Type consumed) {
   return edge;
 }
 
-int64_t LowerToTasksPass::getIntAttrValue(Operation *op, StringRef name) {
+i64 LowerToTasksPass::getIntAttrValue(Operation *op, StringRef name) {
   return op->getAttrOfType<IntegerAttr>(name).getInt();
 }
 
@@ -758,7 +780,7 @@ void LowerToTasksPass::annotateAllocations(SmallVector<Value> &vals) {
     populateAllocEdgeAttrs(edge);
     // auto first_node_total_firings =
     //     node->getAttrOfType<IntegerAttr>("total_firings").getInt();
-    // int64_t total_firings =
+    // i64 total_firings =
     //     (first_node_total_firings - getIntAttrValue(edge, "cons_alpha")) /
     //         getIntAttrValue(edge, "cons_beta") +
     //     1;
@@ -799,7 +821,7 @@ void LowerToTasksPass::annotateDeallocations(
     auto last_node = edge.getProducerNode();
     // auto last_node_total_firings =
     //     last_node->getAttrOfType<IntegerAttr>("total_firings").getInt();
-    // int64_t total_firings =
+    // i64 total_firings =
     //     (last_node_total_firings - getIntAttrValue(edge, "prod_alpha")) /
     //         getIntAttrValue(edge, "prod_beta") +
     //     1;
@@ -880,8 +902,8 @@ void LowerToTasksPass::codegenInitialFirings(NodeOp node, OpBuilder builder) {
   generateAllocFiring(node, builder);
 }
 
-int64_t LowerToTasksPass::getTotalInputBytes(NodeOp node) {
-  int64_t rv = 0;
+i64 LowerToTasksPass::getTotalInputBytes(NodeOp node) {
+  i64 rv = 0;
   for (auto input : node.getAllInputs()) {
     rv += getTypeSize(input);
   }
@@ -923,7 +945,7 @@ LogicalResult LowerToTasksPass::codegenRuntimeFunction(ActorOp actor) {
   auto entry_block = setup_function.addEntryBlock();
   builder = builder.atBlockBegin(entry_block);
 
-  DenseMap<NodeOp, int64_t> totalInputBytes;
+  DenseMap<NodeOp, i64> totalInputBytes;
 
   for (NodeOp node : actor.getOps<NodeOp>()) {
     totalInputBytes[node] = 0;

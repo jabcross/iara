@@ -11,6 +11,7 @@
 
 #include "Iara/IaraDialect.h"
 #include "Util/rational.h"
+#include "Util/types.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
