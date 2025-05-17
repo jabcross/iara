@@ -9,6 +9,7 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/Attributes.h>
@@ -23,6 +24,7 @@
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 #include <source_location>
+#include <utility>
 
 namespace mlir::iara::mlir_util {
 
@@ -32,8 +34,9 @@ size_t getTypeSize(Type type, DataLayout dl);
 
 std::string stringifyType(Type type);
 
-func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
-                                             Location loc);
+std::pair<func::FuncOp, OpBuilder>
+createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
+                                Location loc);
 OpOperand &appendOperand(Operation *op, Value val);
 void moveBlockAfter(Block *to_move, Block *after_this);
 void viewGraph(Operation *op);
@@ -146,6 +149,15 @@ public:
 
   Attribute operator*() { return get(); }
 };
+
+struct AssertNonNull {};
+
+template <class T> inline auto operator|(T &&lhs, AssertNonNull rhs) {
+  if (!lhs) {
+    llvm_unreachable("Something is null that shouldn't.");
+  }
+  return std::forward<T>(lhs);
+}
 
 template <class T> auto asAttr(MLIRContext *context, T t);
 

@@ -1,22 +1,24 @@
 #ifndef UTIL_UTIL_H
 #define UTIL_UTIL_H
 
+#include "types.h"
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/Support/Casting.h>
-#include <mlir/Dialect/Func/IR/FuncOps.h>
-#include <mlir/IR/Attributes.h>
-#include <mlir/IR/Builders.h>
-#include <mlir/IR/BuiltinAttributes.h>
-#include <mlir/IR/Dialect.h>
-#include <mlir/IR/Location.h>
-#include <mlir/IR/Operation.h>
+// #include <mlir/Dialect/Func/IR/FuncOps.h>
+// #include <mlir/IR/Attributes.h>
+// #include <mlir/IR/Builders.h>
+// #include <mlir/IR/BuiltinAttributes.h>
+// #include <mlir/IR/Dialect.h>
+// #include <mlir/IR/Location.h>
+// #include <mlir/IR/Operation.h>
 #include <numeric>
 #include <optional>
 #include <tuple>
@@ -25,7 +27,7 @@
 
 using namespace std::placeholders;
 
-namespace RangeUtil {
+namespace mlir::iara::rangeutil {
 
 template <class A, class B, class R = void> struct Piper {};
 
@@ -49,17 +51,17 @@ template <class R> struct OwnedElementType {
   using type = decltype(*std::begin(std::declval<R>()));
 };
 
-template <class T, typename Enable = void> struct NullTypeOf {
-  using type = std::optional<T>;
-  static constexpr std::optional<T> value() { return std::nullopt; };
-};
+// template <class T, typename Enable = void> struct NullTypeOf {
+//   using type = std::optional<T>;
+//   static constexpr std::optional<T> value() { return std::nullopt; };
+// };
 
-template <class T>
-struct NullTypeOf<T, typename std::enable_if<std::is_convertible<
-                         T, mlir::Operation *>::value>::type> {
-  using type = T;
-  static constexpr T value() { return nullptr; };
-};
+// template <class T>
+// struct NullTypeOf<T, typename std::enable_if<std::is_convertible<
+//                          T, mlir::Operation *>::value>::type> {
+//   using type = T;
+//   static constexpr T value() { return nullptr; };
+// };
 
 template <class F> struct Filter {
   using type = F;
@@ -201,22 +203,22 @@ auto operator|(std::optional<R> &&range, S &&stage)
   return llvm::make_range(begin, end) | std::forward<S>(stage);
 }
 
-template <class F> struct Find {
-  using type = F;
-  F f;
-  Find(F &&f) : f(f){};
-};
+// template <class F> struct Find {
+//   using type = F;
+//   F f;
+//   Find(F &&f) : f(f){};
+// };
 
-template <typename F> Find(F) -> Find<F>;
-template <class R, class F>
-auto operator|(R &&range, Find<F> &&find)
-    -> NullTypeOf<decltype(*std::begin(range))>::type {
-  for (auto i : range) {
-    if (find.f(i))
-      return {i};
-  }
-  return NullTypeOf<decltype(*std::begin(range))>::value();
-}
+// template <typename F> Find(F) -> Find<F>;
+// template <class R, class F>
+// auto operator|(R &&range, Find<F> &&find)
+//     -> NullTypeOf<decltype(*std::begin(range))>::type {
+//   for (auto i : range) {
+//     if (find.f(i))
+//       return {i};
+//   }
+//   return NullTypeOf<decltype(*std::begin(range))>::value();
+// }
 
 struct Count {};
 
@@ -262,7 +264,7 @@ auto memoize(F fn) {
 
 template <class T> using StaticRange = std::initializer_list<T *>;
 
-} // namespace RangeUtil
+} // namespace mlir::iara::rangeutil
 
 // Allow optional ranges to be used in range-based for loops.
 namespace std {

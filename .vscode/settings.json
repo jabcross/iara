@@ -13,6 +13,6 @@
   ],
   "dotnetAcquisitionExtension.enableTelemetry": false,
   "clang-tidy.blacklist": ["scripts/.*"],
-  "clangd.checkUpdates": true,
-  "clang-format.assumeFilename": ".clang-format"
+  "clang-format.assumeFilename": ".clang-format",
+  "clangd.enableCodeCompletion": true
 }

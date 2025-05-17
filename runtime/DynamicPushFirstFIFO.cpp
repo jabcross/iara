@@ -1,12 +1,8 @@
 #include "IaraRuntime/DynamicPushFirstFIFO.h"
-#include "IaraRuntime/MemRef.h"
-#include <atomic>
 #include <cassert>
 #include <condition_variable>
 #include <cstring>
-#include <memory>
 #include <mutex>
-#include <semaphore>
 #include <unordered_map>
 
 struct DynamicPushFirstFifo::Impl {
@@ -106,7 +102,11 @@ struct DynamicPushFirstFifo::Impl {
 };
 
 DynamicPushFirstFifo *DynamicPushFirstFifo::create() {
-  return new DynamicPushFirstFifo{.pimpl = Impl::create()};
+  Impl *pimpl;
+  pimpl = Impl::create();
+  DynamicPushFirstFifo *fifo = new DynamicPushFirstFifo{};
+  fifo->pimpl = pimpl;
+  return fifo;
 }
 
 void DynamicPushFirstFifo::push(i64 size, i64 sequence_number, byte *data) {

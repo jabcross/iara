@@ -17,8 +17,8 @@ struct NodeInfo {
   i64 num_pure_inputs;
   i64 num_inouts;
   i64 num_pure_outputs;
-  EdgeInfo *input_edges;
-  EdgeInfo *output_edges;
+  EdgeInfo **input_edges;
+  EdgeInfo **output_edges;
 
   void (*kernel_wrapper)(void *args);
 };

@@ -1,6 +1,5 @@
 #include "Iara/Passes/Schedule/BufferSizeCalculator.h"
-
-template <class T> using Vec = llvm::SmallVector<T>;
+#include "Util/RangeUtil.h"
 
 llvm::FailureOr<std::pair<llvm::SmallVector<i64>, llvm::SmallVector<i64>>>
 calculateBufferSize(llvm::SmallVector<i64> &rates,
@@ -64,7 +63,7 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
   auto error =
       llvm::MemoryBuffer::getFileAsStream(errpath)->get()->getBuffer().str();
 
-  auto lines = llvm::split(output, "\n") | RangeUtil::IntoVector();
+  auto lines = llvm::split(output, "\n") | mlir::iara::rangeutil::IntoVector();
 
   {
     i64 val;

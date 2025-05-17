@@ -1,12 +1,21 @@
 // RUN: mkdir -p "`dirname %s`/build"
 // RUN: cd "`dirname %s`/build"
-// RUN: iara-opt --flatten --sdf-to-tasks  %s > schedule.mlir
+// RUN: env >env.out.txt
+// RUN: iara-opt --flatten --dynamic-push-first-fifo-scheduler  %s > schedule.mlir
 // RUN: mlir-to-llvmir.sh schedule.mlir
+// RUN: clang++ -g -xir -c schedule.ll -o schedule.o
+// RUN: clang++ -g -xc -c "`dirname %s`/main.c" \
+// RUN:    -I. -I$IARA_DIR/include -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include \
+// RUN:    -o main.o
+// RUN: clang++ -g -xc++ -std=c++20 -c $IARA_DIR/runtime/DynamicPushFirstFIFOScheduler.cpp \
+// RUN:     -c $IARA_DIR/runtime/DynamicPushFirstFIFO.cpp \
+// RUN:    -I. -I$IARA_DIR/include -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include
 // RUN: clang++ -g -lomp -lpthread -fuse-ld=mold\
-// RUN:    -xir schedule.ll \
-// RUN:    -xc "`dirname %s`/03-two-nodes.c" \
-// RUN:    -xc++ $IARA_DIR/runtime/IaraRuntime.cpp \
-// RUN:    -I. -I$IARA_DIR/include
+// RUN:    schedule.o \
+// RUN:    main.o \
+// RUN:    DynamicPushFirstFIFOScheduler.o \
+// RUN:    DynamicPushFirstFIFO.o \
+// RUN:    -I. -I$IARA_DIR/include -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include
 // RUN: ./a.out > output.txt
 // RUN: FileCheck %s < output.txt
 

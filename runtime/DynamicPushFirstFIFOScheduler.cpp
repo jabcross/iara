@@ -16,13 +16,13 @@ extern "C" void iara_fire_node(NodeInfo *node) {
 #pragma omp task default(private)
       {
         auto &edge = node->input_edges[i];
-        args[i] = edge.fifo->pop(edge.cons_rate, seq);
+        args[i] = edge->fifo->pop(edge->cons_rate, seq);
       }
     }
 
     // allocate space for pure outputs
     for (int i = node->num_pure_inputs + node->num_inouts; i < num_args; i++) {
-      args[i] = (byte *)malloc(node->output_edges[i].prod_rate);
+      args[i] = (byte *)malloc(node->output_edges[i]->prod_rate);
     }
 
     // wait for all buffers to be ready.
@@ -34,9 +34,9 @@ extern "C" void iara_fire_node(NodeInfo *node) {
     // Push outputs
 
     for (int i = node->num_pure_inputs; i < num_args; i++) {
-#pragma omp task default(private) {
-      auto &edge = node->output_edges[i - node->num_pure_inputs];
-      edge.fifo->push(edge.prod_rate, seq, args[i]);
+#pragma omp task default(private), public(node) {
+      auto edge = node->output_edges[i - node->num_pure_inputs];
+      edge->fifo->push(edge->prod_rate, seq, args[i]);
     }
 
     // free pure input memory

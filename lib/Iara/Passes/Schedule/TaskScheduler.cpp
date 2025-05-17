@@ -1,5 +1,5 @@
-#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Iara/IaraOps.h"
+#include "Iara/Passes/Schedule/TaskScheduler.h"
 #include "Util/MlirUtil.h"
 #include "Util/RangeUtil.h"
 #include "mlir/IR/TypeRange.h"
@@ -31,7 +31,7 @@
 
 namespace mlir::iara {
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 
 bool TaskScheduler::checkSingleRate(ActorOp actor) {
   if (!(actor.getParameterTypes().empty() && actor->getOperands().empty() &&

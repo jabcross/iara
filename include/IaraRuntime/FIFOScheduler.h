@@ -12,7 +12,8 @@ using std::byte;
 namespace iara_fifo_runtime {
 
 template <i64 N, class... Args> struct SpreadArgsFuncType {
-  using func_type = SpreadArgsFuncType<N - 1, byte *, Args...>::func_type;
+  using func_type =
+      typename SpreadArgsFuncType<N - 1, byte *, Args...>::func_type;
 };
 
 template <class... Args> struct SpreadArgsFuncType<0, Args...> {
@@ -21,13 +22,14 @@ template <class... Args> struct SpreadArgsFuncType<0, Args...> {
 };
 
 template <i64 N, i64... Args> struct SpreadArgs {
-  using type = SpreadArgs<N - 1, N, Args...>::type;
+  using type = typename SpreadArgs<N - 1, N, Args...>::type;
 };
 
 template <i64... Args> struct SpreadArgs<0, Args...> {
   using type = struct impl {
     static void call(void *func, byte *args) {
-      auto casted_func = (SpreadArgsFuncType<sizeof...(Args)>::func_type);
+      auto casted_func =
+          (typename SpreadArgsFuncType<sizeof...(Args)>::func_type)func;
       casted_func(args[Args]...);
     };
   };

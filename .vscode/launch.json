@@ -43,7 +43,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--flatten", "--sdf-to-tasks", "../topology.test"],
+      "args": ["--flatten", "--dynamic-push-first-fifo-scheduler", "../topology.test"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}/build",
       "environment": [

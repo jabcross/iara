@@ -67,13 +67,16 @@ std::string stringifyType(Type type) {
   return {safe_name};
 }
 
-func::FuncOp createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
-                                             Location loc) {
+std::pair<func::FuncOp, OpBuilder>
+createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
+                                Location loc) {
   auto rv =
       builder.create<func::FuncOp>(loc, name, builder.getFunctionType({}, {}));
-  builder.atBlockEnd(rv.addEntryBlock()).create<func::ReturnOp>(loc);
-  return rv;
+  auto entry = rv.addEntryBlock();
+
+  return {rv, builder.atBlockEnd(entry)};
 }
+
 OpOperand &appendOperand(Operation *op, Value val) {
   SmallVector<Value> operands = op->getOperands();
   operands.push_back(val);

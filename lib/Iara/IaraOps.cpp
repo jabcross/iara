@@ -38,7 +38,7 @@
 #define GET_OP_CLASSES
 #include "Iara/IaraOps.cpp.inc"
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 using namespace mlir::iara::mlir_util;
 
 namespace mlir::iara {

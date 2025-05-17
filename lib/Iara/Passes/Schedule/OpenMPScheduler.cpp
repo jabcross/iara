@@ -26,7 +26,7 @@
 #include <mlir/Support/LLVM.h>
 
 namespace mlir::iara {
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 
 func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
   for (auto node_op : llvm::to_vector(dag.getOps<NodeOp>())) {

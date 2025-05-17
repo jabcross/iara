@@ -15,13 +15,13 @@
 
 #include "Iara/IaraDialect.h"
 #include "Iara/IaraPasses.h"
+#include "Iara/Passes/FIFOScheduler/DynamicFIFOSchedulerPass.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
   mlir::iara::passes::registerPasses();
   // mlir::iara::passes::registerLowerToTasksPass();
-  mlir::iara::passes::registerLowerToFIFO();
-  // TODO: Register iara passes here.
+  mlir::iara::passes::fifo::registerDynamicPushFirstFIFOSchedulerPass();
 
   mlir::DialectRegistry registry;
   registry.insert<mlir::iara::IaraDialect, mlir::arith::ArithDialect,

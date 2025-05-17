@@ -3,6 +3,7 @@
 #include "Iara/Passes/LowerToTasksPass.h"
 #include "Iara/Passes/Schedule/BufferSizeCalculator.h"
 #include "IaraRuntime/IaraRuntime.h"
+#include "Util/Canon.h"
 #include "Util/MlirUtil.h"
 #include "Util/OpCreateHelper.h"
 #include "Util/RangeUtil.h"
@@ -93,10 +94,9 @@
 #include <tuple>
 #include <unistd.h>
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 using namespace mlir::iara::mlir_util;
 using util::Rational;
-template <class T> using Vec = llvm::SmallVector<T>;
 template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
@@ -296,57 +296,6 @@ LogicalResult LowerToTasksPass::expandToBroadcast(OpResult &value) {
   return success();
 }
 
-LogicalResult LowerToTasksPass::expandImplicitEdges(ActorOp actor) {
-  // First, expand all broadcasts.
-  for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
-    for (auto result : op->getResults()) {
-      auto uses = result.getUses() | Pointers() | IntoVector();
-      if (uses.size() > 1) {
-        expandToBroadcast(result);
-      }
-    }
-  }
-
-  // Insert edges between adjacent nodes.
-  for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
-    for (auto output : node.getOut()) {
-      auto uses = output.getUses() | Pointers() | IntoVector();
-      auto users = output.getUsers() | IntoVector();
-      if (uses.size() == 0) {
-        node->emitError() << "Found an output port with no users: " << node
-                          << "\n"
-                          << "This is not supported in this version yet.";
-        return failure();
-      }
-      assert((output.getUses() | Pointers() | Count()) == 1);
-      if (auto consumer_node = dyn_cast<NodeOp>(users.front())) {
-        auto builder = OpBuilder(consumer_node);
-        auto new_edge =
-            CREATE(EdgeOp, builder,
-                   builder.getFusedLoc({node.getLoc(), consumer_node.getLoc()}),
-                   output.getType(), output);
-        output.replaceAllUsesExcept(new_edge.getOut(), {new_edge});
-      }
-    }
-  }
-  return success();
-}
-
-LogicalResult canonicalizeTypes(ActorOp actor) {
-  for (Operation &op_ref : actor.getOps()) {
-    auto op = &op_ref;
-    if (!llvm::isa<NodeOp>(op) and !llvm::isa<EdgeOp>(op))
-      continue;
-    for (auto result : op->getResults()) {
-      if (not dyn_cast<RankedTensorType>(result.getType())) {
-        auto new_type = RankedTensorType::get({1}, result.getType());
-        result.setType(new_type);
-      }
-    }
-  }
-  return success();
-}
-
 LogicalResult LowerToTasksPass::annotateIDs(ActorOp actor) {
   i64 edge_id_counter = 0;
   {
@@ -480,74 +429,6 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffers(ActorOp actor) {
     edge["buffer_size_without_delays"] = getBufferSizeWithoutDelays(edge);
     edge["total_delay_size"] = info.delays_only;
   }
-  return success();
-}
-
-// An edge is backwards if it creates a cycle with a bfs starting on the
-// sources.
-// TODO: check for appropriate delay size
-template <class T> using IL = std::initializer_list<T>;
-LogicalResult LowerToTasksPass::annotateEdgeInfo(ActorOp actor) {
-  // run bfs on graph
-
-  auto getRank = [](Operation *op) -> std::optional<i64> {
-    auto attr = op->getAttrOfType<IntegerAttr>("rank");
-    if (attr)
-      return {attr.getInt()};
-    return {};
-  };
-  auto setRank = [](Operation *op, i64 value) {
-    op->setAttr("rank", OpBuilder{op}.getI64IntegerAttr(value));
-  };
-
-  std::queue<std::pair<Operation *, int>> bfs{};
-
-  Operation *start_node = *actor.getOps<NodeOp>().begin();
-
-  bfs.push({start_node, 0});
-
-  auto flood_fill = [&](Operation *op, int rank) {
-    if (getRank(op)) {
-      return;
-    }
-    setRank(op, rank);
-    for (auto operand : op->getOperands()) {
-      bfs.push({operand.getDefiningOp(), rank - 1});
-    }
-    for (auto user : op->getUsers()) {
-      bfs.push({user, rank + 1});
-    }
-  };
-
-  while (!bfs.empty()) {
-    auto [op, rank] = bfs.front();
-    bfs.pop();
-    flood_fill(op, rank);
-  }
-
-  for (auto edge : actor.getOps<EdgeOp>()) {
-    if (getRank(edge.getConsumerNode()) <= getRank(edge.getProducerNode())) {
-      edge->setAttr("backwards_edge", OpBuilder{edge}.getUnitAttr());
-    }
-    auto delay_attr = *edge["delay"];
-    if (delay_attr == nullptr) {
-      edge["delay_elems"] = 0;
-    } else if (auto array =
-                   llvm::dyn_cast_if_present<DenseArrayAttr>(delay_attr)) {
-      edge["delay_elems"] = array.size();
-    } else if (auto integer =
-                   llvm::dyn_cast_if_present<IntegerAttr>(delay_attr)) {
-      edge["delay_elems"] = integer.getInt();
-    } else {
-      llvm_unreachable("Unexpected delay attr type");
-    }
-    if (auto delay_elems = *edge["delay_elems"]) {
-      edge["delay_bytes"] = (i64)edge["delay_elems"] *
-                            getTypeSize(getElementTypeOrSelf(edge.getIn()),
-                                        DataLayout::closest(edge));
-    }
-  }
-
   return success();
 }
 
@@ -1000,7 +881,7 @@ LogicalResult LowerToTasksPass::taskify(ActorOp actor) {
     return failure();
   if (expandImplicitEdges(actor).failed())
     return failure();
-  if (canonicalizeTypes(actor).failed())
+  if (mlir::iara::canon::canonicalizeTypes(actor).failed())
     return failure();
   if (annotateEdgeInfo(actor).failed())
     return failure();

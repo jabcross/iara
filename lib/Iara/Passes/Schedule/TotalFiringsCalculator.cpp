@@ -10,7 +10,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Support/LLVM.h>
 
-template <class T> using Vec = llvm::SmallVector<T>;
 using namespace mlir::iara;
 using namespace mlir::iara::passes;
 

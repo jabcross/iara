@@ -17,7 +17,7 @@
 
 namespace mlir::iara::passes::fifo {
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 using namespace mlir::iara::mlir_util;
 using util::Rational;
 template <class T> using Vec = llvm::SmallVector<T>;
@@ -48,13 +48,14 @@ struct DynamicPushFirstFIFOSchedulerPass
 
   void runOnOperation() final override;
 };
-} // namespace mlir::iara::passes::fifo
 
-inline void registerDynamicFIFOSchedulerPass() {
+inline void registerDynamicPushFirstFIFOSchedulerPass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
     return std::make_unique<
         mlir::iara::passes::fifo::DynamicPushFirstFIFOSchedulerPass>();
   });
 }
+
+} // namespace mlir::iara::passes::fifo
 
 #endif

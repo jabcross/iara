@@ -17,7 +17,7 @@
 
 namespace mlir::iara::passes {
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 using namespace mlir::iara::mlir_util;
 using util::Rational;
 template <class T> using Vec = llvm::SmallVector<T>;

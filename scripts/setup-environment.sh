@@ -39,7 +39,9 @@ cd Polygeist
 pwd
 git pull origin main
 git fetch origin $POLYGEIST_COMMIT
-git checkout $POLYGEIST_COMMIT/usr/bin/time sh -c 'git submodule update --init'
+git checkout $POLYGEIST_COMMIT
+
+/usr/bin/time sh -c 'git submodule update --init'
 
 /usr/bin/time -o llvm-cmake-and-build-time.txt sh -c '
 cd llvm-project ;\

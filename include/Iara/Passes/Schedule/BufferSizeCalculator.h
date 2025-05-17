@@ -1,7 +1,6 @@
 
 
-#include "Util/RangeUtil.h"
-#include <cstdint>
+#include "Util/types.h"
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringExtras.h>

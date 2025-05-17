@@ -26,7 +26,7 @@
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 
-using namespace RangeUtil;
+using namespace mlir::iara::rangeutil;
 
 namespace mlir::iara::passes {
 #define GEN_PASS_DEF_LOWERTOOPENMPPASS
