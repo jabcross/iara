@@ -1,3 +1,4 @@
-CompileFlags:                     # Tweak the parse settings
-  Add: [-std=c++26]
-  Compiler: clang++
+CompileFlags:
+  Add: [-std=c++20]
+Diagnostics:
+  Suppress: "pp_including_mainfile_in_preamble"

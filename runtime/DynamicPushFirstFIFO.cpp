@@ -1,6 +1,8 @@
 #include "IaraRuntime/DynamicPushFirstFIFO.h"
+#include "Util/ReflectStruct.h"
+#include "external/gtl/phmap.hpp"
+#include "external/gtl/phmap_fwd_decl.hpp"
 #include <cassert>
-#include <condition_variable>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -27,11 +29,15 @@ struct DynamicPushFirstFifo::Impl {
 
   // keeps the ordering of the pop callers
   i64 pop_sequence_number = 0;
-  std::condition_variable pop_cv;
 
-  std::mutex mutex;
-  std::unordered_map<i64 /* block number */, Block> blocks;
-  std::condition_variable block_cv; // Notified when a new block is inserted.
+  template <class Key, class Value>
+  using ParallelHashMap =
+      gtl::parallel_flat_hash_map<Key, Value, gtl::priv::hash_default_hash<Key>,
+                                  gtl::priv::hash_default_eq<Key>,
+                                  std::allocator<std::pair<const Key, Value>>,
+                                  4, std::mutex>;
+
+  ParallelHashMap<i64 /* block number */, Block> blocks;
 
   static Impl *create() { return new Impl(); };
 
@@ -39,65 +45,71 @@ struct DynamicPushFirstFifo::Impl {
   // It is the programmer's responsability to guarantee that sequence_number
   // will be different at each call to this function.
   void push(i64 size, i64 sequence_number, byte *data) {
-    auto lock = std::unique_lock(mutex);
-    auto it = blocks.find(sequence_number);
-    assert(it == blocks.end());
-    blocks.try_emplace(sequence_number, size, data);
-    lock.unlock();
-    block_cv.notify_all();
+#pragma omp parallel
+#pragma omp task depend(mutexinoutset this)
+    {
+      auto it = blocks.find(sequence_number);
+      assert(it == blocks.end());
+      blocks.try_emplace(sequence_number, size, data);
+    }
+#pragma omp taskwait
   }
 
   // Returns a buffer with the front of the queue. If the block matches exactly
   // the expected size size, no allocations/copies need to happen.
   byte *pop(i64 size, i64 sequence_number) {
-    auto lock = std::unique_lock(mutex);
-    if (sequence_number != pop_sequence_number) {
-      pop_cv.wait(lock,
-                  [&]() { return sequence_number == pop_sequence_number; });
+#pragma omp single
+#pragma omp task depend(mutexinoutset this)
+    {
+      if (sequence_number != pop_sequence_number) {
+        pop_cv.wait(lock,
+                    [&]() { return sequence_number == pop_sequence_number; });
+      }
+
+      byte *rv = nullptr;
+      i64 rv_size = 0;
+
+      while (rv_size < size) {
+        auto it = blocks.find(block_sequence_number);
+        if (it == blocks.end()) {
+          block_cv.wait(lock, [&]() {
+            it = blocks.find(block_sequence_number);
+            return it != blocks.end();
+          });
+        }
+        auto &block = it->second;
+        if (rv == nullptr and block.size == size) {
+          // No copy needed. Return the block's buffer directly.
+          rv = block.allocated;
+          rv_size = size;
+          blocks.erase(it);
+          block_sequence_number++; // Next pop will look for the next block.
+          break;
+        }
+
+        // We'll need to copy the values into a new buffer.
+        rv = (byte *)malloc(size);
+        auto remaining_size = size - rv_size;
+        auto block_available_data = block.size - block.consumed;
+        auto copy_size = std::min(remaining_size, block_available_data);
+        std::memcpy(rv + rv_size, block.allocated + block.consumed, copy_size);
+        rv_size += copy_size;
+        block.consumed += copy_size;
+
+        if (block.consumed == block.size) {
+          // We're done with this block.
+          blocks.erase(it);
+          block_sequence_number++; // Next pop will look for the next block.
+        }
+      }
+      assert(rv_size == size);
+      assert(rv != nullptr);
+      pop_sequence_number++;
+      lock.unlock();
+      pop_cv.notify_all();
+      return rv;
     }
-
-    byte *rv = nullptr;
-    i64 rv_size = 0;
-
-    while (rv_size < size) {
-      auto it = blocks.find(block_sequence_number);
-      if (it == blocks.end()) {
-        block_cv.wait(lock, [&]() {
-          it = blocks.find(block_sequence_number);
-          return it != blocks.end();
-        });
-      }
-      auto &block = it->second;
-      if (rv == nullptr and block.size == size) {
-        // No copy needed. Return the block's buffer directly.
-        rv = block.allocated;
-        rv_size = size;
-        blocks.erase(it);
-        block_sequence_number++; // Next pop will look for the next block.
-        break;
-      }
-
-      // We'll need to copy the values into a new buffer.
-      rv = (byte *)malloc(size);
-      auto remaining_size = size - rv_size;
-      auto block_available_data = block.size - block.consumed;
-      auto copy_size = std::min(remaining_size, block_available_data);
-      std::memcpy(rv + rv_size, block.allocated + block.consumed, copy_size);
-      rv_size += copy_size;
-      block.consumed += copy_size;
-
-      if (block.consumed == block.size) {
-        // We're done with this block.
-        blocks.erase(it);
-        block_sequence_number++; // Next pop will look for the next block.
-      }
-    }
-    assert(rv_size == size);
-    assert(rv != nullptr);
-    pop_sequence_number++;
-    lock.unlock();
-    pop_cv.notify_all();
-    return rv;
+#pragma omp taskwait
   }
 };
 

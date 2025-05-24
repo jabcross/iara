@@ -1,12 +1,7 @@
+// RUN: build-test.sh . --dynamic-push-first-fifo-scheduler
 // RUN: mkdir -p "`dirname %s`/build"
 // RUN: cd "`dirname %s`/build"
-// RUN: iara-opt --flatten --sdf-to-tasks  %s > schedule.mlir
-// RUN: mlir-to-llvmir.sh schedule.mlir
-// RUN: clang++ -g -lomp -lpthread -fuse-ld=mold\
-// RUN:    -xir schedule.ll \
-// RUN:    -xc++ "`dirname %s`/04-multithread.cpp" \
-// RUN:     $IARA_DIR/runtime/IaraRuntime.cpp \
-// RUN:    -I. -I$IARA_DIR/include
+// RUN: env >env.out.txt
 // RUN: ./a.out > output.txt
 // RUN: FileCheck %s < output.txt
 
