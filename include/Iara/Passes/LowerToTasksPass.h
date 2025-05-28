@@ -1,9 +1,9 @@
 #ifndef IARA_PASSES_LOWERTOTASKSPASS_H
 #define IARA_PASSES_LOWERTOTASKSPASS_H
 
-#include "Iara/IaraOps.h"
-#include "Util/MlirUtil.h"
-#include "Util/RangeUtil.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include <mlir/Analysis/Presburger/Matrix.h>
 #include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -15,11 +15,11 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/Pass/Pass.h>
 
-namespace mlir::iara::passes {
+namespace iara::passes {
 
-using namespace mlir::iara::rangeutil;
-using namespace mlir::iara::mlir_util;
-using util::Rational;
+using namespace iara::util::range;
+using namespace iara::util::mlir;
+using iara::util::Rational;
 template <class T> using Vec = llvm::SmallVector<T>;
 template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
@@ -108,6 +108,6 @@ inline void registerLowerToTasksPass() {
   });
 }
 
-} // namespace mlir::iara::passes
+} // namespace iara::passes
 
 #endif

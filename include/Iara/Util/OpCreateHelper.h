@@ -5,9 +5,10 @@
 #include <source_location>
 #ifdef IARA_DEBUG
   #define IARA_SET_DEBUG_LOC_ATTR(___debug_loc)                                \
-    ___OP->setAttr("debug_loc", getDebugLoc(___BUILDER, ___debug_loc));
+    ___OP.getOperation()->setAttr("debug_loc",                                 \
+                                  getDebugLoc(___BUILDER, ___debug_loc));
 #else
-  #define IARA_DEBUG_LOC_PARAM
+  #define IARA_SET_DEBUG_LOC_ATTR
 #endif
 
 #ifdef IARA_DEBUG

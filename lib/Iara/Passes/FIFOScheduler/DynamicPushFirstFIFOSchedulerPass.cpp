@@ -1,12 +1,12 @@
-#include "Iara/IaraOps.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/FIFOScheduler/DynamicFIFOSchedulerPass.h"
+#include "Iara/SDF/Canon.h"
+#include "Iara/SDF/SDF.h"
+#include "Iara/Util/Codegen.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/OpCreateHelper.h"
+#include "Iara/Util/Range.h"
 #include "IaraRuntime/DynamicQueueScheduler.h"
-#include "Util/Canon.h"
-#include "Util/Codegen.h"
-#include "Util/MlirUtil.h"
-#include "Util/OpCreateHelper.h"
-#include "Util/RangeUtil.h"
-#include "Util/SDF.h"
 #include <cstddef>
 #include <iterator>
 #include <llvm/ADT/STLExtras.h>
@@ -32,15 +32,15 @@
 #include <mlir/IR/Value.h>
 #include <mlir/Support/LogicalResult.h>
 
-using namespace mlir::iara::rangeutil;
-using namespace mlir::iara::canon;
-using namespace mlir::iara::sdf;
-using namespace mlir::iara::mlir_util;
+using namespace iara::util::range;
+using namespace iara::canon;
+using namespace iara::sdf;
+using namespace iara::util::mlir;
 
-namespace mlir::iara::passes::fifo {
+namespace iara::passes::fifo {
 
 using namespace func;
-using namespace mlir::iara::codegen;
+using namespace iara::codegen;
 
 struct DynamicPushFirstFIFOSchedulerPass::Impl {
 
@@ -52,93 +52,7 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
   Type pointer_type;
   Type void_type;
 
-  template <typename T, typename... Args>
-  void fillTypeVector(MLIRContext *context, SmallVector<Type> &vec) {
-    vec.push_back(GetMLIRType<T>::get(context));
-    if constexpr (sizeof...(Args) > 0) {
-      fillTypeVector<Args...>(context, vec);
-    }
-  }
-
-  template <typename... Args>
-  LLVM::LLVMStructType getLLVMStructType(MLIRContext *context) {
-    SmallVector<Type> types;
-    fillTypeVector<Args...>(context, types);
-    return LLVM::LLVMStructType::getLiteral(context, types);
-  }
-
-  // template <typename T> Value asValue(OpBuilder builder, Location loc, T t) {
-  //   return asValue(builder, loc, t);
-  // }
-
-  template <typename T, typename... Args>
-  Value fillOutContainer(OpBuilder builder, Value container, i64 position, T t,
-                         Args... args) {
-    auto loc = container.getDefiningOp()->getLoc();
-    auto insert = CREATE(LLVM::InsertValueOp, builder, loc, container,
-                         asValue(builder, loc, t), position);
-    if constexpr (sizeof...(Args) > 0) {
-      return fillOutContainer(builder, insert.getResult(), position + 1,
-                              args...);
-    }
-    return insert.getResult();
-  }
-
-  template <typename... Args>
-  LLVM::GlobalOp createGlobalStruct(OpBuilder builder, Location loc,
-                                    StringRef name, Args... args) {
-    auto type = getLLVMStructType<Args...>(builder.getContext());
-    LLVM::GlobalOp rv = CREATE(LLVM::GlobalOp, builder, loc, type, false,
-                               LLVM::Linkage::External, name, Attribute{});
-    rv.getInitializerRegion().emplaceBlock();
-    auto global_builder = OpBuilder::atBlockBegin(rv.getInitializerBlock());
-    auto _struct = CREATE(LLVM::UndefOp, global_builder, loc, type).getResult();
-    _struct = fillOutContainer(global_builder, _struct, 0, args...);
-    CREATE(LLVM::ReturnOp, global_builder, loc, _struct);
-    return rv;
-  }
-
-  LLVM::GlobalOp createGlobalArrayOrNull(ModuleOp module, Location loc,
-                                         DenseArrayAttr array, StringRef name,
-                                         bool is_constant) {
-    if (array.empty())
-      return nullptr;
-    auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-    return CREATE(
-        LLVM::GlobalOp, mod_builder, loc,
-        LLVM::LLVMArrayType::get(array.getElementType(), array.getSize()),
-        is_constant, LLVM::Linkage::External, name, array);
-  };
-
-  // Returns null if the range is empty.
-  template <typename Range>
-  LLVM::GlobalOp createGlobalArrayOrNull(ModuleOp module, Location loc,
-                                         Range &&range, StringRef name,
-                                         bool is_constant) {
-    if (range.empty())
-      return nullptr;
-    auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-    auto elem_type =
-        GetMLIRType<decltype(*range.begin())>::get(module.getContext());
-    auto items = llvm::to_vector(range);
-    auto array_type = LLVM::LLVMArrayType::get(elem_type, items.size());
-    LLVM::GlobalOp rv =
-        CREATE(LLVM::GlobalOp, mod_builder, loc, array_type, is_constant,
-               LLVM::Linkage::External, name, Attribute{});
-    rv.getInitializer().emplaceBlock();
-    auto global_builder = OpBuilder::atBlockBegin(rv.getInitializerBlock());
-    auto array_value =
-        CREATE(LLVM::UndefOp, global_builder, loc, array_type).getResult();
-    for (auto [i, v] : llvm::enumerate(items)) {
-      array_value = CREATE(LLVM::InsertValueOp, global_builder, loc,
-                           array_value, asValue(global_builder, loc, v), i)
-                        .getResult();
-    }
-    CREATE(LLVM::ReturnOp, global_builder, loc, array_value);
-    return rv;
-  };
-
-  void codegenFIFO(OpBuilder main_func_builder, EdgeInfo edge) {
+  void codegenFIFO(OpBuilder main_func_builder, SDFEdge edge) {
     auto module = edge.op->getParentOfType<ModuleOp>();
     auto create_call =
         CREATE(CallOp, main_func_builder, edge.op->getLoc(),
@@ -196,7 +110,7 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
   // also spread out the arguments from the given array.
   // The single argument is a pointer to a buffer of pointers to the memory
   // accessed by the kernel.
-  LLVM::LLVMFuncOp createNodeWrapper(NodeInfo node) {
+  LLVM::LLVMFuncOp createNodeWrapper(SDFNode node) {
     auto module = node.op->getParentOfType<ModuleOp>();
     auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
     auto sym_name = llvm::formatv("iara_node_wrapper_{0}", node.id()).str();
@@ -267,7 +181,7 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
     return wrapper;
   }
 
-  LLVM::GlobalOp generateNodeInfo(NodeInfo node) {
+  LLVM::GlobalOp generateNodeInfo(SDFNode node) {
     // matches NodeInfo in IaraRuntime/DynamicPushFirstFIFO.h
     auto module = node.op->getParentOfType<ModuleOp>();
     auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
@@ -299,10 +213,10 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
         module, node.op.getLoc(), input_edge_infos, inputs_sym_name, true);
 
     auto output_edge_infos =
-        node.op.getAllOutputs() | Map{[](auto v) -> EdgeInfo {
-          return EdgeInfo(cast<EdgeOp>(*v.getUsers().begin()));
+        node.op.getAllOutputs() | Map{[](auto v) -> SDFEdge {
+          return SDFEdge(cast<EdgeOp>(*v.getUsers().begin()));
         }} |
-        Map([&](EdgeInfo edge) { return edge_info_global_ops[edge.op]; });
+        Map([&](SDFEdge edge) { return edge_info_global_ops[edge.op]; });
 
     auto outputs_sym_name =
         llvm::formatv("iara_node_info_{0}_outputs", node.id()).str();
@@ -323,7 +237,7 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
     return node_info;
   }
 
-  void codegenNode(OpBuilder builder, NodeInfo node) {
+  void codegenNode(OpBuilder builder, SDFNode node) {
     auto info = generateNodeInfo(node);
     node_infos[node.op] = info;
 
@@ -360,9 +274,8 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
   }
 
   FuncOp convertToFunction(ActorOp actor) {
-    auto [main_func, main_func_builder] =
-        mlir_util::createEmptyVoidFunctionWithBody(
-            OpBuilder(actor), actor.getSymName(), actor.getLoc());
+    auto [main_func, main_func_builder] = createEmptyVoidFunctionWithBody(
+        OpBuilder(actor), actor.getSymName(), actor.getLoc());
 
     // only once:
 
@@ -370,10 +283,10 @@ struct DynamicPushFirstFIFOSchedulerPass::Impl {
     auto nodes = actor.getOps<NodeOp>() | IntoVector();
 
     for (auto edge_op : actor.getOps<EdgeOp>()) {
-      codegenFIFO(main_func_builder, EdgeInfo(edge_op));
+      codegenFIFO(main_func_builder, SDFEdge(edge_op));
     }
     for (auto node_op : actor.getOps<NodeOp>()) {
-      codegenNode(main_func_builder, NodeInfo(node_op));
+      codegenNode(main_func_builder, SDFNode(node_op));
     }
 
     CREATE(ReturnOp, main_func_builder, main_func.getLoc(), {});
@@ -405,4 +318,4 @@ void DynamicPushFirstFIFOSchedulerPass::runOnOperation() {
   };
 }
 
-} // namespace mlir::iara::passes::fifo
+} // namespace iara::passes::fifo

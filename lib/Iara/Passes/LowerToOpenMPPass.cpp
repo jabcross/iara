@@ -1,6 +1,6 @@
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraOps.h"
-#include "Util/RangeUtil.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Range.h"
 #include "llvm/Support/Casting.h"
 #include <cstddef>
 #include <llvm/ADT/DenseMap.h>
@@ -26,11 +26,11 @@
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 
-using namespace mlir::iara::rangeutil;
+using namespace iara::util::range;
 
-namespace mlir::iara::passes {
+namespace iara::passes {
 #define GEN_PASS_DEF_LOWERTOOPENMPPASS
-#include "Iara/IaraPasses.h.inc"
+#include "Iara/Dialect/IaraPasses.h.inc"
 
 namespace {
 
@@ -80,4 +80,4 @@ public:
   }
 };
 } // namespace
-} // namespace mlir::iara::passes
+} // namespace iara::passes

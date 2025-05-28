@@ -1,17 +1,17 @@
 #ifndef IARA_PASSES_SCHEDULE_STATICDATACODEGEN_H
 #define IARA_PASSES_SCHEDULE_STATICDATACODEGEN_H
 
-#include "Iara/IaraOps.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/LowerToTasksPass.h"
-#include "Util/MlirUtil.h"
-#include <Iara/IaraPasses.h>
+#include "Iara/Util/Mlir.h"
+#include <Iara/Dialect/IaraPasses.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
 
-using namespace mlir::iara;
-using namespace mlir::iara::passes;
+using namespace iara;
+using namespace iara::passes;
 
 // Values to be copied to buffer on first allocation.
 template <typename ValueType>
@@ -66,7 +66,7 @@ std::string codegenFirstBuffer(LowerToTasksPass *_this, NodeOp node) {
     } else {
       llvm_unreachable("Unexpected delay attr type");
     }
-    current_edge = followInoutEdgeBackwards(current_edge);
+    current_edge = followInoutChainBackwards(current_edge);
   }
 
   rvs << "(byte*)(" << getCTypeName(elem_type) << "[" << counter
@@ -120,7 +120,7 @@ void LowerToTasksPass::codegenHeaderFile(mlir::OpBuilder &func_builder,
       num_buffers += (i64)node["total_firings"];
     }
     for (auto output : node.getAllOutputs()) {
-      auto successor = mlir_util::followChainUntilNext<EdgeOp>(output);
+      auto successor = util::mlir::followChainUntilNext<EdgeOp>(output);
       assert(successor);
       node_successors[node].push_back(successor);
     }

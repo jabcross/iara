@@ -1,9 +1,8 @@
 #ifndef IARA_RUNTIME_SDF_OOO_FIFO_H
 #define IARA_RUNTIME_SDF_OOO_FIFO_H
 
+#include "Iara/Util/Types.h"
 #include "IaraRuntime/Chunk.h"
-#include "IaraRuntime/SDF_OoO_Buffer.h"
-#include "Util/types.h"
 #include <boost/describe/class.hpp>
 #include <cstdlib>
 
@@ -12,20 +11,25 @@ struct SDF_OoO_Node;
 // SDF Out of Order Fifo.
 struct alignas(64) SDF_OoO_FIFO {
   struct StaticInfo {
-    i64 local_index;  // Position in the chain of inout
-    i64 prod_rate;    //
-    i64 cons_rate;    //
-    i64 cons_arg_idx; // index of the connected port in the consumer
-    std::span<byte> delay_data;
-    i64 delay_offset; // start of delay in first chunk
-    i64 first_chunk_size;
-    i64 next_chunk_sizes;
+    i64 id = -1;
+    i64 local_index = -1;  // Position in the chain of inout
+    i64 prod_rate = -1;    //
+    i64 cons_rate = -1;    //
+    i64 cons_arg_idx = -1; // index of the connected port in the consumer
+    i64 delay_offset = -1; // start of delay in first chunk
+    i64 delay_size = -1;
+    i64 first_chunk_size = -1;
+    i64 next_chunk_sizes = -1;
+    i64 prod_alpha = -1;
+    i64 prod_beta = -1;
+    i64 cons_alpha = -1;
+    i64 cons_beta = -1;
   };
 
   StaticInfo info;
-  SDF_OoO_Buffer *buffer;
-  SDF_OoO_Node *producer;
-  SDF_OoO_Node *consumer;
+  byte *delay_data;
+  void *producer;
+  void *consumer;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.

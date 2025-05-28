@@ -1,5 +1,5 @@
 #include "IaraRuntime/FIFOScheduler.h"
-#include "Util/RangeUtil.h"
+#include "Iara/Util/Range.h"
 #include <atomic>
 
 namespace iara_fifo_runtime {

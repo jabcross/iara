@@ -1,7 +1,7 @@
-#include "Iara/IaraOps.h"
 #include "Iara/Passes/Schedule/TaskScheduler.h"
-#include "Util/MlirUtil.h"
-#include "Util/RangeUtil.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include "mlir/IR/TypeRange.h"
 #include "llvm/ADT/STLExtras.h"
 #include <llvm/ADT/SmallVector.h>
@@ -29,9 +29,9 @@
 #include <mlir/Transforms/TopologicalSortUtils.h>
 #include <mlir/Transforms/ViewOpGraph.h>
 
-namespace mlir::iara {
+namespace iara {
 
-using namespace mlir::iara::rangeutil;
+using namespace iara::util::range;
 
 bool TaskScheduler::checkSingleRate(ActorOp actor) {
   if (!(actor.getParameterTypes().empty() && actor->getOperands().empty() &&
@@ -479,4 +479,4 @@ LogicalResult TaskScheduler::convertToTasks(ActorOp actor) {
 //   return func_op;
 // }
 
-} // namespace mlir::iara
+} // namespace iara

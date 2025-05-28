@@ -1,7 +1,7 @@
 #ifndef UTIL_UTIL_H
 #define UTIL_UTIL_H
 
-#include "types.h"
+#include "Types.h"
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -25,27 +25,26 @@
 #include <type_traits>
 #include <utility>
 
+namespace iara::util::range {
 using namespace std::placeholders;
 
-namespace mlir::iara::rangeutil {
+// template <class A, class B, class R = void> struct Piper {};
 
-template <class A, class B, class R = void> struct Piper {};
+// template <class A, class B>
+// struct Piper<A, B,
+//              std::void_t<decltype(std::bind(std::declval<B>(),
+//                                             std::declval<A>(), _1))>> {
+// public:
+//   static constexpr auto apply(A a, B b) { return std::bind(b, a, _1); }
+// };
 
-template <class A, class B>
-struct Piper<A, B,
-             std::void_t<decltype(std::bind(std::declval<B>(),
-                                            std::declval<A>(), _1))>> {
-public:
-  static constexpr auto apply(A a, B b) { return std::bind(b, a, _1); }
-};
+// template <class A, class B> auto constexpr apply(A a, B b) {
+//   return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
+// }
 
-template <class A, class B> auto constexpr apply(A a, B b) {
-  return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
-}
-
-template <class A, class B> auto constexpr operator|(A a, B b) {
-  return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
-}
+// template <class A, class B> auto constexpr pipe(A a, B b) {
+//   return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
+// }
 
 template <class R> struct OwnedElementType {
   using type = decltype(*std::begin(std::declval<R>()));
@@ -66,11 +65,12 @@ template <class R> struct OwnedElementType {
 template <class F> struct Filter {
   using type = F;
   F f;
-  Filter(F &&f) : f(f){};
+  Filter(F &&f) : f(f) {};
 };
 template <typename F> Filter(F) -> Filter<F>;
+
 template <class R, class F>
-auto operator|(R &&range, Filter<F> &&transform) -> auto {
+auto pipe(R &&range, Filter<F> &&transform) -> auto {
   return llvm::make_filter_range(std::forward<R>(range),
                                  std::forward<F>(transform.f));
 }
@@ -98,7 +98,7 @@ MapMember(Ret (Base::*)(Args...) const) -> MapMember<Base, Ret, true, Args...>;
 
 template <typename R, typename Base, typename Ret, bool is_const,
           typename... Args, class T = decltype(std::begin(std::declval<R>()))>
-auto operator|(R &&range, MapMember<Base, Ret, is_const, Args...> &&transform)
+auto pipe(R &&range, MapMember<Base, Ret, is_const, Args...> &&transform)
     -> auto {
   return llvm::map_range(std::forward<R>(range),
                          std::move(std::bind(transform.pointer, _1)));
@@ -112,7 +112,7 @@ template <typename F> struct Map {
 template <typename F> Map(F) -> Map<F>;
 
 template <class R, class F, class T = decltype(std::begin(std::declval<R>()))>
-auto operator|(R &&range, Map<F> &&transform) -> auto {
+auto pipe(R &&range, Map<F> &&transform) -> auto {
   return llvm::map_range(std::forward<R>(range), std::move(transform.f));
 }
 
@@ -124,14 +124,14 @@ template <class F> struct Reduce {
 template <typename F> Reduce(F) -> Reduce<F>;
 
 template <class R, class T = decltype(std::begin(std::declval<R>())), class F>
-auto operator|(R &&range, Reduce<F> &&reduce) -> auto {
+auto pipe(R &&range, Reduce<F> &&reduce) -> auto {
   return std::accumulate(begin(range), end(range), T(), reduce.f);
 }
 
 struct Sum {};
 
 template <class R, class T = decltype(std::begin(std::declval<R>())), class F>
-auto operator|(R &&range, Sum &&) -> auto {
+auto pipe(R &&range, Sum &&) -> auto {
   return range | Reduce(std::plus<T>());
 }
 
@@ -139,7 +139,7 @@ template <class T> struct OfType {
   using type = T;
 };
 
-template <class R, class T> auto operator|(R &&range, OfType<T> &&) -> auto {
+template <class R, class T> auto pipe(R &&range, OfType<T> &&) -> auto {
   return range | Filter([](auto &x) { return llvm::isa<T>(x); }) |
          Map([](auto &x) { return llvm::cast<T>(x); });
 }
@@ -149,26 +149,24 @@ template <class C = std::nullptr_t> struct Into {};
 // Wraps llvm::to_vector
 struct IntoVector {};
 
-template <class R> auto operator|(R &&range, IntoVector) -> auto {
+template <class R> auto pipe(R &&range, IntoVector) -> auto {
   return llvm::to_vector(range);
 }
 
-template <unsigned Size, typename R,
-          template <typename element_type, unsigned>
-          typename CT = llvm::SmallVector>
-CT<typename OwnedElementType<R>::type, Size>
-operator|(R &&Range, Into<std::nullptr_t> &&) {
+template <
+    unsigned Size, typename R,
+    template <typename element_type, unsigned> typename CT = llvm::SmallVector>
+CT<typename OwnedElementType<R>::type, Size> pipe(R &&Range,
+                                                  Into<std::nullptr_t> &&) {
   return {std::begin(Range), std::end(Range)};
 };
 
-template <class R, class C> auto operator|(R &&range, Into<C> c) {
-  return C{range};
-}
+template <class R, class C> auto pipe(R &&range, Into<C> c) { return C{range}; }
 
 // Converts a range of references to a range of pointers.
 struct Pointers {};
 
-template <class R> auto operator|(R &&range, Pointers) -> auto {
+template <class R> auto pipe(R &&range, Pointers) -> auto {
   return range | Map([](auto &x) { return &x; });
 }
 
@@ -177,7 +175,7 @@ struct Drop {
   Drop(unsigned int count) : count(count) {}
 };
 
-template <class R> auto operator|(R &&range, Drop drop) -> auto {
+template <class R> auto pipe(R &&range, Drop drop) -> auto {
   return llvm::drop_begin(range, drop.count);
 }
 
@@ -186,13 +184,13 @@ struct Take {
   Take(unsigned int count) : count(count) {}
 };
 
-template <class R> auto operator|(R &&range, Take take) -> auto {
+template <class R> auto pipe(R &&range, Take take) -> auto {
   return range.take_front(take.count);
 }
 
 // treat optional ranges as ranges
 template <class R, class S>
-auto operator|(std::optional<R> &&range, S &&stage)
+auto pipe(std::optional<R> &&range, S &&stage)
     -> decltype(std::declval<R>() | std::forward<S>(stage)) {
   auto begin = decltype(std::begin(*range))();
   auto end = decltype(std::begin(*range))();
@@ -211,7 +209,7 @@ auto operator|(std::optional<R> &&range, S &&stage)
 
 // template <typename F> Find(F) -> Find<F>;
 // template <class R, class F>
-// auto operator|(R &&range, Find<F> &&find)
+// auto pipe(R &&range, Find<F> &&find)
 //     -> NullTypeOf<decltype(*std::begin(range))>::type {
 //   for (auto i : range) {
 //     if (find.f(i))
@@ -222,7 +220,7 @@ auto operator|(std::optional<R> &&range, S &&stage)
 
 struct Count {};
 
-template <class R> auto operator|(R &&range, Count count) -> i64 {
+template <class R> auto pipe(R &&range, Count count) -> i64 {
   i64 rv = 0;
   for (auto _i : range) {
     std::ignore = _i;
@@ -233,15 +231,21 @@ template <class R> auto operator|(R &&range, Count count) -> i64 {
 
 // allow piping into anything that takes begin and end iterators
 template <class R, class F>
-auto operator|(R &&range, F &&f)
-    -> decltype(f(std::begin(range), std::end(range))) {
+auto pipe(R &&range, F &&f) -> decltype(f(std::begin(range), std::end(range))) {
   return f(std::begin(range), std::end(range));
 }
+
+template <class F, class... Args> struct Wrapper {
+  auto wrap(F &&f, Args &&...args) { return std::move(f(args...)); }
+};
+
+// If function has overloads, wrap in this
+#define WRAP(f, ...) [](auto &&x) { return f(std::move(x)); }
 
 // Calls copy assignment on the object and returns the result.
 struct Copy {};
 
-template <class T> auto operator|(T &c, Copy) -> auto {
+template <class T> auto pipe(T &c, Copy) -> auto {
   auto rv = c;
   return rv;
 }
@@ -264,7 +268,15 @@ auto memoize(F fn) {
 
 template <class T> using StaticRange = std::initializer_list<T *>;
 
-} // namespace mlir::iara::rangeutil
+template <class A, class B> inline auto operator|(A &&a, B &&b) {
+  return pipe(std::forward<A>(a), std::forward<B>(b));
+}
+
+template <class A, class B> inline auto operator->*(A &&a, B &&b) {
+  return pipe(std::forward<A>(a), std::forward<B>(b));
+}
+
+} // namespace iara::util::range
 
 // Allow optional ranges to be used in range-based for loops.
 namespace std {

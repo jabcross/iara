@@ -1,5 +1,5 @@
-#include "Iara/IaraOps.h"
-#include "Util/MlirUtil.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Dialect/IaraOps.h"
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
@@ -13,11 +13,7 @@
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <sstream>
 
-namespace mlir {
-
-namespace iara {
-
-namespace mlir_util {
+namespace iara::util::mlir {
 
 size_t getTypeTokenCount(Type type) {
   if (auto ranked_tensor_type =
@@ -29,7 +25,7 @@ size_t getTypeTokenCount(Type type) {
 
 // returns the size of the type in bytes
 size_t getTypeSize(Value value) {
-  auto dl = mlir::DataLayout::closest(value.getDefiningOp());
+  auto dl = DataLayout::closest(value.getDefiningOp());
   if (auto tensor = llvm::dyn_cast<TensorType>(value.getType())) {
     return tensor.getNumElements() * dl.getTypeSize(tensor.getElementType());
   }
@@ -112,7 +108,7 @@ Value getIntConstant(Block *block, i64 value) {
       block, builder.getIntegerAttr(builder.getIntegerType(64), value));
 }
 
-StringRef getCTypeName(mlir::Type type) {
+StringRef getCTypeName(Type type) {
   auto ctx = type.getContext();
   if (type == IntegerType::get(ctx, 64))
     return "i64";
@@ -132,12 +128,8 @@ func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers) {
       func::FuncOp, builder, module.getLoc(), call.getCallee(),
       builder.getFunctionType(call->getOperandTypes(), call->getResultTypes()));
   rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
-  rv.setVisibility(mlir::SymbolTable::Visibility::Private);
+  rv.setVisibility(SymbolTable::Visibility::Private);
   return rv;
 }
 
-} // namespace mlir_util
-
-} // namespace iara
-
-} // namespace mlir
+} // namespace iara::util::mlir

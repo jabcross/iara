@@ -9,7 +9,7 @@
 #ifndef IARA_IARADIALECT_H
 #define IARA_IARADIALECT_H
 
-#include "Util/MlirUtil.h"
+#include "Iara/Util/Mlir.h"
 #include <cstring>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
@@ -20,20 +20,20 @@
 #include <mlir/IR/Dialect.h>
 #include <mlir/IR/Operation.h>
 
-namespace mlir::iara {
+namespace iara::dialect {
 
 template <typename ConcreteType>
 class IaraOp : public mlir::OpTrait::TraitBase<ConcreteType, IaraOp> {
 public:
-  mlir_util::AttrAccessor operator[](StringRef attr_name) {
-    return mlir_util::AttrAccessor{this->getOperation(), attr_name};
+  util::mlir::AttrAccessor operator[](StringRef attr_name) {
+    return util::mlir::AttrAccessor{this->getOperation(), attr_name};
   };
 
-  void traitMethod(){};
+  void traitMethod() {};
 };
 
-} // namespace mlir::iara
+} // namespace iara::dialect
 
-#include "Iara/IaraOpsDialect.h.inc"
+#include "Iara/Dialect/IaraOpsDialect.h.inc"
 
 #endif // IARA_IARADIALECT_H

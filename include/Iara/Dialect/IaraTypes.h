@@ -12,6 +12,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 
 #define GET_TYPEDEF_CLASSES
-#include "Iara/IaraOpsTypes.h.inc"
+#include "Iara/Dialect/IaraOpsTypes.h.inc"
 
 #endif // IARA_IARATYPES_H

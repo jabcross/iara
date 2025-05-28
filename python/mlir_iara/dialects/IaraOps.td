@@ -9,6 +9,6 @@
 #ifndef PYTHON_BINDINGS_IARA_OPS
 #define PYTHON_BINDINGS_IARA_OPS
 
-include "Iara/IaraOps.td"
+include "Iara/Dialect/IaraOps.td"
 
 #endif

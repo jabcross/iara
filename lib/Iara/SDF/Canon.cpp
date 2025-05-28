@@ -1,16 +1,17 @@
-#include "Util/MlirUtil.h"
-#include "Util/RangeUtil.h"
+#include "Iara/SDF/Canon.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include <Util/Canon.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Support/LogicalResult.h>
 
-namespace mlir::iara::canon {
+namespace iara::sdf::canon {
 
-using namespace mlir::iara::mlir_util;
-using namespace mlir::iara::rangeutil;
+using namespace iara::util::mlir;
+using namespace iara::util::range;
 
 LogicalResult canonicalizeTypes(ActorOp actor) {
   for (Operation &op_ref : actor.getOps()) {
@@ -28,8 +29,7 @@ LogicalResult canonicalizeTypes(ActorOp actor) {
 }
 
 std::string getBroadcastName(i64 size, Type type) {
-  return llvm::formatv("iara_broadcast_{0}x{1}", size,
-                       mlir_util::stringifyType(type));
+  return llvm::formatv("iara_broadcast_{0}x{1}", size, stringifyType(type));
 }
 
 func::FuncOp getOrCodegenBroadcastImpl(Value value, i64 size) {
@@ -62,8 +62,8 @@ func::FuncOp getOrCodegenBroadcastImpl(Value value, i64 size) {
   auto impl_builder = OpBuilder(impl);
   impl_builder.setInsertionPointToStart(body);
 
-  auto size_val = mlir_util::getIntConstant(&impl.getFunctionBody().front(),
-                                            (size_t)size * getTypeSize(value));
+  auto size_val = getIntConstant(&impl.getFunctionBody().front(),
+                                 (size_t)size * getTypeSize(value));
 
   auto src = body->getArgument(0);
 
@@ -108,7 +108,7 @@ LogicalResult expandToBroadcast(OpResult &value) {
   return success();
 }
 
-LogicalResult expandImplicitEdges(ActorOp actor) {
+LogicalResult expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   // First, expand all broadcasts.
   for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
     for (auto result : op->getResults()) {
@@ -144,6 +144,8 @@ LogicalResult expandImplicitEdges(ActorOp actor) {
   return success();
 }
 
-LogicalResult canonicalize(ActorOp actor) { return expandImplicitEdges(actor); }
+LogicalResult canonicalize(ActorOp actor) {
+  return expandImplicitEdgesAndBroadcasts(actor);
+}
 
-} // namespace mlir::iara::canon
+} // namespace iara::sdf::canon

@@ -1,7 +1,7 @@
-#include "Iara/IaraOps.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/LowerToTasksPass.h"
-#include "Util/MlirUtil.h"
-#include "Util/RangeUtil.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/FileSystem.h>
@@ -10,8 +10,8 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Support/LLVM.h>
 
-using namespace mlir::iara;
-using namespace mlir::iara::passes;
+using namespace iara;
+using namespace iara::passes;
 
 // Calculate total firings with another ILP model.
 mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
@@ -55,7 +55,7 @@ mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
     auto edge = followChainUntilNext<EdgeOp>(node->getResult(0));
     while (edge != nullptr) {
       input_file << (i64)edge.getConsumerNode()["node_id"] << " ";
-      edge = followInoutEdgeForwards(edge);
+      edge = followInoutChainForwards(edge);
     }
     input_file << "\n";
   }

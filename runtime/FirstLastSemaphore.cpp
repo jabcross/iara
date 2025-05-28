@@ -6,10 +6,10 @@
 namespace first_last_semaphore {
 
 template <class Data, class FirstArgs, class EveryTimeArgs, class LastArgs>
-void first_last_semaphore::FirstLastSemaphoreMap<
-    Data, FirstArgs, EveryTimeArgs,
-    LastArgs>::arrive(i64 id, i64 this_resources, FirstArgs &first_args,
-                      EveryTimeArgs &every_time_args, LastArgs &last_args) {
+void first_last_semaphore::
+    FirstLastSemaphoreMap<Data, FirstArgs, EveryTimeArgs, LastArgs>::arrive(
+        i64 id, i64 this_resources, i64 total_resources, FirstArgs &first_args,
+        EveryTimeArgs &every_time_args, LastArgs &last_args) {
   assert(total_resources >= this_resources);
 
   // todo: avoid scheduling if trivial

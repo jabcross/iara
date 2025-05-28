@@ -23,7 +23,7 @@ def IaraDialect : Dialect {
         support for dataflow graphs, nodes, and edges, parameters, interfaces,
         in-place computaton, and more.
     }];
-    let cppNamespace = "::mlir::iara";
+    let cppNamespace = "::iara::dialect";
 
     let useDefaultTypePrinterParser = 1;
     let extraClassDeclaration = [{
@@ -37,7 +37,7 @@ def IaraDialect : Dialect {
 
 
 def IaraOpTrait: NativeOpTrait<"IaraOp"> {
-    string cppNamespace = "::mlir::iara";
+    string cppNamespace = "::iara::dialect";
 }
 
 class IaraOp<string mnemonic, list<Trait> traits = []> :

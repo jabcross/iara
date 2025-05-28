@@ -1,14 +1,14 @@
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraOps.h"
 #include "Iara/Passes/LowerToTasksPass.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/Schedule/BufferSizeCalculator.h"
+#include "Iara/SDF/Canon.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/OpCreateHelper.h"
+#include "Iara/Util/Range.h"
+#include "Iara/Util/Shell.h"
+#include "Iara/Util/rational.h"
 #include "IaraRuntime/IaraRuntime.h"
-#include "Util/Canon.h"
-#include "Util/MlirUtil.h"
-#include "Util/OpCreateHelper.h"
-#include "Util/RangeUtil.h"
-#include "Util/ShellUtil.h"
-#include "Util/rational.h"
 #include "llvm/Support/Casting.h"
 #include <algorithm>
 #include <any>
@@ -94,14 +94,14 @@
 #include <tuple>
 #include <unistd.h>
 
-using namespace mlir::iara::rangeutil;
-using namespace mlir::iara::mlir_util;
-using util::Rational;
+using namespace iara::util::range;
+using namespace iara::util::mlir;
+using iara::util::Rational;
 template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
 
-namespace mlir::iara::passes {
+namespace iara::passes {
 
 using Direction = LowerToTasksPass::Direction;
 
@@ -129,7 +129,7 @@ NodeOp LowerToTasksPass::getMatchingDealloc(NodeOp alloc_node) {
   assert(alloc_node.isAlloc());
   auto edge = dyn_cast<EdgeOp>(*alloc_node->getUsers().begin());
   assert(edge);
-  while (auto next_edge = followInoutEdgeForwards(edge)) {
+  while (auto next_edge = followInoutChainForwards(edge)) {
     edge = next_edge;
   }
   auto dealloc_node = edge.getConsumerNode();
@@ -141,7 +141,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
   assert(dealloc_node.isDealloc());
   auto edge = followChainUntilPrevious<EdgeOp>(dealloc_node.getIn().front());
   assert(edge);
-  while (auto prev_edge = followInoutEdgeBackwards(edge)) {
+  while (auto prev_edge = followInoutChainBackwards(edge)) {
     edge = prev_edge;
   }
   auto alloc_node = edge.getProducerNode();
@@ -215,7 +215,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
 // func::FuncOp LowerToTasksPass::codegenBroadcastImpl(Value value, i64
 // size) {
 //   std::string name = llvm::formatv("iara_broadcast_{0}x{1}", size,
-//                                    mlir_util::stringifyType(value.getType()));
+//                                    <Iara/Util::stringifyType(value.getType()));
 
 //   // check if exists
 
@@ -243,7 +243,7 @@ NodeOp LowerToTasksPass::getMatchingAlloc(NodeOp dealloc_node) {
 //   auto impl_builder = OpBuilder(impl);
 //   impl_builder.setInsertionPointToStart(body);
 
-//   auto size_val = mlir_util::getIntConstant(&impl.getFunctionBody().front(),
+//   auto size_val = <Iara/Util::getIntConstant(&impl.getFunctionBody().front(),
 //                                             (size_t)size *
 //                                             getTypeSize(value));
 
@@ -322,7 +322,7 @@ LogicalResult LowerToTasksPass::annotateIDs(ActorOp actor) {
 i64 calculateRemainingDelayBytes(EdgeOp edge) {
   i64 rv = 0;
   auto next = edge;
-  while ((next = followInoutEdgeForwards(next))) {
+  while ((next = followInoutChainForwards(next))) {
     rv += (i64)next["delay_bytes"];
   }
   return rv;
@@ -339,7 +339,7 @@ struct BufferSizeInfo {
 
 BufferSizeInfo getBufferSizeWithDelays(EdgeOp edge) {
   BufferSizeInfo rv;
-  while (auto prev_edge = followInoutEdgeBackwards(edge)) {
+  while (auto prev_edge = followInoutChainBackwards(edge)) {
     edge = prev_edge;
   }
   rv.delays_only = edge["delay_bytes"] + calculateRemainingDelayBytes(edge);
@@ -349,7 +349,7 @@ BufferSizeInfo getBufferSizeWithDelays(EdgeOp edge) {
 }
 
 i64 getBufferSizeWithoutDelays(EdgeOp edge) {
-  while (auto prev_edge = followInoutEdgeBackwards(edge)) {
+  while (auto prev_edge = followInoutChainBackwards(edge)) {
     edge = prev_edge;
   }
   return (i64)edge["prod_rate"] * (i64)edge["prod_beta"];
@@ -360,7 +360,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
 
   if (edge->hasAttr("prod_alpha"))
     return success();
-  while (auto previousInoutEdge = followInoutEdgeBackwards(edge)) {
+  while (auto previousInoutEdge = followInoutChainBackwards(edge)) {
     edge = previousInoutEdge;
   }
 
@@ -376,7 +376,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
 
   {
     auto next_edge = edge;
-    while ((next_edge = followInoutEdgeForwards(next_edge))) {
+    while ((next_edge = followInoutChainForwards(next_edge))) {
       delays.push_back((i64)next_edge["delay_bytes"]);
       rates.push_back(next_edge.getConsRate());
     }
@@ -409,7 +409,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffer(EdgeOp edge) {
       forward_edge["prod_beta"] = beta[i];
       forward_edge["cons_alpha"] = alpha[i + 1];
       forward_edge["cons_beta"] = beta[i + 1];
-      forward_edge = followInoutEdgeForwards(forward_edge);
+      forward_edge = followInoutChainForwards(forward_edge);
       i++;
     }
   }
@@ -434,7 +434,7 @@ LogicalResult LowerToTasksPass::allocateContiguousBuffers(ActorOp actor) {
 
 func::FuncOp codegenCopyImpl(Value input) {
   std::string name =
-      llvm::formatv("iara_copy_{1}", mlir_util::stringifyType(input.getType()));
+      llvm::formatv("iara_copy_{1}", stringifyType(input.getType()));
 
   auto module = input.getDefiningOp()->getParentOfType<ModuleOp>();
 
@@ -459,8 +459,8 @@ func::FuncOp codegenCopyImpl(Value input) {
   auto impl_builder = OpBuilder(impl);
   impl_builder.setInsertionPointToStart(body);
 
-  auto size_val = mlir_util::getIntConstant(&impl.getFunctionBody().front(),
-                                            getTypeSize(input));
+  auto size_val =
+      getIntConstant(&impl.getFunctionBody().front(), getTypeSize(input));
 
   CREATE(LLVM::MemcpyOp, impl_builder, impl->getLoc(), body->getArgument(1),
          body->getArgument(0), size_val, false);
@@ -606,7 +606,7 @@ i64 LowerToTasksPass::getIntAttrValue(Operation *op, StringRef name) {
 
 void LowerToTasksPass::populateAllocEdgeAttrs(EdgeOp edge) {
   edge.traitMethod();
-  auto next_edge = followInoutEdgeForwards(edge);
+  auto next_edge = followInoutChainForwards(edge);
   edge["prod_rate"] = -1;
   edge["cons_rate"] = next_edge.getProdRate();
   edge["cons_alpha"] = *next_edge["prod_alpha"];
@@ -622,7 +622,7 @@ void LowerToTasksPass::populateAllocEdgeAttrs(EdgeOp edge) {
 }
 
 void LowerToTasksPass::populateDeallocEdgeAttrs(EdgeOp edge) {
-  auto prev_edge = followInoutEdgeBackwards(edge);
+  auto prev_edge = followInoutChainBackwards(edge);
   edge["cons_rate"] = -1;
   edge["prod_rate"] = *prev_edge["cons_rate"];
   edge["cons_alpha"] = -1;
@@ -831,7 +831,7 @@ LogicalResult LowerToTasksPass::codegenRuntimeFunction(ActorOp actor) {
   for (NodeOp node : actor.getOps<NodeOp>()) {
     totalInputBytes[node] = 0;
     for (auto i : node.getAllInputs()) {
-      totalInputBytes[node] += mlir_util::getTypeTokenCount(i.getType());
+      totalInputBytes[node] += getTypeTokenCount(i.getType());
     }
   }
 
@@ -881,7 +881,7 @@ LogicalResult LowerToTasksPass::taskify(ActorOp actor) {
     return failure();
   if (expandImplicitEdges(actor).failed())
     return failure();
-  if (mlir::iara::canon::canonicalizeTypes(actor).failed())
+  if (canonicalizeTypes(actor).failed())
     return failure();
   if (annotateEdgeInfo(actor).failed())
     return failure();
@@ -923,4 +923,4 @@ void LowerToTasksPass::runOnOperation() {
   });
 }
 
-} // namespace mlir::iara::passes
+} // namespace iara::passes

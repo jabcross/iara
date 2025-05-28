@@ -1,7 +1,7 @@
 #ifndef IARA_RUNTIME_FIRST_COMPLETER_TASK_H
 #define IARA_RUNTIME_FIRST_COMPLETER_TASK_H
 
-#include "Util/types.h"
+#include "Iara/Util/Types.h"
 
 namespace first_last_semaphore {
 
@@ -15,7 +15,6 @@ struct FirstLastSemaphoreMap {
   };
 
   ParallelHashMap<i64, Entry> map{};
-  i64 total_resources;
   std::function<void(FirstArgs &, Data &)>
       first_time_func; // called by the first dependency
   std::function<void(EveryTimeArgs &, Data &)>
@@ -25,8 +24,9 @@ struct FirstLastSemaphoreMap {
 
   // The first dependency to access this id will execute (`first`). The last one
   // will execute `last`. Each dependency will decrement the counter.
-  void arrive(i64 id, i64 this_resources, FirstArgs &first_args,
-              EveryTimeArgs &every_time_args, LastArgs &last_args);
+  void arrive(i64 id, i64 this_resources, i64 total_resources,
+              FirstArgs &first_args, EveryTimeArgs &every_time_args,
+              LastArgs &last_args);
 };
 
 } // namespace first_last_semaphore

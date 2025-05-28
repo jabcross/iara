@@ -10,7 +10,7 @@
 #define IARA_TYPES
 
 include "mlir/IR/AttrTypeBase.td"
-include "Iara/IaraDialect.td"
+include "Iara/Dialect/IaraDialect.td"
 
 //===----------------------------------------------------------------------===//
 // Iara type definitions

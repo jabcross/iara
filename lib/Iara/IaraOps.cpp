@@ -6,11 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraOps.h"
-#include "Util/MlirUtil.h"
-#include "Util/RangeUtil.h"
-#include "Util/rational.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
+#include "Iara/Util/rational.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpImplementation.h"
@@ -18,7 +18,6 @@
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Casting.h"
-#include <Util/RangeUtil.h>
 #include <assert.h>
 #include <functional>
 #include <iterator>
@@ -36,12 +35,12 @@
 #include <mlir/Support/LLVM.h>
 
 #define GET_OP_CLASSES
-#include "Iara/IaraOps.cpp.inc"
+#include "Iara/Dialect/IaraOps.cpp.inc"
 
-using namespace mlir::iara::rangeutil;
-using namespace mlir::iara::mlir_util;
+using namespace iara::util::range;
+using namespace iara::util::mlir;
 
-namespace mlir::iara {
+namespace iara {
 
 bool ActorOp::isEmpty() {
   for (Operation &op : this->getOps()) {
@@ -278,14 +277,13 @@ NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
 }
 
 // Input rate in bytes
-i64 EdgeOp::getProdRate() { return mlir_util::getTypeSize(getIn()); }
+i64 EdgeOp::getProdRate() { return getTypeSize(getIn()); }
 
 // Output rate in bytes
-i64 EdgeOp::getConsRate() { return mlir_util::getTypeSize(getOut()); }
+i64 EdgeOp::getConsRate() { return getTypeSize(getOut()); }
 
 util::Rational EdgeOp::getFlowRatio() {
-  return util::Rational(mlir_util::getTypeSize(getIn()),
-                        mlir_util::getTypeSize(getOut()));
+  return util::Rational(getTypeSize(getIn()), getTypeSize(getOut()));
 }
 
 NodeOp EdgeOp::getProducerNode() {
@@ -299,7 +297,7 @@ NodeOp EdgeOp::getConsumerNode() {
 }
 
 // Follow an inout edge backwards, or return null.
-EdgeOp followInoutEdgeBackwards(EdgeOp edge) {
+EdgeOp followInoutChainBackwards(EdgeOp edge) {
   auto prev_node = edge.getProducerNode();
   if (auto in_port = prev_node.getMatchingInoutInput(edge.getIn())) {
     return followChainUntilPrevious<EdgeOp>(in_port);
@@ -308,7 +306,7 @@ EdgeOp followInoutEdgeBackwards(EdgeOp edge) {
 }
 
 // Follow an inout edge forwards, or return null.
-EdgeOp followInoutEdgeForwards(EdgeOp edge) {
+EdgeOp followInoutChainForwards(EdgeOp edge) {
 
   auto next_node = edge.getConsumerNode();
   if (auto out_port = next_node.getMatchingInoutOutput(edge.getOut())) {
@@ -317,4 +315,22 @@ EdgeOp followInoutEdgeForwards(EdgeOp edge) {
   return nullptr;
 }
 
-} // namespace mlir::iara
+EdgeOp findFirstEdgeOfChain(EdgeOp edge) {
+  auto prev = edge;
+  while (prev) {
+    edge = prev;
+    prev = followInoutChainBackwards(prev);
+  }
+  return edge;
+}
+
+EdgeOp findLastEdgeOfChain(EdgeOp edge) {
+  auto next = edge;
+  while (next) {
+    edge = next;
+    next = followInoutChainForwards(next);
+  }
+  return edge;
+}
+
+} // namespace iara

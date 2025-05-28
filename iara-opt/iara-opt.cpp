@@ -13,18 +13,17 @@
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraPasses.h"
-#include "Iara/Passes/FIFOScheduler/DynamicFIFOSchedulerPass.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraPasses.h"
+#include "Iara/Passes/FIFOScheduler/OoOSchedulerPass.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
-  mlir::iara::passes::registerPasses();
-  // mlir::iara::passes::registerLowerToTasksPass();
-  mlir::iara::passes::fifo::registerDynamicPushFirstFIFOSchedulerPass();
+  iara::passes::registerPasses();
+  iara::passes::fifo::registerOoOSchedulerPass();
 
   mlir::DialectRegistry registry;
-  registry.insert<mlir::iara::IaraDialect, mlir::arith::ArithDialect,
+  registry.insert<iara::dialect::IaraDialect, mlir::arith::ArithDialect,
                   mlir::func::FuncDialect>();
   // Add the following to include *all* MLIR Core dialects, or selectively
   // include what you need like above. You only need to register dialects that

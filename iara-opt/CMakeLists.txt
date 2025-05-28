@@ -7,6 +7,8 @@ set(LIBS
         MLIROptLib
         MLIRIara
         )
+
+
 add_llvm_executable(iara-opt iara-opt.cpp)
 
 llvm_update_compile_flags(iara-opt)

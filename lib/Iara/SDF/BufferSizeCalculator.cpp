@@ -1,7 +1,9 @@
-#include "Iara/Passes/Schedule/BufferSizeCalculator.h"
-#include "Util/RangeUtil.h"
+#include "Iara/SDF/BufferSizeCalculator.h"
+#include "Iara/Util/Range.h"
 
-llvm::FailureOr<std::pair<llvm::SmallVector<i64>, llvm::SmallVector<i64>>>
+namespace iara::sdf {
+
+llvm::FailureOr<BufferSizeValues>
 calculateBufferSize(llvm::SmallVector<i64> &rates,
                     llvm::SmallVector<i64> &delays) {
   // WIP: Using slow script.
@@ -63,7 +65,7 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
   auto error =
       llvm::MemoryBuffer::getFileAsStream(errpath)->get()->getBuffer().str();
 
-  auto lines = llvm::split(output, "\n") | mlir::iara::rangeutil::IntoVector();
+  auto lines = llvm::split(output, "\n") | iara::util::range::IntoVector();
 
   {
     i64 val;
@@ -78,3 +80,4 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
   }
   return {{alpha, beta}};
 }
+} // namespace iara::sdf

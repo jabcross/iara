@@ -4,6 +4,7 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
+#include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <mlir/Analysis/Presburger/Matrix.h>
 #include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -25,34 +26,27 @@ template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
 
-struct DynamicPushFirstFIFOSchedulerPass
-    : public PassWrapper<DynamicPushFirstFIFOSchedulerPass,
-                         OperationPass<::mlir::ModuleOp>> {
+struct OoOSchedulerPass
+    : public PassWrapper<OoOSchedulerPass, OperationPass<::mlir::ModuleOp>> {
   struct Impl;
-  ::llvm::StringRef getArgument() const override {
-    return "dynamic-push-first-fifo-scheduler";
-  }
+  ::llvm::StringRef getArgument() const override { return "ooo-scheduler"; }
   ::llvm::StringRef getDescription() const override {
-    return "Converts SDF dataflow to a runtime with dynamic FIFOs. This "
-           "version has non-blocking pushs and blocking pops.";
+    return "Converts SDF dataflow to a runtime with out-of-order FIFOs.";
   }
   static constexpr ::llvm::StringLiteral getPassName() {
-    return ::llvm::StringLiteral("DynamicPushFirstFIFOSchedulerPass");
+    return ::llvm::StringLiteral("OoOSchedulerPass");
   }
 
   Impl *pimpl;
 
-  ::llvm::StringRef getName() const override {
-    return "DynamicFIFOSchedulerPass";
-  }
+  ::llvm::StringRef getName() const override { return "OoOSchedulerPass"; }
 
   void runOnOperation() final override;
 };
 
-inline void registerDynamicPushFirstFIFOSchedulerPass() {
+inline void registerOoOSchedulerPass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
-    return std::make_unique<
-        iara::passes::fifo::DynamicPushFirstFIFOSchedulerPass>();
+    return std::make_unique<iara::passes::fifo::OoOSchedulerPass>();
   });
 }
 

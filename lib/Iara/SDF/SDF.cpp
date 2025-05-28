@@ -1,0 +1,248 @@
+#include "Iara/SDF/SDF.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/SDF/Analysis.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/rational.h"
+#include "IaraRuntime/SDF_OoO_FIFO.h"
+#include "IaraRuntime/SDF_OoO_Node.h"
+#include <cmath>
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/CodeGen/GlobalISel/GIMatchTableExecutor.h>
+#include <llvm/Support/FormatVariadic.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Support/LogicalResult.h>
+#include <queue>
+
+namespace iara::sdf
+
+{
+using namespace iara::util::mlir;
+
+enum class Direction { Forward, Backward };
+
+Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
+  Vec<Vec<EdgeOp>> chains;
+  for (auto edge : actor.getOps<EdgeOp>()) {
+    // Only once per inout chain.
+    if (iara::followInoutChainBackwards(edge))
+      continue;
+    Vec<EdgeOp> chain;
+    while (edge) {
+      chain.push_back(edge);
+      edge = followInoutChainForwards(edge);
+    }
+    chains.push_back(chain);
+  }
+  return chains;
+}
+
+// Sets the ids of the nodes and edges, as well as the position of each edge in
+// its inout chain.
+LogicalResult annotateNodeAndEdgeIds(ActorOp actor, StaticAnalysisData &data) {
+  for (auto [i, n] : llvm::enumerate(actor.getOps<NodeOp>())) {
+    data.node_info[n].id = i;
+  }
+  for (auto [i, e] : llvm::enumerate(actor.getOps<EdgeOp>())) {
+    data.edge_info[e].id = i;
+    // if first of chain
+    if (!followInoutChainBackwards(e)) {
+      int j = 0;
+      while (e) {
+        data.edge_info[e].local_index = j++;
+        e = followInoutChainForwards(e);
+      }
+    }
+  }
+  return success();
+}
+
+LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
+  // run bfs on graph to get rank
+
+  auto getRank = [&](NodeOp node) -> std::optional<i64> {
+    if (auto entry = data.node_info.find(node); entry != data.node_info.end()) {
+      return entry->second.rank;
+    }
+    return {};
+  };
+  auto setRank = [&](NodeOp node, i64 value) {
+    data.node_info[node].rank = value;
+  };
+
+  std::queue<std::pair<Operation *, int>> bfs{};
+
+  Operation *start_node = *actor.getOps<NodeOp>().begin();
+
+  bfs.push({start_node, 0});
+
+  auto flood_fill = [&](Operation *op, int rank) {
+    auto node = dyn_cast<NodeOp>(op);
+    if (node and getRank(node)) {
+      return;
+    }
+    if (node)
+      setRank(node, rank);
+    for (auto operand : op->getOperands()) {
+      bfs.push({operand.getDefiningOp(), rank - 1});
+    }
+    for (auto user : op->getUsers()) {
+      bfs.push({user, rank + 1});
+    }
+  };
+
+  while (!bfs.empty()) {
+    auto [op, rank] = bfs.front();
+    bfs.pop();
+    flood_fill(op, rank);
+  }
+
+  for (auto edge : actor.getOps<EdgeOp>()) {
+    if (data.node_info[edge.getConsumerNode()].rank <=
+        data.node_info[edge.getProducerNode()].rank) {
+      edge.emitError("Backwards edge.");
+      // todo: implement buffer
+    }
+  }
+}
+
+// An edge is backwards if it creates a cycle with a bfs starting on the
+// sources.
+// TODO: check for appropriate delay size
+template <class T> using IL = std::initializer_list<T>;
+LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
+
+  for (auto edge : actor.getOps<EdgeOp>()) {
+
+    // rate info
+
+    auto &edge_info = data.edge_info[edge];
+    edge_info.prod_rate = edge.getProdRate();
+    edge_info.cons_rate = edge.getConsRate();
+    edge_info.cons_arg_idx =
+        edge.getResult().getUses().begin()->getOperandNumber();
+    if (auto attr = edge->getAttr("delay")) {
+      if (auto delay = dyn_cast_if_present<DenseElementsAttr>(attr)) {
+        edge_info.delay_size =
+            getTypeSize(delay.getType(), DataLayout::closest(edge));
+      } else {
+        edge_info.delay_size = 0;
+      }
+    }
+  }
+
+  if (analyseOOOBufferSizes(actor, data).failed())
+    return failure();
+
+  // Fill out the delay offsets.
+  for (auto chain : getInoutChains(actor)) {
+    i64 offset = 0;
+    for (auto edge : reverse(chain)) {
+      auto &info = data.edge_info[edge];
+      info.delay_offset = offset;
+      offset += info.delay_size;
+    }
+  }
+
+  return success();
+} // namespace iara::sdf
+
+SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node) {
+  SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> neighbors;
+  auto inputs = node.getAllInputs();
+  auto outputs = node.getAllOutputs();
+  for (auto input : inputs) {
+    auto edge = dyn_cast<EdgeOp>(input.getDefiningOp());
+    assert(edge);
+    auto other_node = edge.getProducerNode();
+    neighbors.push_back({Direction::Backward, edge, other_node});
+  }
+  for (auto output : outputs) {
+    auto edge = dyn_cast<EdgeOp>(*output.getUsers().begin());
+    assert(edge);
+    auto other_node = edge.getConsumerNode();
+    neighbors.push_back({Direction::Forward, edge, other_node});
+  }
+  return neighbors;
+}
+
+LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
+
+  using util::Rational;
+
+  if (actor.isKernelDeclaration())
+    return success();
+  assert(actor.isFlat());
+  DenseMap<NodeOp, Rational> total_firings;
+  // start walk
+  SmallVector<NodeOp> stack, alloc_nodes, dealloc_nodes;
+
+  for (auto node : actor.getOps<NodeOp>()) {
+    stack.push_back(node);
+    break;
+  }
+
+  SmallVector<i64> denominators = {1};
+
+  total_firings[stack.back()] = {1};
+  while (not stack.empty()) {
+    auto node = stack.back();
+    stack.pop_back();
+    if (node.isAlloc() or node.isDealloc()) {
+      continue;
+    }
+    for (auto [direction, edge, neighbor] : getNeighbors(node)) {
+      Rational flow_ratio = edge.getFlowRatio().normalized();
+      if (direction == Direction::Forward) {
+        flow_ratio = flow_ratio.reciprocal();
+      }
+      auto neighbor_firings = total_firings[node] * flow_ratio;
+      if (total_firings.contains(neighbor)) {
+        if (total_firings[neighbor] != neighbor_firings) {
+          node->emitError(
+              "Graph is not admissible (inconsistent iteration numbers ")
+              << llvm::formatv("{0} and {1}", total_firings[neighbor],
+                               neighbor_firings)
+              << "\n";
+          node->dump();
+          neighbor->dump();
+          return failure();
+        }
+        continue;
+      }
+      total_firings[neighbor] = neighbor_firings;
+      denominators.push_back(neighbor_firings.denom);
+      stack.push_back(neighbor);
+    }
+  }
+
+  // All iteration numbers must be integers. Multiply all by lcm of
+  // denominators.
+  i64 mult = std::reduce(denominators.begin(), denominators.end(), 1,
+                         [](auto a, auto b) { return std::lcm(a, b); });
+
+  for (auto [node, firings] : total_firings) {
+    firings = firings * mult;
+    firings = firings.normalized();
+    assert(firings.denom == 1);
+    auto total_firings = mult * firings.num;
+    data.node_info[node].total_firings = total_firings;
+  }
+  return success();
+}
+
+FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor) {
+  StaticAnalysisData data;
+
+  if (annotateNodeRanks(actor, data).succeeded() &&
+      annotateNodeAndEdgeIds(actor, data).succeeded() &&
+      annotateTotalFirings(actor, data).succeeded() &&
+      annotateDelayInfo(actor, data).succeeded()) {
+    return data;
+  }
+  return failure();
+}
+
+} // namespace iara::sdf

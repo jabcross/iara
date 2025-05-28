@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraOps.h"
-#include "Iara/IaraTypes.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/IaraTypes.h"
 
 using namespace mlir;
-using namespace mlir::iara;
+using namespace iara;
 
-#include "Iara/IaraOpsDialect.cpp.inc"
+#include "Iara/Dialect/IaraOpsDialect.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Iara dialect.
@@ -22,7 +22,7 @@ using namespace mlir::iara;
 void IaraDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "Iara/IaraOps.cpp.inc"
+#include "Iara/Dialect/IaraOps.cpp.inc"
       >();
   registerTypes();
 }

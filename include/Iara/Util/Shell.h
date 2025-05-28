@@ -1,11 +1,11 @@
-#ifndef UTIL_SHELL_UTIL_H
-#define UTIL_SHELL_UTIL_H
+#ifndef UTIL_SHELL_H
+#define UTIL_SHELL_H
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <sstream>
 #include <system_error>
-namespace shell_util {
+namespace shell {
 struct ShellCallResult {
   std::error_code error_code;
   std::unique_ptr<llvm::MemoryBuffer> stdout;
@@ -54,5 +54,5 @@ inline ShellCallResult shellCall(std::string command) {
           .stderr = std::move(errstream)};
 };
 
-} // namespace shell_util
+} // namespace shell
 #endif

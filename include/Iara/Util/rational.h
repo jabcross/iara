@@ -1,12 +1,13 @@
 #ifndef RATIONAL_H
 #define RATIONAL_H
 
+#include "Iara/Util/Types.h"
 #include <compare>
 #include <llvm/Support/FormatProviders.h>
 #include <mlir/Support/MathExtras.h>
 #include <numeric>
 
-namespace util {
+namespace iara::util {
 
 // Rational number representation. Keeps precision between successive
 // multiplications/divisions, as long as both numerator and denominator can fit
@@ -61,11 +62,11 @@ struct Rational {
   Rational reciprocal() const { return Rational(denom, num); }
 };
 
-} // namespace util
+} // namespace iara::util
 
 namespace llvm {
-template <> struct format_provider<util::Rational> {
-  static void format(const util::Rational &V, raw_ostream &Stream,
+template <> struct format_provider<iara::util::Rational> {
+  static void format(const iara::util::Rational &V, raw_ostream &Stream,
                      StringRef Style) {
     Stream << V.num << "/" << V.denom;
   }

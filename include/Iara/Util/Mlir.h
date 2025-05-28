@@ -1,7 +1,7 @@
 #ifndef MLIR_IARA_MLIR_UTIL_H
 #define MLIR_IARA_MLIR_UTIL_H
+#include "Iara/Util/Types.h"
 #include "OpCreateHelper.h"
-#include "Util/types.h"
 #include <cstdint>
 #include <functional>
 #include <llvm/ADT/DenseSet.h>
@@ -26,7 +26,8 @@
 #include <source_location>
 #include <utility>
 
-namespace mlir::iara::mlir_util {
+using namespace mlir;
+namespace iara::util::mlir {
 
 size_t getTypeTokenCount(Type type);
 size_t getTypeSize(Value value);
@@ -92,12 +93,12 @@ template <class T> T followChainUntilPrevious(Value val) {
 }
 
 // Generates an int constant for the given function and value
-mlir::Value getIntConstant(Block *block, IntegerAttr val);
+Value getIntConstant(Block *block, IntegerAttr val);
 
-mlir::Value getIntConstant(Block *block, i64 value);
+Value getIntConstant(Block *block, i64 value);
 
 // generate C name for this type (for use on C header codegen)
-StringRef getCTypeName(mlir::Type type);
+StringRef getCTypeName(Type type);
 
 template <class ValueType> struct MLIRTypeOf {};
 template <> struct MLIRTypeOf<i64> {
@@ -167,6 +168,6 @@ template <> inline auto asAttr<i64>(MLIRContext *context, i64 value) {
 
 func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers);
 
-} // namespace mlir::iara::mlir_util
+} // namespace iara::util::mlir
 
 #endif

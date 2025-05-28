@@ -1,12 +1,12 @@
-#include "Iara/IaraOps.h"
 #include "Iara/Passes/Schedule/OpenMPScheduler.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
 #include "mlir/Support/LogicalResult.h"
-#include <Util/MlirUtil.h>
-#include <Util/RangeUtil.h>
 #include <iterator>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
@@ -25,8 +25,8 @@
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/LLVM.h>
 
-namespace mlir::iara {
-using namespace mlir::iara::rangeutil;
+namespace iara {
+using namespace iara::util::range;
 
 func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
   for (auto node_op : llvm::to_vector(dag.getOps<NodeOp>())) {
@@ -182,4 +182,4 @@ func::FuncOp OpenMPScheduler::convertIntoOpenMP(DAGOp dag) {
   return func_op;
 }
 
-} // namespace mlir::iara
+} // namespace iara

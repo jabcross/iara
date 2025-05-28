@@ -8,24 +8,22 @@
 #ifndef IARA_IARAPASSES_H
 #define IARA_IARAPASSES_H
 
-#include "Iara/IaraDialect.h"
-#include "Iara/IaraOps.h"
+#include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/LowerToTasksPass.h"
 #include "mlir/Pass/Pass.h"
 #include <memory>
 
-namespace mlir {
 namespace iara {
 namespace passes {
 
 #define GEN_PASS_DECL
-#include "Iara/IaraPasses.h.inc"
+#include "Iara/Dialect/IaraPasses.h.inc"
 
 #define GEN_PASS_REGISTRATION
-#include "Iara/IaraPasses.h.inc"
+#include "Iara/Dialect/IaraPasses.h.inc"
 
 } // namespace passes
 } // namespace iara
-} // namespace mlir
 
 #endif
