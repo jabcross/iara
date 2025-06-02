@@ -32,7 +32,7 @@ void SDF_OoO_FIFO::push(Chunk chunk) {
                        : info.next_chunk_sizes),
                   info.first_chunk_size, info.next_chunk_sizes, chunk);
   }
-  while (remaining_data.data_size() >= (size_t)info.cons_rate) {
+  while (remaining_data.data_size >= (size_t)info.cons_rate) {
     auto front = remaining_data.take(info.cons_rate);
     auto [seq, off] = get_consumer_seq(front.ooo_offset);
     consumer->consume(seq, front, info.cons_arg_idx, off);

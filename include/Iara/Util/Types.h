@@ -1,20 +1,13 @@
 #ifndef UTIL_TYPES_H
 #define UTIL_TYPES_H
 
-#include "external/gtl/phmap.hpp"
 #include <cstdint>
+#include <gtl/phmap.hpp>
 #include <llvm/ADT/SmallVector.h>
+#include <span>
 
 using i64 = int64_t;
 using std::byte;
-
-#ifdef IARA_COMPILER
-template <class T> using StaticArray = std::vector<T>;
-#endif
-
-#ifdef IARA_RUNTIME
-template <class T> using StaticArray = std::span<T>;
-#endif
 
 template <class... T> using Vec = llvm::SmallVector<T...>;
 template <class T> using PairOf = std::pair<T, T>;

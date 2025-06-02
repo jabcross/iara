@@ -10,8 +10,6 @@
       "command": "extension.commandvariable.pickStringRemember",
       "args": {
         "options": [
-          "01-empty",
-          "02-single-node",
           "03-two-nodes",
           "04-multithread",
           "05-cholesky",
@@ -24,6 +22,18 @@
         ],
         "description": "Which test to run",
         "key": "pickedTest"
+      }
+    },
+    {
+      "id": "scheduler",
+      "type": "command",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "options": [
+          "ooo-scheduler"
+        ],
+        "description": "Which scheduler to use",
+        "key": "pickedScheduler"
       }
     }
   ],
@@ -43,7 +53,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--flatten", "--dynamic-push-first-fifo-scheduler", "../topology.test"],
+      "args": ["--flatten", "--${input:scheduler}", "../topology.test"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}/build",
       "environment": [
@@ -80,7 +90,8 @@
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}/build/",
-      "environment": [],
+      "environment": [{"name": "SCHEDULER_MODE",
+                     "value": "${input:scheduler}"}],
       "externalConsole": false,
       "MIMode": "gdb",
       "preLaunchTask": "LIT test",
@@ -161,15 +172,6 @@
           "ignoreFailures": true
         }
       ]
-    },
-
-    {
-      "type": "gdb",
-      "request": "launch",
-      "name": "Launch Program",
-      "target": "a.out",
-      "cwd": "${workspaceRoot}/test/Iara/05-cholesky",
-      "valuesFormatting": "parseText"
     },
     {
       "name": "(ctest) Launch",

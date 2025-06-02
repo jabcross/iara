@@ -1,6 +1,6 @@
-#include "Iara/SDF/SDF.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/SDF/Analysis.h"
+#include "Iara/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/rational.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
@@ -9,6 +9,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/CodeGen/GlobalISel/GIMatchTableExecutor.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
@@ -43,15 +44,15 @@ Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
 // its inout chain.
 LogicalResult annotateNodeAndEdgeIds(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, n] : llvm::enumerate(actor.getOps<NodeOp>())) {
-    data.node_info[n].id = i;
+    data.node_static_info[n].id = i;
   }
   for (auto [i, e] : llvm::enumerate(actor.getOps<EdgeOp>())) {
-    data.edge_info[e].id = i;
+    data.edge_static_info[e].id = i;
     // if first of chain
     if (!followInoutChainBackwards(e)) {
       int j = 0;
       while (e) {
-        data.edge_info[e].local_index = j++;
+        data.edge_static_info[e].local_index = j++;
         e = followInoutChainForwards(e);
       }
     }
@@ -63,13 +64,14 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   // run bfs on graph to get rank
 
   auto getRank = [&](NodeOp node) -> std::optional<i64> {
-    if (auto entry = data.node_info.find(node); entry != data.node_info.end()) {
+    if (auto entry = data.node_static_info.find(node);
+        entry != data.node_static_info.end()) {
       return entry->second.rank;
     }
     return {};
   };
   auto setRank = [&](NodeOp node, i64 value) {
-    data.node_info[node].rank = value;
+    data.node_static_info[node].rank = value;
   };
 
   std::queue<std::pair<Operation *, int>> bfs{};
@@ -100,12 +102,13 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   }
 
   for (auto edge : actor.getOps<EdgeOp>()) {
-    if (data.node_info[edge.getConsumerNode()].rank <=
-        data.node_info[edge.getProducerNode()].rank) {
+    if (data.node_static_info[edge.getConsumerNode()].rank <=
+        data.node_static_info[edge.getProducerNode()].rank) {
       edge.emitError("Backwards edge.");
       // todo: implement buffer
     }
   }
+  return success();
 }
 
 // An edge is backwards if it creates a cycle with a bfs starting on the
@@ -118,19 +121,22 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
 
     // rate info
 
-    auto &edge_info = data.edge_info[edge];
+    auto &edge_info = data.edge_static_info[edge];
     edge_info.prod_rate = edge.getProdRate();
     edge_info.cons_rate = edge.getConsRate();
     edge_info.cons_arg_idx =
         edge.getResult().getUses().begin()->getOperandNumber();
     if (auto attr = edge->getAttr("delay")) {
-      if (auto delay = dyn_cast_if_present<DenseElementsAttr>(attr)) {
+      if (auto delay = dyn_cast_if_present<DenseArrayAttr>(attr)) {
         edge_info.delay_size =
-            getTypeSize(delay.getType(), DataLayout::closest(edge));
-      } else {
-        edge_info.delay_size = 0;
+            getTypeSize(delay.getElementType(), DataLayout::closest(edge)) *
+            delay.getSize();
+        continue;
       }
+      llvm_unreachable("Unsupported type for delay");
+      continue;
     }
+    edge_info.delay_size = 0;
   }
 
   if (analyseOOOBufferSizes(actor, data).failed())
@@ -140,7 +146,7 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto chain : getInoutChains(actor)) {
     i64 offset = 0;
     for (auto edge : reverse(chain)) {
-      auto &info = data.edge_info[edge];
+      auto &info = data.edge_static_info[edge];
       info.delay_offset = offset;
       offset += info.delay_size;
     }
@@ -228,7 +234,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
     firings = firings.normalized();
     assert(firings.denom == 1);
     auto total_firings = mult * firings.num;
-    data.node_info[node].total_firings = total_firings;
+    data.node_static_info[node].total_firings = total_firings;
   }
   return success();
 }

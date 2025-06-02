@@ -12,7 +12,9 @@
     "/home/jabcross/repos/Polygeist/llvm-project/llvm/utils/lit"
   ],
   "dotnetAcquisitionExtension.enableTelemetry": false,
-  "clang-tidy.blacklist": ["scripts/.*"],
+  "clang-tidy.blacklist": [
+    "scripts/.*"
+  ],
   "clang-format.assumeFilename": ".clang-format",
-  "clangd.enableCodeCompletion": true
+  "clangd.enableCodeCompletion": true,
 }

@@ -3,11 +3,10 @@ project(iara-dialect LANGUAGES CXX C)
 
 set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 
-set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD 23 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options("-fcoroutines")
 add_compile_definitions("IARA_DEBUG")
 add_compile_definitions("IARA_COMPILER")
 
@@ -45,6 +44,7 @@ set(IARA_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 set(IARA_BINARY_DIR ${PROJECT_BINARY_DIR})
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM ${MLIR_INCLUDE_DIRS})
+include_directories(SYSTEM ${IARA_SOURCE_DIR}/external)
 include_directories(${IARA_SOURCE_DIR}/include)
 include_directories(${IARA_BINARY_DIR}/include)
 link_directories(${LLVM_BUILD_LIBRARY_DIR})

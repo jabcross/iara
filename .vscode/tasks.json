@@ -61,7 +61,7 @@
     {
       "label": "LIT test",
       "type": "shell",
-      "command": "scripts/run_lit_test.sh test/Iara/${input:remember_test} --ignore-result",
+      "command": "scripts/run-lit-test.sh test/Iara/${input:remember_test} --ignore-result",
       "options": {
         "env": {
           "MOLD_PATH": "/usr/bin/mold",

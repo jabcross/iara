@@ -1,6 +1,7 @@
 #ifndef IARA_RUNTIME_SDF_OOO_FIFO_H
 #define IARA_RUNTIME_SDF_OOO_FIFO_H
 
+#include "Iara/Util/Span.h"
 #include "Iara/Util/Types.h"
 #include "IaraRuntime/Chunk.h"
 #include <boost/describe/class.hpp>
@@ -27,9 +28,9 @@ struct alignas(64) SDF_OoO_FIFO {
   };
 
   StaticInfo info;
-  byte *delay_data;
-  void *producer;
-  void *consumer;
+  Span<const char> delay_data;
+  SDF_OoO_Node *consumer;
+  SDF_OoO_Node *producer;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.

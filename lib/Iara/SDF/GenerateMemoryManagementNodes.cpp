@@ -16,8 +16,8 @@ struct BufferSizeInfo {
 
 void populateAllocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
   auto first_edge = followInoutChainForwards(edge);
-  auto &alloc_edge_info = data.edge_info[edge];
-  auto &first_edge_info = data.edge_info[first_edge];
+  auto &alloc_edge_info = data.edge_static_info[edge];
+  auto &first_edge_info = data.edge_static_info[first_edge];
   alloc_edge_info.prod_rate = -1;
   alloc_edge_info.cons_rate = first_edge_info.prod_rate;
   alloc_edge_info.prod_alpha = -1;
@@ -32,8 +32,8 @@ void populateAllocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
 
 void populateDeallocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
   auto last_edge = followInoutChainBackwards(edge);
-  auto &dealloc_edge_info = data.edge_info[edge];
-  auto &last_edge_info = data.edge_info[last_edge];
+  auto &dealloc_edge_info = data.edge_static_info[edge];
+  auto &last_edge_info = data.edge_static_info[last_edge];
   dealloc_edge_info.cons_rate = -1;
   dealloc_edge_info.prod_rate = last_edge_info.cons_rate;
   dealloc_edge_info.cons_alpha = -1;
@@ -77,6 +77,10 @@ SmallVector<Value> createAllocations(ValueRange values) {
 
 SmallVector<NodeOp> createDeallocations(ValueRange values) {
   SmallVector<NodeOp> rv;
+
+  if (values.empty())
+    return rv;
+
   // Replace with edge id once its generated
   auto placeholder_value = getPlaceholderValue(
       values[0].getDefiningOp()->getParentOfType<ModuleOp>());
@@ -103,9 +107,10 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     auto edge = cast<EdgeOp>(dealloc_node.getIn().front().getDefiningOp());
     populateDeallocEdgeData(edge, data);
     auto last_node = edge.getProducerNode();
-    auto &last_node_info = data.node_info[last_node];
-    auto &last_edge_info = data.edge_info[followInoutChainBackwards(edge)];
-    auto &dealloc_node_info = data.node_info[dealloc_node];
+    auto &last_node_info = data.node_static_info[last_node];
+    auto &last_edge_info =
+        data.edge_static_info[followInoutChainBackwards(edge)];
+    auto &dealloc_node_info = data.node_static_info[dealloc_node];
     i64 alpha_firing = last_edge_info.cons_alpha > 0;
     auto [beta_firings, rem] =
         std::lldiv((last_node_info.total_firings - last_edge_info.cons_alpha) *
@@ -123,9 +128,9 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     auto alloc_node = (NodeOp)alloc_edge.getIn().getDefiningOp();
     populateAllocEdgeData(alloc_edge, data);
     auto first_edge = followInoutChainForwards(alloc_edge);
-    auto &alloc_node_info = data.node_info[alloc_node];
-    auto &first_edge_info = data.edge_info[first_edge];
-    auto &first_node_info = data.node_info[first_node];
+    auto &alloc_node_info = data.node_static_info[alloc_node];
+    auto &first_edge_info = data.edge_static_info[first_edge];
+    auto &first_node_info = data.node_static_info[first_node];
     i64 alpha_firing = first_edge_info.prod_alpha > 0;
     auto [beta_firings, rem] = std::lldiv(
         (first_node_info.total_firings - first_edge_info.prod_alpha) *
@@ -155,6 +160,7 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
              old_node.getImpl(), old_node.getParams(), {}, new_node_inputs);
 
   assert(new_node_inputs.size() == new_result_types.size());
+  data.node_static_info[new_node] = data.node_static_info[old_node];
 
   new_node->setDiscardableAttrs(old_node->getDiscardableAttrs());
 
@@ -166,6 +172,7 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
     old.replaceAllUsesWith(new_);
   }
   old_node->erase();
+  data.node_static_info.erase(old_node);
 
   annotateDeallocations(new_dealloc_nodes, data);
   annotateAllocations(alloc_inputs, data);

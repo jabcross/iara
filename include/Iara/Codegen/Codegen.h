@@ -1,6 +1,7 @@
 #ifndef IARA_UTIL_CODEGEN_H
 #define IARA_UTIL_CODEGEN_H
 
+#include "Iara/Codegen/GetMLIRType.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Types.h"
@@ -25,122 +26,6 @@
 
 namespace iara::codegen {
 using namespace util::mlir;
-
-template <typename T> struct GetMLIRType {
-  static Type get(MLIRContext *context) {
-    llvm_unreachable("Unsupported");
-    return nullptr;
-  }
-};
-
-template <typename T> struct GetMLIRType<T &> {
-  static Type get(MLIRContext *context) { return GetMLIRType<T>::get(context); }
-};
-
-template <> struct GetMLIRType<i64> {
-  static Type get(MLIRContext *context) {
-    return IntegerType::get(context, 64);
-  }
-};
-
-template <> struct GetMLIRType<LLVM::GlobalOp> {
-  static LLVM::LLVMPointerType get(MLIRContext *context) {
-    return LLVM::LLVMPointerType::get(context);
-  }
-};
-
-template <> struct GetMLIRType<SymbolOpInterface> {
-  static LLVM::LLVMPointerType get(MLIRContext *context) {
-    return LLVM::LLVMPointerType::get(context);
-  }
-};
-
-template <class T>
-  requires std::is_class_v<T>
-struct GetMLIRType<T> {
-  static LLVM::LLVMStructType get(MLIRContext *context) {
-    Vec<Type> types;
-    T *t = nullptr;
-    boost::pfr::for_each_field(*t, [&](auto &&member, size_t i) {
-      types.push_back(GetMLIRType<decltype(member)>::get(context));
-    });
-    return LLVM::LLVMStructType::getLiteral(context, types);
-  }
-};
-
-template <class T> auto getMLIRType(MLIRContext *context) {
-  return GetMLIRType<T>::get(context);
-}
-
-template <class T> Type getLLVMType(MLIRContext *context) {}
-
-template <class T>
-concept ConvertibleToAttr = requires(T t) {
-  { asAttr(std::declval<MLIRContext>(), t) };
-};
-
-template <class T> struct AsValue {};
-
-template <class T>
-  requires ConvertibleToAttr<T>
-struct AsValue<T> {
-  Value asValue(OpBuilder builder, Location loc, T t) {
-    auto rv = CREATE(LLVM::ConstantOp, builder, loc,
-                     (asAttr(builder.getContext(), t)));
-    return rv.getResult();
-  }
-};
-
-template <class T>
-  requires std::is_class_v<T>
-struct AsValue<T> {
-  Value asValue(OpBuilder builder, Location loc, T t) {
-    auto type = getMLIRType<T>(builder.getContext());
-    auto _struct = CREATE(LLVM::UndefOp, builder, loc, type).getResult();
-    boost::pfr::for_each_field(t, [&](auto member, size_t i) {
-      _struct = CREATE(LLVM::InsertValueOp, builder, loc, _struct,
-                       asValue(builder, loc, member), i)
-                    .getResult();
-    });
-    return _struct;
-  }
-};
-
-template <> struct AsValue<std::nullptr_t> {
-  Value asValue(OpBuilder builder, Location loc, std::nullptr_t) {
-    return CREATE(LLVM::ZeroOp, builder, loc,
-                  cast<Type>(LLVM::LLVMPointerType::get(builder.getContext())))
-        .getRes();
-  }
-};
-
-template <> struct AsValue<LLVM::GlobalOp> {
-  Value asValue(OpBuilder builder, Location loc, LLVM::GlobalOp global_op) {
-    if (cast<Operation *>(global_op))
-      return CREATE(LLVM::AddressOfOp, builder, loc,
-                    LLVM::LLVMPointerType::get(builder.getContext()),
-                    global_op.getSymName())
-          .getResult();
-    else
-      return asValue(builder, loc, nullptr);
-  }
-};
-
-template <> struct AsValue<SymbolOpInterface> {
-  inline Value asValue(OpBuilder builder, Location loc, SymbolOpInterface op) {
-    if (op)
-      return CREATE(LLVM::AddressOfOp, builder, loc,
-                    LLVM::LLVMPointerType::get(builder.getContext()),
-                    op.getName())
-          .getResult();
-    else
-      return asValue(builder, loc, nullptr);
-  }
-};
-
-template <class T> inline Value asValue(OpBuilder builder, Location loc, T t) {
-  return AsValue<T>::asValue(builder, loc, t);
-}
 
 template <typename T, typename... Args>
 void fillTypeVector(MLIRContext *context, SmallVector<Type> &vec) {
@@ -174,7 +59,7 @@ LLVM::GlobalOp createGlobal(OpBuilder builder, Location loc, StringRef name,
                              LLVM::Linkage::External, name, Attribute{});
   rv.getInitializerRegion().emplaceBlock();
   auto global_builder = OpBuilder::atBlockBegin(rv.getInitializerBlock());
-  auto val = asValue(global_builder, loc, t);
+  auto val = asValue(global_builder, loc, e);
   CREATE(LLVM::ReturnOp, global_builder, loc, val);
   return rv;
 }
@@ -213,8 +98,7 @@ LLVM::GlobalOp createGlobalArrayOrNull(ModuleOp module, Location loc,
   if (range.empty())
     return nullptr;
   auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-  auto elem_type =
-      GetMLIRType<decltype(*range.begin())>::get(module.getContext());
+  auto elem_type = getMLIRType<decltype(*range.begin())>(module.getContext());
   auto items = llvm::to_vector(range);
   auto array_type = LLVM::LLVMArrayType::get(elem_type, items.size());
   LLVM::GlobalOp rv =
@@ -251,7 +135,7 @@ LLVM::LLVMFuncOp getLLVMFuncDecl(ModuleOp module, StringRef func_name) {
   auto func_type = getMLIRType<FuncType>(module.getContext());
 
   auto rv =
-      CREATE(func::FuncOp, builder, module.getLoc(), func_name, func_type);
+      CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(), func_name, func_type);
   rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
   rv.setVisibility(mlir::SymbolTable::Visibility::Private);
   return rv;
@@ -298,49 +182,39 @@ template <class T> struct TypeWrapper {
   using type = T;
 };
 
-template <class Reduce, class T, class... Tail> struct ForEachType {
-  template <class F> static constexpr void apply(F f) {
-    f(TypeWrapper<T>{});
-    ForEachType<Reduce, Tail...>::apply(f);
-  }
-};
-
-template <class Reduce, class T, class U> struct ForEachType<Reduce, T, U> {
-  template <class F> static constexpr void apply(F f) {
-    f(TypeWrapper<T>{});
-    f(TypeWrapper<U>{});
-  }
-};
-
-template <class... Args> struct Holder {};
-
-using SupportedDataTypes = Holder<i64, float>;
-
-template <class... Args, class F>
-constexpr auto forEachType(Holder<Args...>, F f) {
-  return ForEachType<void, Args...>::apply(f);
-}
-
 // We don't know that Attributes are stored as contiguous arrays, so we need to
 // do this witchcraft.
-inline std::vector<byte> convertToVecOfByte(DenseElementsAttr dense) {
-  std::vector<byte> rv;
-  int num_valid = 0;
-  forEachType(SupportedDataTypes{}, [&](auto x) {
-    using TheType = decltype(x)::type;
-    auto type = getMLIRType<TheType>(dense.getContext());
-    if (dense.getElementType() == type) {
-      num_valid++;
-      auto range = dense.getValues<TheType>();
-      rv.reserve(dense.size() * sizeof(TheType));
-      for (auto &i : range) {
-        insertIntoVecOfByte(i, rv);
-      }
-    }
-  });
-  assert(num_valid == 1);
-  return rv;
-}
+// (i64 for alignment reasons)
+
+// inline std::vector<i64> convertToVecOfByte(DenseArrayAttr dense) {
+//   struct Result {
+//     Type type;
+//     void *buffer;
+//     i64 size;
+//   } rv;
+//   i64 num_valid = 0;
+//   forEachType(SupportedDataTypes{}, [&](auto x) {
+//     using TheType = decltype(x)::type;
+//     auto type = getMLIRType<TheType>(dense.getContext());
+//     if (dense.getElementType() == type) {
+//       num_valid++;
+//       auto buf = dense.getRawData();
+//       dense.getRawData();
+
+//       DenseElementsAttr::auto range = dense.getValues<TheType>();
+
+//       std::vector<TheType> buffer;
+//       buffer.reserve(dense.size());
+//       for (auto element : range) {
+//         buffer.push_back(element);
+//       }
+
+//       buffer.
+//     }
+//   });
+//   assert(num_valid == 1);
+//   return rv;
+// }
 
 } // namespace iara::codegen
 #endif

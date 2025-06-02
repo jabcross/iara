@@ -48,8 +48,8 @@ struct SDFEdge : EdgeOp {
 };
 
 struct StaticAnalysisData {
-  DenseMap<EdgeOp, SDF_OoO_FIFO::StaticInfo> edge_info;
-  DenseMap<NodeOp, SDF_OoO_Node::StaticInfo> node_info;
+  DenseMap<EdgeOp, SDF_OoO_FIFO::StaticInfo> edge_static_info;
+  DenseMap<NodeOp, SDF_OoO_Node::StaticInfo> node_static_info;
 };
 
 FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor);

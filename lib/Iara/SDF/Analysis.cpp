@@ -1,7 +1,8 @@
-#include "Iara/SDF/Analysis.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/SDF/Analysis.h"
 #include "Iara/SDF/BufferSizeCalculator.h"
 #include <llvm/Support/ErrorHandling.h>
+#include <mlir/Support/LogicalResult.h>
 
 namespace iara::sdf {
 using namespace iara::dialect;
@@ -13,10 +14,10 @@ LogicalResult analyseOOOBufferSizes(ActorOp actor,
 
     Vec<i64> rates, delays;
 
-    rates.push_back(data.edge_info[chain.front()].prod_rate);
+    rates.push_back(data.edge_static_info[chain.front()].prod_rate);
 
     for (auto edge : chain) {
-      auto info = &data.edge_info[edge];
+      auto info = &data.edge_static_info[edge];
       rates.push_back(info->cons_rate);
       delays.push_back(info->delay_size);
     }
@@ -34,7 +35,7 @@ LogicalResult analyseOOOBufferSizes(ActorOp actor,
     auto next_buffer_sizes = buffer_values->beta.back() * rates.back();
 
     for (auto [i, edge] : enumerate(chain)) {
-      auto &info = data.edge_info[edge];
+      auto &info = data.edge_static_info[edge];
       info.prod_alpha = buffer_values->alpha[i];
       info.prod_beta = buffer_values->beta[i];
       info.cons_alpha = buffer_values->alpha[i + 1];

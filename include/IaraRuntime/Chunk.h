@@ -18,9 +18,6 @@ struct alignas(64) Chunk {
   byte *data;
   i64 data_size;
 
-  Chunk();
-  Chunk(i64 ooo_offset) : ooo_offset(ooo_offset) {}
-
 public:
   bool is_released() { return allocated == nullptr; }
 
@@ -28,9 +25,7 @@ public:
   // accordingly
   Chunk take(i64 amount) {
     assert(data_size >= amount);
-    Chunk rv{ooo_offset};
-    rv.allocated = allocated;
-    rv.data = data;
+    Chunk rv = *this;
     rv.data_size = amount;
     data += amount;
     data_size -= amount;

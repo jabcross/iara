@@ -1,4 +1,4 @@
-// RUN: build-test.sh . --dynamic-push-first-fifo-scheduler
+// RUN: build-test.sh .
 // RUN: mkdir -p "`dirname %s`/build"
 // RUN: cd "`dirname %s`/build"
 // RUN: env >env.out.txt

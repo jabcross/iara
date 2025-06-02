@@ -15,6 +15,7 @@
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
@@ -32,6 +33,14 @@ namespace iara::util::mlir {
 size_t getTypeTokenCount(Type type);
 size_t getTypeSize(Value value);
 size_t getTypeSize(Type type, DataLayout dl);
+
+inline ModuleOp getModule(OpBuilder builder) {
+  Operation *parent = builder.getInsertionBlock()->getParentOp();
+  ModuleOp module = dyn_cast<ModuleOp>(parent);
+  if (!module)
+    module = parent->getParentOfType<ModuleOp>();
+  return module;
+}
 
 std::string stringifyType(Type type);
 
@@ -164,6 +173,13 @@ template <class T> auto asAttr(MLIRContext *context, T t);
 
 template <> inline auto asAttr<i64>(MLIRContext *context, i64 value) {
   return IntegerAttr::get(IntegerType::get(context, 64), value);
+}
+template <> inline auto asAttr<size_t>(MLIRContext *context, size_t value) {
+  return IntegerAttr::get(IntegerType::get(context, 64), value);
+}
+
+template <> inline auto asAttr<char>(MLIRContext *context, char value) {
+  return IntegerAttr::get(IntegerType::get(context, 8), value);
 }
 
 func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers);

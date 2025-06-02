@@ -6,13 +6,14 @@ add_mlir_dialect_library(MLIRIara
         Passes/FlattenPass.cpp
         # Passes/LowerToTasksPass.cpp
         Passes/FIFOScheduler/OoOSchedulerPass.cpp
-        SDF/BufferSizeCalculator.cpp
         Passes/Schedule/StaticDataCodegen.cpp
         Passes/Schedule/TotalFiringsCalculator.cpp
         Util/Mlir.cpp
+        SDF/BufferSizeCalculator.cpp
         SDF/Canon.cpp
         SDF/GenerateMemoryManagementNodes.cpp
         SDF/SDF.cpp
+        SDF/Analysis.cpp
 
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/Iara
