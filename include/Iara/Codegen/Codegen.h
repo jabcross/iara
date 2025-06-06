@@ -125,14 +125,12 @@ template <class T, class... Args> struct AsValueVec {
   }
 };
 
-template <typename FuncType>
-LLVM::LLVMFuncOp getLLVMFuncDecl(ModuleOp module, StringRef func_name) {
+LLVM::LLVMFuncOp getLLVMFuncDecl(ModuleOp module, StringRef func_name,
+                                 LLVM::LLVMFunctionType func_type) {
   auto builder = OpBuilder(module).atBlockBegin(module.getBody());
 
   if (auto func = module.lookupSymbol<LLVM::LLVMFuncOp>(func_name))
     return func;
-
-  auto func_type = getMLIRType<FuncType>(module.getContext());
 
   auto rv =
       CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(), func_name, func_type);

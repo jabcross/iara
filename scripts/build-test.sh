@@ -10,14 +10,18 @@ if [ "$#" -lt 1 ]; then
 fi
 
 # Store arguments in variables
-PATH_TO_TEST="$1"
 
-cd $PATH_TO_TEST
+FOLDER_NAME=$(basename $(realpath $1))
 
-FOLDER_NAME=$(basename $(pwd))
+PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
+PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
+
+cd $PATH_TO_TEST_BUILD_DIR
 
 mkdir -p build
 cd build
+
+rm -rf *
 
 rm *.o
 
@@ -28,7 +32,11 @@ if [[ $2 != "" ]]; then
   SCHEDULER_MODE=$2
 fi
 
+echo SCHEDULER_MODE = \"$SCHEDULER_MODE\"
+
 SCHEDULER_SOURCES="-c $IARA_DIR/runtime/$SCHEDULER_MODE/*.c* "
+
+echo SCHEDULER_SOURCES = \"$SCHEDULER_SOURCES\"
 
 # if [ "$SCHEDULER_MODE" == "ooo-scheduler" ]; then
 #   SCHEDULER_SOURCES="-c $IARA_DIR/runtime/SDF_OoO*.cpp"
@@ -39,36 +47,70 @@ SCHEDULER_SOURCES="-c $IARA_DIR/runtime/$SCHEDULER_MODE/*.c* "
 
 INCLUDES="-I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$LLVM_DIR/build/lib/clang/*/include"
 
-iara-opt --flatten --$SCHEDULER_MODE ../topology.test >schedule.mlir
+pwd
+pwd >&2
 
-mlir-to-llvmir.sh schedule.mlir
+iara-opt --flatten --$SCHEDULER_MODE $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null
+
+sh -x mlir-to-llvmir.sh schedule.mlir
 
 shopt -s nullglob
 
 echo building schedule
 clang++ -g -xir -c schedule.ll -o schedule.o
+RC=$?
 echo scheduler return code: $?
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to build schedule"
+  exit 1
+fi
 
 ls ..
 
+pwd >&2
+
 echo building c kernels
-for c_file in ../*.c; do
-  echo "Compiling $c_file"
-  clang++ -g -xc -c "$c_file" $INCLUDES
-  echo c kernels return code: $?
-done
+if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
+  for c_file in $PATH_TO_TEST_SOURCES/*.c; do
+    echo "Compiling $c_file"
+    clang++ -g -xc -c "$c_file" $INCLUDES
+    RC=$?
+    echo c kernels return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to build c files"
+      exit 2
+    fi
+  done
+fi
 
 echo building cpp kernels
-for cpp_file in ../*.cpp; do
-  echo "Compiling $cpp_file"
-  clang++ -g -xc++ -std=c++20 -c "$cpp_file" $INCLUDES
-  echo cpp kernels return code: $?
-done
+if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
+  for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
+    echo "Compiling $cpp_file"
+    clang++ -g -xc++ -std=c++20 -c "$cpp_file" $INCLUDES
+    RC=$?
+    echo cpp kernels return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to build cpp files"
+      exit 3
+    fi
+  done
+fi
 
 echo building runtime
 clang++ -g -xc++ -std=c++20 -fopenmp=libomp $SCHEDULER_SOURCES $INCLUDES
+RC=$?
 echo executable return code: $?
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to build runtime"
+  exit 4
+fi
 
 echo linking
 clang++ -g -lomp -lpthread -fuse-ld=mold *.o $INCLUDES
+RC=$?
 echo linker return code: $?
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to link"
+  exit 5
+fi

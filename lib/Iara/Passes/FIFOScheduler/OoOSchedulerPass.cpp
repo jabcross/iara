@@ -59,12 +59,31 @@ struct OoOSchedulerPass::Impl {
   DenseMap<EdgeOp, LLVM::GlobalOp> edge_info_global_ops;
   DenseMap<NodeOp, LLVM::GlobalOp> node_infos;
   DenseMap<EdgeOp, LLVM::GlobalOp> delay_values;
-  Type i64type() { return IntegerType::get(&pass->getContext(), 64); }
+
+  Impl(OoOSchedulerPass *pass) : pass(pass) {}
+
+  MLIRContext *ctx() { return &pass->getContext(); }
+
+  Type i64type() { return IntegerType::get(ctx(), 64); }
+
   LLVM::LLVMPointerType llvm_pointer_type() {
-    return LLVM::LLVMPointerType::get(&pass->getContext());
+    return LLVM::LLVMPointerType::get(ctx());
   }
-  LLVM::LLVMVoidType llvm_void_type() {
-    return LLVM::LLVMVoidType::get(&pass->getContext());
+  LLVM::LLVMVoidType llvm_void_type() { return LLVM::LLVMVoidType::get(ctx()); }
+
+  LLVM::LLVMStructType chunk_type() {
+    return cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx()));
+  }
+
+  LLVM::LLVMPointerType pointer_to(Type type) {
+    return LLVM::LLVMPointerType::get(type, 0);
+  }
+
+  LLVM::LLVMFunctionType wrapper_type() {
+    return LLVM::LLVMFunctionType::get(
+        llvm_void_type(),
+        {IntegerType::get(ctx(), 64), pointer_to(pointer_to(chunk_type()))},
+        false);
   }
 
   // template <typename T, typename... Args>
@@ -219,12 +238,10 @@ struct OoOSchedulerPass::Impl {
   LLVM::LLVMFuncOp codegenNodeWrapper(NodeOp node, SDF_OoO_Node &info) {
     auto module = node->getParentOfType<ModuleOp>();
     if (node.isAlloc()) {
-      return getLLVMFuncDecl<SDF_OoO_Node::WrapperType>(module,
-                                                        "iara_runtime_alloc");
+      return getLLVMFuncDecl(module, "iara_runtime_alloc", wrapper_type());
     }
     if (node.isDealloc()) {
-      return getLLVMFuncDecl<SDF_OoO_Node::WrapperType>(module,
-                                                        "iara_runtime_dealloc");
+      return getLLVMFuncDecl(module, "iara_runtime_dealloc", wrapper_type());
     }
 
     auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
@@ -232,18 +249,12 @@ struct OoOSchedulerPass::Impl {
 
     auto ctx = module.getContext();
 
-    LLVM::LLVMStructType chunk_type =
-        cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx));
+    auto num_buffers = node.getIn().size() + node.getOut().size();
 
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx);
-
-    auto pointer_to_chunk_type = LLVM::LLVMPointerType::get(chunk_type);
-
-    auto pointer_to_pointer_type =
-        LLVM::LLVMPointerType::get(LLVM::LLVMPointerType::get(ctx));
-
-    SmallVector<Type> arg_types = {mod_builder.getIntegerType(64),
-                                   pointer_to_chunk_type};
+    auto pointer_to_chunk_type = pointer_to(chunk_type());
+    auto pointer_to_pointer_to_chunk_type = pointer_to(pointer_to_chunk_type);
+    auto pointer_to_opaque_pointer_type = pointer_to(opaque_ptr_type);
 
     // for (auto i : node.op.getIn())
     //   arg_types.push_back(i.getType());
@@ -252,9 +263,8 @@ struct OoOSchedulerPass::Impl {
     // for (auto i : node.op.getOut())
     //   arg_types.push_back(i.getType());
 
-    auto wrapper =
-        CREATE(LLVM::LLVMFuncOp, mod_builder, node.getLoc(), sym_name,
-               getMLIRType<SDF_OoO_Node::WrapperType>(node.getContext()));
+    auto wrapper = CREATE(LLVM::LLVMFuncOp, mod_builder, node.getLoc(),
+                          sym_name, wrapper_type());
 
     wrapper.setVisibility(mlir::SymbolTable::Visibility::Public);
     wrapper->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
@@ -262,12 +272,8 @@ struct OoOSchedulerPass::Impl {
     // addEntryBlock broken?
 
     auto *block = &wrapper.getFunctionBody().emplaceBlock();
-    for (auto type : arg_types) {
-      if (isa<LLVM::LLVMPointerType>(type)) {
-        block->addArgument(opaque_ptr_type, wrapper->getLoc());
-      } else {
-        block->addArgument(type, wrapper->getLoc());
-      }
+    for (auto type : wrapper_type().getParams()) {
+      block->addArgument(type, wrapper->getLoc());
     }
 
     //   auto block = wrapper.addEntryBlock();
@@ -285,25 +291,30 @@ struct OoOSchedulerPass::Impl {
       kernel_args.push_back(new_const->getResult(0));
     }
 
-    auto num_buffers = node.getIn().size() + node.getOut().size();
-
     for (size_t i = 0; i < num_buffers; i++) {
-      Value cast = CREATE(LLVM::BitcastOp, func_builder, node.getLoc(),
-                          pointer_to_chunk_type,
-                          func_builder.getBlock()->getArgument(1));
+      // Value cast = CREATE(LLVM::BitcastOp, func_builder, node.getLoc(),
+      //                     pointer_to_chunk_type,
+      //                     func_builder.getBlock()->getArgument(1));
 
-      auto pointer_to_chunk = CREATE(LLVM::GEPOp, func_builder, node.getLoc(),
-                                     pointer_to_chunk_type, cast, {i});
-
-      auto pointer_to_pointer =
+      // get pointer from array
+      auto pointer_to_pointer_to_chunk =
           CREATE(LLVM::GEPOp, func_builder, node.getLoc(),
-                 pointer_to_pointer_type, pointer_to_chunk,
+                 pointer_to_pointer_to_chunk_type, pointer_to_chunk_type,
+                 func_builder.getBlock()->getArgument(1), {i});
+
+      auto pointer_to_chunk = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
+                                     pointer_to_pointer_to_chunk);
+
+      // get first value
+      auto pointer_to_opaque_pointer =
+          CREATE(LLVM::GEPOp, func_builder, node.getLoc(),
+                 pointer_to_opaque_pointer_type, pointer_to_chunk,
                  getIntConstant(func_builder.getInsertionBlock(), 0), true);
 
-      auto pointer =
-          CREATE(LLVM::LoadOp, func_builder, node.getLoc(), pointer_to_pointer);
+      auto opaque_pointer = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
+                                   pointer_to_opaque_pointer);
 
-      kernel_args.push_back(pointer);
+      kernel_args.push_back(opaque_pointer);
     }
 
     auto kernel_call = CREATE(CallOp, func_builder, node.getLoc(),
@@ -487,17 +498,18 @@ struct OoOSchedulerPass::Impl {
         codegen::StaticBuilder<SDF_OoO_RuntimeData>::build(
             module, &runtime_data, "iara_runtime_data", known_global_ptrs,
             actor.getLoc());
-
     for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
-      auto func = getLLVMFuncDecl<void()>(node->getParentOfType<ModuleOp>(),
-                                          "iara_runtime_node_init");
+      auto func = getLLVMFuncDecl(
+          node->getParentOfType<ModuleOp>(), "iara_runtime_node_init",
+          LLVM::LLVMFunctionType::get(llvm_void_type(),
+                                      {LLVM::LLVMPointerType::get(ctx())}));
       func.setPrivate();
 
       auto [offset, name] = static_builder.pointer_lists[(void *)&info];
       auto ptr =
           static_builder.regenRuntimePointer(main_func_builder, (void *)&info);
 
-      CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), func, {});
+      CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), func, {ptr});
     }
 
     CREATE(ReturnOp, main_func_builder, main_func.getLoc(), {});
@@ -520,7 +532,7 @@ struct OoOSchedulerPass::Impl {
 };
 
 void OoOSchedulerPass::runOnOperation() {
-  pimpl = new Impl();
+  pimpl = new Impl{this};
   if (pimpl->runOnOperation(getOperation()).failed()) {
     signalPassFailure();
   };

@@ -53,9 +53,9 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--flatten", "--${input:scheduler}", "../topology.test"],
+      "args": ["--flatten", "--${input:scheduler}", "topology.test"],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build",
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "environment": [
         {
           "name": "POLYGEIST_MLIR_CLANG_BIN",
@@ -86,15 +86,15 @@
       "name": "(gdb) Runtime test",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/test/Iara/${input:test}/build/a.out",
+      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build/a.out",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/test/Iara/${input:test}/build/",
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "environment": [{"name": "SCHEDULER_MODE",
                      "value": "${input:scheduler}"}],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "LIT test",
+      "preLaunchTask": "Build test",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

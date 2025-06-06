@@ -23,6 +23,12 @@
       "type": "command",
       "command": "extension.commandvariable.remember",
       "args": { "key": "pickedTest" }
+    },
+    {
+      "id": "remember_scheduler",
+      "type": "command",
+      "command": "extension.commandvariable.remember",
+      "args": { "key": "pickedScheduler" }
     }
   ],
   "tasks": [
@@ -59,13 +65,13 @@
       "command": "bash -c 'cd ${workspaceFolder} ; scripts/build.sh && mkdir -p test/Iara/08-SIFT/build && python scripts/dif-to-iara.py test/Iara/08-SIFT/topology.dif > test/Iara/08-SIFT/build/topology.mlir' "
     },
     {
-      "label": "LIT test",
+      "label": "Build test",
       "type": "shell",
-      "command": "scripts/run-lit-test.sh test/Iara/${input:remember_test} --ignore-result",
+      "command": "scripts/build-test.sh test/Iara/${input:remember_test} ${input:remember_scheduler}",
       "options": {
         "env": {
           "MOLD_PATH": "/usr/bin/mold",
-          "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
+          // "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
         }
       },
       "problemMatcher": ["$gcc"]

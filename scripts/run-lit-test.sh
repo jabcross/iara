@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 # pass a path to a test; this will run the corresponding lit test
 
 cd $1
@@ -8,6 +10,11 @@ TEST_NAME=${PWD##*/}
 
 CLEAN_FIRST=0
 IGNORE_RESULT=0
+
+cd $IARA_DIR
+scripts/build.sh
+
+export SCHEDULER_MODE=ooo-scheduler
 
 # Parse arguments
 for arg in "$@"; do

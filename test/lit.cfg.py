@@ -33,7 +33,7 @@ config.substitutions.append(("%PATH%", config.environment["PATH"]))
 config.substitutions.append(("%shlibext", config.llvm_shlib_ext))
 
 llvm_config.with_system_environment(
-    ["HOME", "INCLUDE", "LIB", "TMP", "TEMP", "IARA_DIR", "LLVM_DIR"])
+    ["HOME", "INCLUDE", "LIB", "TMP", "TEMP", "IARA_DIR", "LLVM_DIR", "SCHEDULER_MODE"])
 
 llvm_config.use_default_substitutions()
 
