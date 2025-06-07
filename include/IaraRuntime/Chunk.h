@@ -39,6 +39,15 @@ public:
   void release() { *this = Chunk(); }
 
   static Chunk make_empty() { return Chunk(); }
+  static Chunk allocate(i64 size, i64 ooo_offset) {
+    auto allocated = (byte *)malloc(size);
+    return Chunk{
+        .allocated = allocated,
+        .ooo_offset = ooo_offset,
+        .data = allocated,
+        .data_size = size,
+    };
+  }
 };
 
 #endif

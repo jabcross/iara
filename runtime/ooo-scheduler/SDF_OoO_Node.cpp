@@ -1,5 +1,6 @@
 #include "IaraRuntime/Chunk.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/SDF_OoO_Scheduler.h"
 
 void SDF_OoO_Node::init() {
   this->semaphore_map = new SemaMap();

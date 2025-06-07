@@ -2,6 +2,7 @@
 #include "Iara/SDF/Analysis.h"
 #include "Iara/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
+#include "Iara/Util/Range.h"
 #include "Iara/Util/rational.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
@@ -15,12 +16,14 @@
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 #include <mlir/Support/LogicalResult.h>
+#include <numeric>
 #include <queue>
 
 namespace iara::sdf
 
 {
 using namespace iara::util::mlir;
+using namespace iara::util::range;
 
 enum class Direction { Forward, Backward };
 
@@ -40,24 +43,67 @@ Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
   return chains;
 }
 
+LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data);
+LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data);
+
+LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
+  auto nodes = actor.getOps<NodeOp>() | IntoVector();
+  auto id_range = getNextPowerOf10(nodes.size() + 1);
+  for (auto [i, node] : enumerate(nodes)) {
+    auto &info = data.node_static_info[node];
+    auto input_bytes = 0;
+    auto inputs = node.getAllInputs();
+    for (auto v : inputs) {
+      input_bytes += getTypeSize(v);
+    }
+
+    info = {
+        .id = (i64)(i + 1 + id_range),
+        .input_bytes = input_bytes,
+        .num_inputs = (i64)inputs.size(),
+        .rank = -1,
+        .total_firings = -1,
+    };
+  }
+  return success(annotateNodeRanks(actor, data).succeeded() &&
+                 annotateTotalFirings(actor, data).succeeded());
+}
+
+LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data);
+
 // Sets the ids of the nodes and edges, as well as the position of each edge in
 // its inout chain.
-LogicalResult annotateNodeAndEdgeIds(ActorOp actor, StaticAnalysisData &data) {
-  for (auto [i, n] : llvm::enumerate(actor.getOps<NodeOp>())) {
-    data.node_static_info[n].id = i;
-  }
+LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
+  auto nodes = actor.getOps<NodeOp>() | IntoVector();
+  auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, e] : llvm::enumerate(actor.getOps<EdgeOp>())) {
-    data.edge_static_info[e].id = i;
+    auto &info = data.edge_static_info[e];
+    auto prod_info = data.node_static_info[e.getProducerNode()];
+    auto cons_info = data.node_static_info[e.getConsumerNode()];
+    auto id = prod_info.id * id_range * 10 + cons_info.id;
     // if first of chain
-    if (!followInoutChainBackwards(e)) {
-      int j = 0;
-      while (e) {
-        data.edge_static_info[e].local_index = j++;
-        e = followInoutChainForwards(e);
-      }
-    }
+
+    info = SDF_OoO_FIFO::StaticInfo{
+        .id = id,
+        // To fill in after alloc and dealloc generation.
+        .local_index = -1,
+        .prod_rate = e.getProdRate(),
+        .cons_rate = e.getConsRate(),
+        .cons_arg_idx = e->getUses().begin()->getOperandNumber(),
+        // To fill in in the delay info calculation.
+        .delay_offset = -1,
+        .delay_size = -1,
+        // To fill in in the buffer sizing calculator.
+        .first_chunk_size = -1,
+        .next_chunk_sizes = -1,
+        .prod_alpha = -1,
+        .prod_beta = -1,
+        .cons_alpha = -1,
+        .cons_beta = -1,
+    };
   }
-  return success();
+
+  return annotateDelayInfo(actor, data);
 }
 
 LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
@@ -66,7 +112,8 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   auto getRank = [&](NodeOp node) -> std::optional<i64> {
     if (auto entry = data.node_static_info.find(node);
         entry != data.node_static_info.end()) {
-      return entry->second.rank;
+      if (entry->second.rank != -1)
+        return entry->second.rank;
     }
     return {};
   };
@@ -135,8 +182,9 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
       }
       llvm_unreachable("Unsupported type for delay");
       continue;
+    } else {
+      edge_info.delay_size = 0;
     }
-    edge_info.delay_size = 0;
   }
 
   if (analyseOOOBufferSizes(actor, data).failed())
@@ -242,10 +290,8 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
 FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor) {
   StaticAnalysisData data;
 
-  if (annotateNodeRanks(actor, data).succeeded() &&
-      annotateNodeAndEdgeIds(actor, data).succeeded() &&
-      annotateTotalFirings(actor, data).succeeded() &&
-      annotateDelayInfo(actor, data).succeeded()) {
+  if (annotateNodeInfo(actor, data).succeeded() &&
+      annotateEdgeInfo(actor, data).succeeded()) {
     return data;
   }
   return failure();

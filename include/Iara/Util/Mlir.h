@@ -44,6 +44,15 @@ inline ModuleOp getModule(OpBuilder builder) {
 
 std::string stringifyType(Type type);
 
+inline i64 getNextPowerOf10(i64 n) {
+  i64 rv = 1;
+  while (n > 0) {
+    rv *= 10;
+    n /= 10;
+  }
+  return rv;
+}
+
 std::pair<func::FuncOp, OpBuilder>
 createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
                                 Location loc);
@@ -167,19 +176,6 @@ template <class T> inline auto operator|(T &&lhs, AssertNonNull rhs) {
     llvm_unreachable("Something is null that shouldn't.");
   }
   return std::forward<T>(lhs);
-}
-
-template <class T> auto asAttr(MLIRContext *context, T t);
-
-template <> inline auto asAttr<i64>(MLIRContext *context, i64 value) {
-  return IntegerAttr::get(IntegerType::get(context, 64), value);
-}
-template <> inline auto asAttr<size_t>(MLIRContext *context, size_t value) {
-  return IntegerAttr::get(IntegerType::get(context, 64), value);
-}
-
-template <> inline auto asAttr<char>(MLIRContext *context, char value) {
-  return IntegerAttr::get(IntegerType::get(context, 8), value);
 }
 
 func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers);

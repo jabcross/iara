@@ -53,7 +53,12 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
-      "args": ["--flatten", "--${input:scheduler}", "topology.test"],
+      "args": [
+        "--flatten",
+        // "--mlir-print-ir-after-failure",
+        "--${input:scheduler}",
+        "topology.test"
+      ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "environment": [
@@ -90,8 +95,12 @@
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
-      "environment": [{"name": "SCHEDULER_MODE",
-                     "value": "${input:scheduler}"}],
+      "environment": [
+        {
+          "name": "SCHEDULER_MODE",
+          "value": "${input:scheduler}"
+        }
+      ],
       "externalConsole": false,
       "MIMode": "gdb",
       "preLaunchTask": "Build test",
@@ -107,6 +116,18 @@
           "ignoreFailures": true
         }
       ]
+    },
+    {
+      "name": "(lldb) Runtime test",
+      "type": "lldb-dap",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build/a.out",
+      "args": [],
+      "env": [
+        "SCHEDULER_MODE=${input:scheduler}"
+      ],
+      "cwd": "${workspaceFolder}/test/Iara/${input:test}",
+      "preLaunchTask": "Build test",
     },
     {
       "type": "lldb",
@@ -135,15 +156,15 @@
         }
       ]
     },
-
     {
       "name": "dif-to-iara",
       "type": "debugpy",
-      "args": ["${workspaceFolder}/test/Iara/08-SIFT/topology.dif"],
+      "args": [
+        "${workspaceFolder}/test/Iara/08-SIFT/topology.dif"
+      ],
       "request": "launch",
       "program": "${workspaceFolder}/scripts/dif-to-iara.py"
     },
-
     {
       "name": "SIFT",
       "type": "cppdbg",
@@ -179,7 +200,9 @@
       "cwd": "${cmake.testWorkingDirectory}",
       "request": "launch",
       "program": "${cmake.testProgram}",
-      "args": ["${cmake.testArgs}"]
+      "args": [
+        "${cmake.testArgs}"
+      ]
     }
   ]
 }

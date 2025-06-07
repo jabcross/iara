@@ -5,6 +5,7 @@
 #include "Iara/Util/Types.h"
 #include "IaraRuntime/Chunk.h"
 #include "IaraRuntime/FirstLastSemaphore.h"
+#include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <cstddef>
 #include <span>
 
@@ -25,8 +26,8 @@ struct SDF_OoO_Node {
 
   struct StaticInfo {
     i64 id = -1;
-    i64 input_bytes = -1;
-    i64 num_inputs = 1;
+    i64 input_bytes = 0;
+    i64 num_inputs = 0;
     i64 rank = -1;
     i64 total_firings = -1;
   };

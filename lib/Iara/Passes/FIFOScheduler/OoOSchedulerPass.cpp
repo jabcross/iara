@@ -81,161 +81,15 @@ struct OoOSchedulerPass::Impl {
 
   LLVM::LLVMFunctionType wrapper_type() {
     return LLVM::LLVMFunctionType::get(
-        llvm_void_type(),
-        {IntegerType::get(ctx(), 64), pointer_to(pointer_to(chunk_type()))},
+        llvm_void_type(), {IntegerType::get(ctx(), 64), llvm_pointer_type()},
         false);
   }
-
-  // template <typename T, typename... Args>
-  // void fillTypeVector(MLIRContext *context, SmallVector<Type> &vec) {
-  //   vec.push_back(GetMLIRType<T>::get(context));
-  //   if constexpr (sizeof...(Args) > 0) {
-  //     fillTypeVector<Args...>(context, vec);
-  //   }
-  // }
-
-  // template <typename... Args>
-  // LLVM::LLVMStructType getLLVMStructType(MLIRContext *context) {
-  //   SmallVector<Type> types;
-  //   fillTypeVector<Args...>(context, types);
-  //   return LLVM::LLVMStructType::getLiteral(context, types);
-  // }
-
-  // // template <typename T> Value asValue(OpBuilder builder, Location loc, T
-  // t) {
-  // //   return asValue(builder, loc, t);
-  // // }
-
-  // template <typename T, typename... Args>
-  // Value fillOutContainer(OpBuilder builder, Value container, i64 position, T
-  // t,
-  //                        Args... args) {
-  //   auto loc = container.getDefiningOp()->getLoc();
-  //   auto insert = CREATE(LLVM::InsertValueOp, builder, loc, container,
-  //                        asValue(builder, loc, t), position);
-  //   if constexpr (sizeof...(Args) > 0) {
-  //     return fillOutContainer(builder, insert.getResult(), position + 1,
-  //                             args...);
-  //   }
-  //   return insert.getResult();
-  // }
-
-  // template <typename... Args>
-  // LLVM::GlobalOp createGlobalStruct(OpBuilder builder, Location loc,
-  //                                   StringRef name, Args... args) {
-  //   auto type = getLLVMStructType<Args...>(builder.getContext());
-  //   LLVM::GlobalOp rv = CREATE(LLVM::GlobalOp, builder, loc, type, false,
-  //                              LLVM::Linkage::External, name, Attribute{});
-  //   rv.getInitializerRegion().emplaceBlock();
-  //   auto global_builder = OpBuilder::atBlockBegin(rv.getInitializerBlock());
-  //   auto _struct = CREATE(LLVM::UndefOp, global_builder, loc,
-  //   type).getResult(); _struct = fillOutContainer(global_builder, _struct, 0,
-  //   args...); CREATE(LLVM::ReturnOp, global_builder, loc, _struct); return
-  //   rv;
-  // }
-
-  // LLVM::GlobalOp createGlobalArrayOrNull(ModuleOp module, Location loc,
-  //                                        DenseArrayAttr array, StringRef
-  //                                        name, bool is_constant) {
-  //   if (array.empty())
-  //     return nullptr;
-  //   auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-  //   return CREATE(
-  //       LLVM::GlobalOp, mod_builder, loc,
-  //       LLVM::LLVMArrayType::get(array.getElementType(), array.getSize()),
-  //       is_constant, LLVM::Linkage::External, name, array);
-  // };
-
-  // // Returns null if the range is empty.
-  // template <typename Range>
-  // LLVM::GlobalOp createGlobalArrayOrNull(ModuleOp module, Location loc,
-  //                                        Range &&range, StringRef name,
-  //                                        bool is_constant) {
-  //   if (range.empty())
-  //     return nullptr;
-  //   auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-  //   auto elem_type =
-  //       GetMLIRType<decltype(*range.begin())>::get(module.getContext());
-  //   auto items = llvm::to_vector(range);
-  //   auto array_type = LLVM::LLVMArrayType::get(elem_type, items.size());
-  //   LLVM::GlobalOp rv =
-  //       CREATE(LLVM::GlobalOp, mod_builder, loc, array_type, is_constant,
-  //              LLVM::Linkage::External, name, Attribute{});
-  //   rv.getInitializer().emplaceBlock();
-  //   auto global_builder = OpBuilder::atBlockBegin(rv.getInitializerBlock());
-  //   auto array_value =
-  //       CREATE(LLVM::UndefOp, global_builder, loc, array_type).getResult();
-  //   for (auto [i, v] : llvm::enumerate(items)) {
-  //     array_value = CREATE(LLVM::InsertValueOp, global_builder, loc,
-  //                          array_value, asValue(global_builder, loc, v), i)
-  //                       .getResult();
-  //   }
-  //   CREATE(LLVM::ReturnOp, global_builder, loc, array_value);
-  //   return rv;
-  // };
-
-  // void codegenFIFO(OpBuilder main_func_builder, SDFEdge edge) {
-  //   auto module = edge->getParentOfType<ModuleOp>();
-  //   auto create_call = CREATE(CallOp, main_func_builder, edge->getLoc(),
-  //                             "iara_fifo_runtime_DynamicPushFirstFifo_create",
-  //                             {LLVM::LLVMPointerType::get(edge->getContext())});
-
-  //   getOrGenFuncDecl(create_call, true);
-
-  //   this->runtime_fifo_pointers[edge] = create_call->getResult(0);
-
-  //   LLVM::GlobalOp delay_global{};
-  //   if (auto array = llvm::dyn_cast_if_present<DenseArrayAttr>(edge.delay()))
-  //   {
-  //     auto sym_name = llvm::formatv("iara_edge_{0}_delay", edge.id()).str();
-  //     delay_global = createGlobalArrayOrNull(module, edge->getLoc(), array,
-  //                                            sym_name, true);
-  //   }
-
-  //   auto sym_name = llvm::formatv("iara_edge_info_{0}", edge.id()).str();
-  //   auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
-
-  //   // Runtime struct:
-  //   // struct EdgeInfo {
-  //   //   i64 prod_rate; // [0]
-  //   //   i64 cons_rate; // [1]
-  //   //   i64 delay_size; // [2]
-  //   //   byte *initial_delays; // [3]
-  //   //   DynamicPushFirstFifo *fifo; // [4] <-- here
-  //   // };
-
-  //   constexpr i64 fifo_index = 4;
-
-  //   auto global_op =
-  //       createGlobalStruct<i64, i64, i64, LLVM::GlobalOp, LLVM::GlobalOp>(
-  //           mod_builder, edge.getLoc(), sym_name, edge.prod_rate(),
-  //           edge.cons_rate(), edge.delay_size_bytes(), delay_global,
-  //           LLVM::GlobalOp{} // start empty, to be filled in at
-  //           initialization
-  //       );
-
-  //   edge_info_global_ops[edge] = global_op;
-
-  //   // write pointer to fifo in global op
-
-  //   auto global_address =
-  //       CREATE(LLVM::AddressOfOp, main_func_builder, edge.getLoc(),
-  //       global_op);
-  //   auto global_struct =
-  //       CREATE(LLVM::LoadOp, main_func_builder, edge.getLoc(),
-  //       global_address);
-  //   auto inserted =
-  //       CREATE(LLVM::InsertValueOp, main_func_builder, edge.getLoc(),
-  //              global_struct, create_call.getResult(0), {fifo_index});
-  //   CREATE(LLVM::StoreOp, main_func_builder, edge.getLoc(), inserted,
-  //          global_address);
-  // }
 
   // Node wrappers call the kernel function with prepopulated parameters, and
   // also spread out the arguments from the given array.
   // The single argument is a pointer to a buffer of pointers to the memory
   // accessed by the kernel.
-  LLVM::LLVMFuncOp codegenNodeWrapper(NodeOp node, SDF_OoO_Node &info) {
+  LLVM::LLVMFuncOp getOrCodegenNodeWrapper(NodeOp node, SDF_OoO_Node &info) {
     auto module = node->getParentOfType<ModuleOp>();
     if (node.isAlloc()) {
       return getLLVMFuncDecl(module, "iara_runtime_alloc", wrapper_type());
@@ -247,6 +101,10 @@ struct OoOSchedulerPass::Impl {
     auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
     auto sym_name = llvm::formatv("iara_node_wrapper_{0}", info.info.id).str();
 
+    if (auto existing = module.lookupSymbol<LLVM::LLVMFuncOp>(sym_name)) {
+      return existing;
+    }
+
     auto ctx = module.getContext();
 
     auto num_buffers = node.getIn().size() + node.getOut().size();
@@ -254,7 +112,7 @@ struct OoOSchedulerPass::Impl {
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx);
     auto pointer_to_chunk_type = pointer_to(chunk_type());
     auto pointer_to_pointer_to_chunk_type = pointer_to(pointer_to_chunk_type);
-    auto pointer_to_opaque_pointer_type = pointer_to(opaque_ptr_type);
+    // auto pointer_to_opaque_pointer_type = pointer_to(opaque_ptr_type);
 
     // for (auto i : node.op.getIn())
     //   arg_types.push_back(i.getType());
@@ -298,26 +156,28 @@ struct OoOSchedulerPass::Impl {
 
       // get pointer from array
       auto pointer_to_pointer_to_chunk =
-          CREATE(LLVM::GEPOp, func_builder, node.getLoc(),
-                 pointer_to_pointer_to_chunk_type, pointer_to_chunk_type,
+          CREATE(LLVM::GEPOp, func_builder, node.getLoc(), opaque_ptr_type,
+                 pointer_to_pointer_to_chunk_type,
                  func_builder.getBlock()->getArgument(1), {i});
 
-      auto pointer_to_chunk = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
-                                     pointer_to_pointer_to_chunk);
+      auto pointer_to_chunk =
+          CREATE(LLVM::LoadOp, func_builder, node.getLoc(), opaque_ptr_type,
+                 pointer_to_pointer_to_chunk);
 
       // get first value
+
       auto pointer_to_opaque_pointer =
-          CREATE(LLVM::GEPOp, func_builder, node.getLoc(),
-                 pointer_to_opaque_pointer_type, pointer_to_chunk,
-                 getIntConstant(func_builder.getInsertionBlock(), 0), true);
+          CREATE(LLVM::GEPOp, func_builder, node.getLoc(), opaque_ptr_type,
+                 pointer_to_chunk_type, pointer_to_chunk,
+                 getIntConstant(func_builder.getInsertionBlock(), 0));
 
       auto opaque_pointer = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
-                                   pointer_to_opaque_pointer);
+                                   opaque_ptr_type, pointer_to_opaque_pointer);
 
       kernel_args.push_back(opaque_pointer);
     }
 
-    auto kernel_call = CREATE(CallOp, func_builder, node.getLoc(),
+    auto kernel_call = CREATE(LLVM::CallOp, func_builder, node.getLoc(),
                               node.getImpl(), {}, kernel_args);
 
     getOrGenFuncDecl(kernel_call, true);
@@ -424,6 +284,24 @@ struct OoOSchedulerPass::Impl {
     auto [main_func, main_func_builder] = createEmptyVoidFunctionWithBody(
         OpBuilder(actor), actor.getSymName(), actor.getLoc());
 
+    // test static emitter
+
+    // struct Test {
+    //   std::vector<int> *x;
+    //   std::vector<int *> y;
+    //   float z;
+    // };
+
+    // std::vector<int> v = {1, 2, 3};
+
+    // Test z = {.x = &v, .y = {&v[0], &v[1], &v[2]}, .z = 3.0};
+
+    // std::map<void *, std::string> test_known_global_ptrs;
+
+    // StaticBuilder<Test>::build(actor->getParentOfType<ModuleOp>(), &z,
+    //                            "test_static_data", actor->getLoc(),
+    //                            test_known_global_ptrs);
+
     // only once:
 
     auto edges = actor.getOps<EdgeOp>() | IntoVector();
@@ -439,6 +317,8 @@ struct OoOSchedulerPass::Impl {
 
     std::vector<char> dummy_ptrs(nodes.size(), ' ');
 
+    [[maybe_unused]] auto &x = llvm::errs();
+
     std::vector<SDF_OoO_Node> _node_infos{[&]() {
       std::vector<SDF_OoO_Node> node_infos;
       for (auto [i, node] : llvm::enumerate(nodes)) {
@@ -447,8 +327,8 @@ struct OoOSchedulerPass::Impl {
         info.info = data.node_static_info[node];
         info.wrapper = (SDF_OoO_Node::WrapperType *)&dummy_ptrs[i];
         info.semaphore_map = nullptr;
-        known_global_ptrs[(void *)info.wrapper] =
-            codegenNodeWrapper(node, info).getSymName().str();
+        auto wrapper = getOrCodegenNodeWrapper(node, info);
+        known_global_ptrs[(void *)info.wrapper] = wrapper.getSymName();
       }
       return node_infos;
     }()};
@@ -464,6 +344,7 @@ struct OoOSchedulerPass::Impl {
             &node_infos[runtime_node_data_index[edge.getConsumerNode()]];
         info.producer =
             &node_infos[runtime_node_data_index[edge.getProducerNode()]];
+
         if (info.info.delay_size > 0) {
           auto delay = edge->getAttrOfType<DenseArrayAttr>("delay");
           delay_data[edge] = delay.getRawData();
@@ -496,18 +377,46 @@ struct OoOSchedulerPass::Impl {
 
     [[maybe_unused]] auto [runtime_data_global, static_builder] =
         codegen::StaticBuilder<SDF_OoO_RuntimeData>::build(
-            module, &runtime_data, "iara_runtime_data", known_global_ptrs,
-            actor.getLoc());
+            module, &runtime_data, "iara_runtime_data", actor.getLoc(),
+            known_global_ptrs);
+
+    // Initialize nodes
     for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
-      auto func = getLLVMFuncDecl(
+      auto node_init_func = getLLVMFuncDecl(
           node->getParentOfType<ModuleOp>(), "iara_runtime_node_init",
           LLVM::LLVMFunctionType::get(llvm_void_type(),
                                       {LLVM::LLVMPointerType::get(ctx())}));
-      func.setPrivate();
+      node_init_func.setPrivate();
 
-      auto [offset, name] = static_builder.pointer_lists[(void *)&info];
-      auto ptr =
-          static_builder.regenRuntimePointer(main_func_builder, (void *)&info);
+      // Type void_type = LLVM::LLVMVoidType::get(ctx());
+
+      std::string name("iara_runtime_data__node_infos");
+
+      auto ptr = static_builder.pointer_map[{
+          &info, getMLIRType<SDF_OoO_Node>(ctx()), llvm::hash_value(name)}](
+          main_func_builder, node.getLoc(), (void *)&info);
+
+      CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), node_init_func,
+             {ptr});
+    }
+
+    // Schedule first executions
+    for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
+      if (!node.isAlloc())
+        continue;
+
+      auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
+
+      std::string name("iara_runtime_data__node_infos");
+
+      auto ptr = static_builder.pointer_map[{
+          &info, getMLIRType<SDF_OoO_Node>(ctx()), llvm::hash_value(name)}](
+          main_func_builder, node.getLoc(), (void *)&info);
+
+      auto func = getLLVMFuncDecl(
+          node->getParentOfType<ModuleOp>(), "kickstart_alloc",
+          LLVM::LLVMFunctionType::get(llvm_void_type(), {opaque_ptr_type}));
+      func.setPrivate();
 
       CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), func, {ptr});
     }

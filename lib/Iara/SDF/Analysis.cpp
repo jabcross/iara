@@ -36,12 +36,13 @@ LogicalResult analyseOOOBufferSizes(ActorOp actor,
 
     for (auto [i, edge] : enumerate(chain)) {
       auto &info = data.edge_static_info[edge];
+
+      info.first_chunk_size = first_buffer_size;
+      info.next_chunk_sizes = next_buffer_sizes;
       info.prod_alpha = buffer_values->alpha[i];
       info.prod_beta = buffer_values->beta[i];
       info.cons_alpha = buffer_values->alpha[i + 1];
       info.cons_beta = buffer_values->beta[i + 1];
-      info.first_chunk_size = first_buffer_size;
-      info.next_chunk_sizes = next_buffer_sizes;
     }
   }
   return success();

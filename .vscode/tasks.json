@@ -1,34 +1,52 @@
 {
   "version": "2.0.0",
   "inputs": [
-    {
-      "id": "test",
-      "type": "pickString",
-      "options": [
-        "01-empty",
-        "02-single-node",
-        "03-two-nodes",
-        "04-multithread",
-        "05-cholesky",
-        "06-broadcast",
-        "07-ownership",
-        "09-hierarchy",
-        "10-multi-rate",
-        "11-forward-delay"
-      ],
-      "description": "Which test to run"
-    },
+    // {
+    //   "id": "test",
+    //   "type": "command",
+    //   "command": "extension.commandvariable.pickStringRemember",
+    //   "args": {
+    //     "options": [
+    //       "03-two-nodes",
+    //       "04-multithread",
+    //       "05-cholesky",
+    //       "06-broadcast",
+    //       "07-ownership",
+    //       "09-hierarchy",
+    //       "10-multi-rate",
+    //       "11-forward-delay"
+    //     ],
+    //     "description": "Which test to run",
+    //     "key": "pickedTest",
+    //   }
+    // },
+    // {
+    //   "id": "scheduler",
+    //   "type": "command",
+    //   "command": "extension.commandvariable.pickStringRemember",
+    //   "args": {
+    //     "options": [
+    //       "ooo-scheduler"
+    //     ],
+    //     "description": "Which scheduler to use",
+    //     "key": "pickedScheduler"
+    //   }
+    // },
     {
       "id": "remember_test",
       "type": "command",
       "command": "extension.commandvariable.remember",
-      "args": { "key": "pickedTest" }
+      "args": {
+        "key": "pickedTest"
+      }
     },
     {
       "id": "remember_scheduler",
       "type": "command",
       "command": "extension.commandvariable.remember",
-      "args": { "key": "pickedScheduler" }
+      "args": {
+        "key": "pickedScheduler"
+      }
     }
   ],
   "tasks": [
@@ -36,7 +54,9 @@
       "type": "cmake",
       "label": "CMake: build",
       "command": "build",
-      "targets": ["iara-opt"],
+      "targets": [
+        "iara-opt"
+      ],
       "group": {
         "kind": "build",
         "isDefault": true
@@ -51,7 +71,9 @@
       "options": {
         "cwd": "${workspaceFolder}/build"
       },
-      "targets": ["check-iara"],
+      "targets": [
+        "check-iara"
+      ],
       "group": {
         "kind": "test",
         "isDefault": true
@@ -74,7 +96,9 @@
           // "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
         }
       },
-      "problemMatcher": ["$gcc"]
+      "problemMatcher": [
+        "$gcc"
+      ]
     }
   ]
 }

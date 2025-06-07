@@ -16,5 +16,5 @@
     "scripts/.*"
   ],
   "clang-format.assumeFilename": ".clang-format",
-  "clangd.enableCodeCompletion": true,
+  "clangd.enableCodeCompletion": true
 }
