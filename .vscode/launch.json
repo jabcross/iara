@@ -55,6 +55,7 @@
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
         "--flatten",
+        // "-mlir-print-stacktrace-on-diagnostic",
         // "--mlir-print-ir-after-failure",
         "--${input:scheduler}",
         "topology.test"

@@ -10,8 +10,10 @@
 #include <regex>
 #include <span>
 
+// todo: alignment
+
 // Type that represents a chunk of memory.
-struct alignas(64) Chunk {
+struct Chunk {
 
   byte *allocated = nullptr;
   i64 ooo_offset = 0;

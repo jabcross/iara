@@ -57,6 +57,7 @@ void SDF_OoO_Node::dealloc(i64 current_buffer_size, i64 first_buffer_size,
 }
 
 void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
+  assert(args.extents == info.num_inputs);
   wrapper(seq, args.ptr);
   assert(output_fifos.extents == 0 || (output_fifos.extents == args.extents));
   for (int i = 0; i < output_fifos.extents; i++) {

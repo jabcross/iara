@@ -98,16 +98,22 @@ struct OoOSchedulerPass::Impl {
               module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_alloc")) {
         return existing;
       }
-      return CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
-                    "iara_runtime_alloc", wrapper_type());
+      auto rv = CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
+                       "iara_runtime_alloc", wrapper_type());
+      rv.setVisibility(mlir::SymbolTable::Visibility::Private);
+      rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
+      return rv;
     }
     if (node.isDealloc()) {
       if (auto existing =
-              module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_delloc")) {
+              module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_dealloc")) {
         return existing;
       }
-      return CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
-                    "iara_runtime_dealloc", wrapper_type());
+      auto rv = CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
+                       "iara_runtime_dealloc", wrapper_type());
+      rv.setVisibility(mlir::SymbolTable::Visibility::Private);
+      rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
+      return rv;
     }
 
     auto sym_name = llvm::formatv("iara_node_wrapper_{0}", info.info.id).str();
@@ -160,31 +166,18 @@ struct OoOSchedulerPass::Impl {
     }
 
     for (size_t i = 0; i < num_buffers; i++) {
-      // Value cast = CREATE(LLVM::BitcastOp, func_builder, node.getLoc(),
-      //                     pointer_to_chunk_type,
-      //                     func_builder.getBlock()->getArgument(1));
+
+      // arg1 is a pointer to the first chunk.
 
       // get pointer from array
-      auto pointer_to_pointer_to_chunk =
+      auto pointer_to_pointer =
           CREATE(LLVM::GEPOp, func_builder, node.getLoc(), opaque_ptr_type,
-                 pointer_to_pointer_to_chunk_type,
-                 func_builder.getBlock()->getArgument(1), {i});
+                 chunk_type(), func_builder.getBlock()->getArgument(1), {i, 0});
 
-      auto pointer_to_chunk =
-          CREATE(LLVM::LoadOp, func_builder, node.getLoc(), opaque_ptr_type,
-                 pointer_to_pointer_to_chunk);
+      auto pointer_to_data = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
+                                    opaque_ptr_type, pointer_to_pointer);
 
-      // get first value
-
-      auto pointer_to_opaque_pointer =
-          CREATE(LLVM::GEPOp, func_builder, node.getLoc(), opaque_ptr_type,
-                 pointer_to_chunk_type, pointer_to_chunk,
-                 getIntConstant(func_builder.getInsertionBlock(), 0));
-
-      auto opaque_pointer = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
-                                   opaque_ptr_type, pointer_to_opaque_pointer);
-
-      kernel_args.push_back(opaque_pointer);
+      kernel_args.push_back(pointer_to_data);
     }
 
     auto kernel_call = CREATE(LLVM::CallOp, func_builder, node.getLoc(),

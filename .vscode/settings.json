@@ -16,5 +16,9 @@
     "scripts/.*"
   ],
   "clang-format.assumeFilename": ".clang-format",
-  "clangd.enableCodeCompletion": true
+  "clangd.enableCodeCompletion": true,
+  "lldb.displayFormat": "auto",
+  "lldb.showDisassembly": "auto",
+  "lldb.dereferencePointers": true,
+  "lldb.consoleMode": "commands"
 }
