@@ -1,9 +1,13 @@
 #include "Iara/Util/Types.h"
 #include "IaraRuntime/Chunk.h"
+#include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <cassert>
 #include <cstdlib>
+
+extern std::span<SDF_OoO_Node> iara_runtime_nodes;
+extern std::span<SDF_OoO_FIFO> iara_runtime_edges;
 
 extern "C" void kickstart_alloc(SDF_OoO_Node *alloc) {
   auto &fifo = **alloc->output_fifos.ptr;

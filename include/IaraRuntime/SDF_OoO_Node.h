@@ -21,7 +21,7 @@ struct SDF_OoO_Node {
     bool first_of_firing;
   };
   using SemaMap =
-      first_last_semaphore::FirstLastSemaphoreMap<std::vector<Chunk>, None,
+      first_last_semaphore::FirstLastSemaphoreMap<Span<Chunk>, None,
                                                   EveryTimeArgs, ConsSeq>;
 
   struct StaticInfo {
@@ -44,7 +44,7 @@ struct SDF_OoO_Node {
   void init();
 
 private:
-  void fire(i64 seq, std::vector<Chunk> &&);
+  void fire(i64 seq, Span<Chunk>);
 };
 
 extern "C" void iara_runtime_node_init(SDF_OoO_Node *node);

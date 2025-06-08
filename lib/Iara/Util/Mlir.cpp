@@ -1,11 +1,13 @@
-#include "Iara/Util/Mlir.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
+#include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
@@ -117,7 +119,7 @@ StringRef getCTypeName(Type type) {
   llvm_unreachable("unimplemented");
 }
 
-func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers) {
+func::FuncOp getOrGenFuncDecl(func::CallOp call) {
   auto module = call->getParentOfType<ModuleOp>();
   auto builder = OpBuilder(module).atBlockBegin(module.getBody());
 
@@ -127,6 +129,20 @@ func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers) {
   auto rv = CREATE(
       func::FuncOp, builder, module.getLoc(), call.getCallee(),
       builder.getFunctionType(call->getOperandTypes(), call->getResultTypes()));
+  rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
+  rv.setVisibility(SymbolTable::Visibility::Private);
+  return rv;
+}
+
+LLVM::LLVMFuncOp getOrGenFuncDecl(LLVM::CallOp call) {
+  auto module = call->getParentOfType<ModuleOp>();
+  auto builder = OpBuilder(module).atBlockBegin(module.getBody());
+
+  if (auto func = module.lookupSymbol<LLVM::LLVMFuncOp>(*call.getCallee()))
+    return func;
+
+  auto rv = CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(),
+                   *call.getCallee(), call.getCalleeFunctionType());
   rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
   rv.setVisibility(SymbolTable::Visibility::Private);
   return rv;

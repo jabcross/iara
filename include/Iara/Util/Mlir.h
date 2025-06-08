@@ -12,6 +12,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -178,7 +179,8 @@ template <class T> inline auto operator|(T &&lhs, AssertNonNull rhs) {
   return std::forward<T>(lhs);
 }
 
-func::FuncOp getOrGenFuncDecl(func::CallOp call, bool use_llvm_pointers);
+func::FuncOp getOrGenFuncDecl(func::CallOp call);
+LLVM::LLVMFuncOp getOrGenFuncDecl(LLVM::CallOp call);
 
 } // namespace iara::util::mlir
 

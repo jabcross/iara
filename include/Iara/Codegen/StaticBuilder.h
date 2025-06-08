@@ -329,10 +329,6 @@ struct StaticBuilder {
                                LLVM::LLVMPointerType::get(ctx));
     if (ptr != nullptr) {
       pointers_to_stitch.push_back([=, _this = this]() {
-        {
-          // capture for debug
-          [[maybe_unused]] auto x = item_name;
-        }
         if (auto entry = _this->known_global_ptrs.get().find((void *)ptr);
             entry != _this->known_global_ptrs.get().end()) {
           Value new_ptr = CREATE(

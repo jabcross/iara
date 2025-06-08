@@ -118,6 +118,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     dealloc_node_info = SDF_OoO_Node::StaticInfo{
         .id = i64(id_range * 30 + last_node_info.id),
         .input_bytes = -1,
+        .num_inputs = 1,
         .rank = last_node_info.rank + 2,
         .total_firings = alpha_firing + beta_firings,
     };
@@ -185,6 +186,7 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     alloc_node_info = SDF_OoO_Node::StaticInfo{
         .id = i64(id_range * 20 + first_node_info.id),
         .input_bytes = -2,
+        .num_inputs = 0,
         .rank = first_node_info.rank - 2,
         .total_firings = alpha_firing + beta_firings,
     };

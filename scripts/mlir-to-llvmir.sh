@@ -12,6 +12,8 @@ rm $NO_EXT.llvm.mlir
 
 which mlir-opt
 
+# Give the full path to the compilers so that the debugger doesn't get confused.
+
 mlir-opt --convert-vector-to-scf \
 	--convert-linalg-to-loops \
 	--lower-affine \
@@ -28,17 +30,17 @@ mlir-opt --convert-vector-to-scf \
 	--convert-openmp-to-llvm \
 	--reconcile-unrealized-casts \
 	--mlir-print-debuginfo \
-	$1 -o $NO_EXT.llvm.mlir
+	$(realpath $1) -o $NO_EXT.llvm.mlir
 
 mlir-opt \
 	--ensure-debug-info-scope-on-llvm-func \
 	--mlir-print-debuginfo \
-	$NO_EXT.llvm.mlir >$NO_EXT.llvm.mlir.2
+	$(realpath $NO_EXT.llvm.mlir) -o $NO_EXT.llvm.mlir.2
 
 which mlir-translate
 
 mlir-translate --mlir-to-llvmir \
-	$NO_EXT.llvm.mlir.2 -o $NO_EXT.ll
+	$(realpath $NO_EXT.llvm.mlir.2) -o $NO_EXT.ll
 
 # # opt -S -passes=debugify $(realpath $INPUT_DIR/$NO_EXT.ll) -o $INPUT_DIR/$NO_EXT.debug.ll
 

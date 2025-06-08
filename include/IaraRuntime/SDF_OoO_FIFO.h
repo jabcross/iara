@@ -10,7 +10,7 @@
 struct SDF_OoO_Node;
 
 // SDF Out of Order Fifo.
-struct alignas(64) SDF_OoO_FIFO {
+struct SDF_OoO_FIFO {
   struct StaticInfo {
     i64 id = -1;
     i64 local_index = -1;  // Position in the chain of inout

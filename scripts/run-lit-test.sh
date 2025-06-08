@@ -12,7 +12,6 @@ CLEAN_FIRST=0
 IGNORE_RESULT=0
 
 cd $IARA_DIR
-scripts/build.sh
 
 export SCHEDULER_MODE=ooo-scheduler
 

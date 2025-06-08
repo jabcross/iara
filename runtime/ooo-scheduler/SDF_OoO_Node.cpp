@@ -1,33 +1,32 @@
+#include "Iara/Util/Span.h"
 #include "IaraRuntime/Chunk.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include "IaraRuntime/SDF_OoO_Scheduler.h"
+#include <cassert>
+#include <cstdlib>
 
 void SDF_OoO_Node::init() {
   this->semaphore_map = new SemaMap();
   // todo: free this later
   auto &semaphore_map = *(SemaMap *)this->semaphore_map;
-  semaphore_map.first_time_func = [_this = this](None,
-                                                 std::vector<Chunk> &args) {
+  semaphore_map.first_time_func = [_this = this](None, Span<Chunk> &args) {
     // Init vector with appropriate size.
-    assert(args.empty());
-    args = std::vector<Chunk>{(size_t)_this->info.num_inputs};
+    args.extents = _this->info.num_inputs;
+    args.ptr = (Chunk *)calloc(sizeof(Chunk), args.extents);
   };
   semaphore_map.every_time_func = [](EveryTimeArgs &et_args,
-                                     std::vector<Chunk> &args) {
+                                     Span<Chunk> &args) {
     auto &[new_chunk, idx, first] = et_args;
-    auto &old_chunk = args[idx];
+    auto &old_chunk = args.ptr[idx];
     assert(args.size() > (size_t)idx);
-    assert(old_chunk.is_released());
     // only the first chunk of a firing contains the right pointer.
     if (first) {
       old_chunk = new_chunk;
     }
   };
   semaphore_map.last_time_func = [_this = this](ConsSeq &seq,
-                                                std::vector<Chunk> &args) {
-    std::vector<Chunk> pass{};
-    pass.swap(args);
-    _this->fire(seq, std::move(pass));
+                                                Span<Chunk> &args) {
+    _this->fire(seq, args);
   };
 };
 
@@ -57,8 +56,13 @@ void SDF_OoO_Node::dealloc(i64 current_buffer_size, i64 first_buffer_size,
       ->arrive(seq, chunk.data_size, current_buffer_size, n, e, seq);
 }
 
-void SDF_OoO_Node::fire(i64 seq, std::vector<Chunk> &&args) {
-  wrapper(seq, &*args.begin());
+void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
+  wrapper(seq, args.ptr);
+  assert(output_fifos.extents == 0 || (output_fifos.extents == args.extents));
+  for (int i = 0; i < output_fifos.extents; i++) {
+    output_fifos.ptr[i]->push(args.ptr[i]);
+  }
+  free(args.ptr);
 }
 
 extern "C" void iara_runtime_node_init(SDF_OoO_Node *node) { node->init(); }

@@ -25,12 +25,13 @@ void SDF_OoO_FIFO::push(Chunk chunk) {
   Chunk remaining_data = std::move(chunk);
   auto cons_rate = info.cons_rate;
   // dealloc
-  if (cons_rate == -1) {
+  if (cons_rate < 0) {
     ((SDF_OoO_Node *)consumer)
         ->dealloc(((chunk.ooo_offset < info.first_chunk_size)
                        ? info.first_chunk_size
                        : info.next_chunk_sizes),
                   info.first_chunk_size, info.next_chunk_sizes, chunk);
+    return;
   }
   while (remaining_data.data_size >= (size_t)info.cons_rate) {
     auto front = remaining_data.take(info.cons_rate);
