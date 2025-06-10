@@ -22,6 +22,8 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <mlir/Conversion/ConvertToLLVM/ToLLVMPass.h>
+#include <mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h>
 #include <mlir/Conversion/LLVMCommon/StructBuilder.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMAttrs.h>
@@ -40,6 +42,7 @@
 #include <mlir/IR/SymbolTable.h>
 #include <mlir/IR/Types.h>
 #include <mlir/IR/Value.h>
+#include <mlir/Pass/PassManager.h>
 #include <mlir/Support/LogicalResult.h>
 
 using namespace iara::util::range;
@@ -80,7 +83,8 @@ struct OoOSchedulerPass::Impl {
 
   LLVM::LLVMFunctionType wrapper_type() {
     return LLVM::LLVMFunctionType::get(
-        llvm_void_type(), {IntegerType::get(ctx(), 64), llvm_pointer_type()},
+        llvm_void_type(),
+        {IntegerType::get(ctx(), 64), llvm_pointer_type()},
         false);
   }
 
@@ -89,7 +93,8 @@ struct OoOSchedulerPass::Impl {
   // The single argument is a pointer to a buffer of pointers to the memory
   // accessed by the kernel.
   LLVM::LLVMFuncOp getOrCodegenNodeWrapper(ModuleOp module,
-                                           OpBuilder mod_builder, NodeOp node,
+                                           OpBuilder mod_builder,
+                                           NodeOp node,
                                            SDF_OoO_Node &info) {
 
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
@@ -98,8 +103,11 @@ struct OoOSchedulerPass::Impl {
               module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_alloc")) {
         return existing;
       }
-      auto rv = CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
-                       "iara_runtime_alloc", wrapper_type());
+      auto rv = CREATE(LLVM::LLVMFuncOp,
+                       mod_builder,
+                       module.getLoc(),
+                       "iara_runtime_alloc",
+                       wrapper_type());
       rv.setVisibility(mlir::SymbolTable::Visibility::Private);
       rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
       return rv;
@@ -109,36 +117,28 @@ struct OoOSchedulerPass::Impl {
               module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_dealloc")) {
         return existing;
       }
-      auto rv = CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
-                       "iara_runtime_dealloc", wrapper_type());
+      auto rv = CREATE(LLVM::LLVMFuncOp,
+                       mod_builder,
+                       module.getLoc(),
+                       "iara_runtime_dealloc",
+                       wrapper_type());
       rv.setVisibility(mlir::SymbolTable::Visibility::Private);
       rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
       return rv;
     }
 
-    auto sym_name = llvm::formatv("iara_node_wrapper_{0}", info.info.id).str();
+    auto sym_name =
+        llvm::formatv("iara_node_wrapper_{0}_{1}", info.info.id, node.getImpl())
+            .str();
 
     if (auto existing = module.lookupSymbol<LLVM::LLVMFuncOp>(sym_name)) {
       return existing;
     }
 
-    auto ctx = module.getContext();
-
     auto num_buffers = node.getIn().size() + node.getOut().size();
 
-    auto pointer_to_chunk_type = pointer_to(chunk_type());
-    auto pointer_to_pointer_to_chunk_type = pointer_to(pointer_to_chunk_type);
-    // auto pointer_to_opaque_pointer_type = pointer_to(opaque_ptr_type);
-
-    // for (auto i : node.op.getIn())
-    //   arg_types.push_back(i.getType());
-
-    // // (getOut returns both inout and pure outs.)
-    // for (auto i : node.op.getOut())
-    //   arg_types.push_back(i.getType());
-
-    auto wrapper = CREATE(LLVM::LLVMFuncOp, mod_builder, node.getLoc(),
-                          sym_name, wrapper_type());
+    auto wrapper = CREATE(
+        LLVM::LLVMFuncOp, mod_builder, node.getLoc(), sym_name, wrapper_type());
 
     wrapper.setVisibility(mlir::SymbolTable::Visibility::Public);
     wrapper->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
@@ -146,7 +146,8 @@ struct OoOSchedulerPass::Impl {
     // addEntryBlock broken?
 
     auto *block = &wrapper.getFunctionBody().emplaceBlock();
-    for (auto type : wrapper_type().getParams()) {
+    auto _wrapper_type = wrapper_type();
+    for (auto type : _wrapper_type.getParams()) {
       block->addArgument(type, wrapper->getLoc());
     }
 
@@ -170,20 +171,46 @@ struct OoOSchedulerPass::Impl {
       // arg1 is a pointer to the first chunk.
 
       // get pointer from array
-      auto pointer_to_pointer =
-          CREATE(LLVM::GEPOp, func_builder, node.getLoc(), opaque_ptr_type,
-                 chunk_type(), func_builder.getBlock()->getArgument(1), {i, 0});
+      auto pointer_to_pointer = CREATE(LLVM::GEPOp,
+                                       func_builder,
+                                       node.getLoc(),
+                                       opaque_ptr_type,
+                                       chunk_type(),
+                                       func_builder.getBlock()->getArgument(1),
+                                       {(i32)i, 0});
 
-      auto pointer_to_data = CREATE(LLVM::LoadOp, func_builder, node.getLoc(),
-                                    opaque_ptr_type, pointer_to_pointer);
+      auto pointer_to_data = CREATE(LLVM::LoadOp,
+                                    func_builder,
+                                    node.getLoc(),
+                                    opaque_ptr_type,
+                                    pointer_to_pointer);
 
       kernel_args.push_back(pointer_to_data);
     }
 
-    auto kernel_call = CREATE(LLVM::CallOp, func_builder, node.getLoc(),
-                              TypeRange{}, node.getImpl(), kernel_args);
+    auto func = module.lookupSymbol(node.getImpl());
 
-    getOrGenFuncDecl(kernel_call);
+    if (!func) {
+      auto kernel_call = CREATE(LLVM::CallOp,
+                                func_builder,
+                                node.getLoc(),
+                                TypeRange{},
+                                node.getImpl(),
+                                kernel_args);
+      ensureFuncDeclExists(kernel_call);
+    } else if (auto llvm_func = dyn_cast<LLVM::LLVMFuncOp>(func)) {
+      DEF_OP(auto,
+             kernel_call,
+             LLVM::CallOp,
+             func_builder,
+             node.getLoc(),
+             TypeRange{},
+             node.getImpl(),
+             kernel_args);
+    } else if (auto mlir_func = dyn_cast<func::FuncOp>(func)) {
+      llvm_unreachable("No MLIR functions at this point,");
+    }
+
     CREATE(LLVM::ReturnOp, func_builder, node.getLoc(), ValueRange{});
 
     return wrapper;
@@ -285,6 +312,9 @@ struct OoOSchedulerPass::Impl {
         auto edge = cast<EdgeOp>(*output.getUsers().begin());
         output_fifos[node].push_back(runtime_edge_data[edge]);
       }
+      for (auto edge_info : output_fifos[node]) {
+        assert(edge_info != nullptr);
+      }
       info.output_fifos = Span<SDF_OoO_FIFO *>{output_fifos[node].begin(),
                                                output_fifos[node].size()};
     }
@@ -296,9 +326,13 @@ struct OoOSchedulerPass::Impl {
           getOrCodegenNodeWrapper(module, mod_builder, node, info));
     }
 
-    auto codegenBuilder =
-        codegen::CodegenStaticData(module, mod_builder, {node_infos},
-                                   {edge_infos}, {nodes}, {edges}, {wrappers});
+    auto codegenBuilder = codegen::CodegenStaticData(module,
+                                                     mod_builder,
+                                                     {node_infos},
+                                                     {edge_infos},
+                                                     {nodes},
+                                                     {edges},
+                                                     {wrappers});
 
     auto node_info_ptrs =
         codegenBuilder.codegenStaticData()(main_func_builder, actor.getLoc());
@@ -306,7 +340,9 @@ struct OoOSchedulerPass::Impl {
     // Init nodes
 
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
-    auto init_func = CREATE(LLVM::LLVMFuncOp, mod_builder, module.getLoc(),
+    auto init_func = CREATE(LLVM::LLVMFuncOp,
+                            mod_builder,
+                            module.getLoc(),
                             "iara_runtime_node_init",
                             LLVM::LLVMFunctionType::get(
                                 LLVMVoidType::get(ctx()), {opaque_ptr_type}));
@@ -319,17 +355,23 @@ struct OoOSchedulerPass::Impl {
 
     // kickstart allocs
 
-    auto kickstart_func = CREATE(
-        LLVM::LLVMFuncOp, mod_builder, module.getLoc(), "kickstart_alloc",
-        LLVM::LLVMFunctionType::get(LLVMVoidType::get(ctx()),
-                                    {opaque_ptr_type}));
+    auto kickstart_func =
+        CREATE(LLVM::LLVMFuncOp,
+               mod_builder,
+               module.getLoc(),
+               "kickstart_alloc",
+               LLVM::LLVMFunctionType::get(LLVMVoidType::get(ctx()),
+                                           {opaque_ptr_type}));
 
     for (auto [i, node, info, ptr] :
          enumerate(nodes, node_infos, node_info_ptrs)) {
       if (!node.isAlloc())
         continue;
 
-      CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), kickstart_func,
+      CREATE(LLVM::CallOp,
+             main_func_builder,
+             node.getLoc(),
+             kickstart_func,
              {ptr});
     }
 

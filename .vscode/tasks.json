@@ -51,6 +51,12 @@
   ],
   "tasks": [
     {
+      "type": "shell",
+      "command": "build.sh",
+      "label": "build.sh",
+      "problemMatcher": "$msCompile"
+    },
+    {
       "type": "cmake",
       "label": "CMake: build",
       "command": "build",
@@ -62,7 +68,7 @@
         "isDefault": true
       },
       "problemMatcher": [],
-      "detail": "CMake template build task"
+      "detail": "CMake template build task",
     },
     {
       "type": "cmake",

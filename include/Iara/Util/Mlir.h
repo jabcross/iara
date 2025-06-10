@@ -124,6 +124,8 @@ template <> struct MLIRTypeOf<i64> {
   IntegerType get(MLIRContext *ctx) { return IntegerType::get(ctx, 64); }
 };
 
+std::string mydump(Operation *op);
+
 class AttrAccessor {
 public:
   Operation *op;
@@ -179,8 +181,8 @@ template <class T> inline auto operator|(T &&lhs, AssertNonNull rhs) {
   return std::forward<T>(lhs);
 }
 
-func::FuncOp getOrGenFuncDecl(func::CallOp call);
-LLVM::LLVMFuncOp getOrGenFuncDecl(LLVM::CallOp call);
+void ensureFuncDeclExists(func::CallOp call);
+void ensureFuncDeclExists(LLVM::CallOp call);
 
 } // namespace iara::util::mlir
 

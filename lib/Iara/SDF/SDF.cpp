@@ -260,8 +260,8 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
               << llvm::formatv("{0} and {1}", total_firings[neighbor],
                                neighbor_firings)
               << "\n";
-          node->dump();
-          neighbor->dump();
+          // node->dump();
+          // neighbor->dump();
           return failure();
         }
         continue;

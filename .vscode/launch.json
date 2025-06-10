@@ -56,7 +56,7 @@
       "args": [
         "--flatten",
         // "-mlir-print-stacktrace-on-diagnostic",
-        // "--mlir-print-ir-after-failure",
+        "--mlir-print-ir-after-failure",
         "--${input:scheduler}",
         "topology.test"
       ],
@@ -74,7 +74,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "CMake: build",
+      "preLaunchTask": "build.sh",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

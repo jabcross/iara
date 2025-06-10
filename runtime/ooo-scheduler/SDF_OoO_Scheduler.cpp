@@ -27,7 +27,7 @@ extern "C" void kickstart_alloc(SDF_OoO_Node *alloc) {
 }
 
 extern "C" void iara_runtime_alloc(i64 seq, Chunk *chunk) {
-  chunk->allocated = (byte *)malloc(chunk->data_size);
+  chunk->allocated = (i8 *)malloc(chunk->data_size);
 }
 
 extern "C" void iara_runtime_dealloc(i64 seq, Chunk *chunk) {

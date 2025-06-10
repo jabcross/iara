@@ -18,6 +18,11 @@ PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 
 cd $PATH_TO_TEST_BUILD_DIR
 
+if [[ $(basename $(realpath ..)) != "Iara" ]]; then
+  echo "Wrong directory!"
+  exit 1
+fi
+
 mkdir -p build
 cd build
 
@@ -45,7 +50,9 @@ echo SCHEDULER_SOURCES = \"$SCHEDULER_SOURCES\"
 #   exit 1
 # fi
 
-INCLUDES="-I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$LLVM_DIR/build/lib/clang/*/include"
+INCLUDES="$INCLUDES -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$LLVM_DIR/build/lib/clang/*/include"
+
+source $PATH_TO_TEST_SOURCES/extra_args.sh
 
 pwd
 pwd >&2
@@ -61,7 +68,7 @@ clang++ -g -xir -c schedule.ll -o schedule.o
 RC=$?
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
-  echo "Error: Failed to build schedule"
+  echo "Error: Failed to build schedule"b
   exit 1
 fi
 
@@ -73,7 +80,7 @@ echo building c kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
   for c_file in $PATH_TO_TEST_SOURCES/*.c; do
     echo "Compiling $c_file"
-    clang++ -g -xc -c "$c_file" $INCLUDES
+    clang++ -g -xc -c "$c_file" $INCLUDES $EXTRA_KERNEL_ARGS
     RC=$?
     echo c kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -107,7 +114,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-clang++ -g -lomp -lpthread -fuse-ld=mold *.o $INCLUDES
+clang++ -g -lomp -lpthread -fuse-ld=mold $EXTRA_LINKER_ARGS *.o $INCLUDES
 RC=$?
 echo linker return code: $?
 if [ $RC -ne 0 ]; then

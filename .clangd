@@ -2,3 +2,6 @@ CompileFlags:
   Add: [-std=c++23]
 Diagnostics:
   Suppress: "pp_including_mainfile_in_preamble"
+InlayHints:
+  BlockEnd: true
+  DefaultArguments: true

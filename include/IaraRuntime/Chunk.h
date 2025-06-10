@@ -15,9 +15,9 @@
 // Type that represents a chunk of memory.
 struct Chunk {
 
-  byte *allocated = nullptr;
+  i8 *allocated = nullptr;
   i64 ooo_offset = 0;
-  byte *data;
+  i8 *data;
   i64 data_size;
 
 public:
@@ -42,7 +42,7 @@ public:
 
   static Chunk make_empty() { return Chunk(); }
   static Chunk allocate(i64 size, i64 ooo_offset) {
-    auto allocated = (byte *)malloc(size);
+    auto allocated = (i8 *)malloc(size);
     return Chunk{
         .allocated = allocated,
         .ooo_offset = ooo_offset,

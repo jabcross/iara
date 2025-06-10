@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRIara
         Passes/FlattenPass.cpp
         # Passes/LowerToTasksPass.cpp
         Passes/FIFOScheduler/OoOSchedulerPass.cpp
+        Codegen/Codegen.cpp
         Passes/Schedule/StaticDataCodegen.cpp
         Passes/Schedule/TotalFiringsCalculator.cpp
         Util/Mlir.cpp

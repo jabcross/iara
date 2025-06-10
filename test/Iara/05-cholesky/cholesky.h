@@ -1,6 +1,8 @@
 #include <assert.h>
+#include <lapack.h>
 #include <math.h>
-#include <openblas/lapack.h>
+// #include <openblas/lapack.h>
+// #include </opt/intel/oneapi/mkl/latest/include/mkl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>

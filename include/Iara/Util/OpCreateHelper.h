@@ -3,6 +3,7 @@
 
 #include <mlir/IR/Builders.h>
 #include <source_location>
+
 #ifdef IARA_DEBUG
   #define IARA_SET_DEBUG_LOC_ATTR(___debug_loc)                                \
     ___OP.getOperation()->setAttr("debug_loc",                                 \
@@ -34,6 +35,14 @@
     IARA_SET_DEBUG_LOC_ATTR(debug_loc)                                         \
     return ___OP;                                                              \
   }()
+
+#define DEF_OP(___rvtype, ___name, ___optype, ___builder, ___loc, ...)         \
+  ___rvtype ___name = CREATE(                                                  \
+      ___optype,                                                               \
+      ___builder,                                                              \
+      ::llvm::cast<Location>(::mlir::NameLoc::get(                             \
+          ::mlir::StringAttr::get(___loc.getContext(), #___name), ___loc)),    \
+      __VA_ARGS__)
 
 inline mlir::Attribute getDebugLoc(mlir::OpBuilder builder,
                                    std::source_location debug_loc) {

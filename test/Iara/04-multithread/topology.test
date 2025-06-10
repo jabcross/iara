@@ -1,9 +1,10 @@
-// RUN: build-test.sh . --dynamic-push-first-fifo-scheduler
-// RUN: mkdir -p "`dirname %s`/build"
-// RUN: cd "`dirname %s`/build"
-// RUN: env >env.out.txt
-// RUN: ./a.out > output.txt
-// RUN: FileCheck %s < output.txt
+// RUN: export SCHEDULER_MODE=$SCHEDULER_MODE
+// RUN: pwd >&2
+// RUN: build-test.sh .
+// RUN: pwd >&2
+// RUN: ls build >&2
+// RUN: ./build/a.out > ./build/output.txt
+// RUN: FileCheck %s < ./build/output.txt
 
 // multithread
 

@@ -6,12 +6,14 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/MLIRContext.h>
+#include <mlir/IR/OperationSupport.h>
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <sstream>
 
@@ -119,32 +121,60 @@ StringRef getCTypeName(Type type) {
   llvm_unreachable("unimplemented");
 }
 
-func::FuncOp getOrGenFuncDecl(func::CallOp call) {
+void ensureFuncDeclExists(func::CallOp call) {
   auto module = call->getParentOfType<ModuleOp>();
   auto builder = OpBuilder(module).atBlockBegin(module.getBody());
 
-  if (auto func = module.lookupSymbol<func::FuncOp>(call.getCallee()))
-    return func;
+  if (auto func = module.lookupSymbol(call.getCallee())) {
+    if (auto mlirfunc = dyn_cast<func::FuncOp>(func)) {
+    } else if (auto llvmfunc = dyn_cast<LLVM::LLVMFuncOp>(func)) {
+    } else {
+      func->dump();
+      llvm_unreachable(
+          "something is taking up this symbol, and it isn't a function.");
+    }
+    return;
+  }
 
-  auto rv = CREATE(
+  auto decl = CREATE(
       func::FuncOp, builder, module.getLoc(), call.getCallee(),
       builder.getFunctionType(call->getOperandTypes(), call->getResultTypes()));
-  rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
-  rv.setVisibility(SymbolTable::Visibility::Private);
-  return rv;
+  decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
+  decl.setVisibility(SymbolTable::Visibility::Private);
 }
 
-LLVM::LLVMFuncOp getOrGenFuncDecl(LLVM::CallOp call) {
+void ensureFuncDeclExists(LLVM::CallOp call) {
   auto module = call->getParentOfType<ModuleOp>();
   auto builder = OpBuilder(module).atBlockBegin(module.getBody());
 
-  if (auto func = module.lookupSymbol<LLVM::LLVMFuncOp>(*call.getCallee()))
-    return func;
+  auto callee_name = *call.getCallee();
 
-  auto rv = CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(),
-                   *call.getCallee(), call.getCalleeFunctionType());
-  rv->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
-  rv.setVisibility(SymbolTable::Visibility::Private);
+  if (auto func = module.lookupSymbol(callee_name)) {
+    if (auto mlirfunc = dyn_cast<func::FuncOp>(func)) {
+    } else if (auto llvmfunc = dyn_cast<LLVM::LLVMFuncOp>(func)) {
+    } else {
+      func->dump();
+      llvm_unreachable(
+          "something is taking up this symbol, and it isn't a function.");
+    }
+    return;
+  }
+
+  auto decl = CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(),
+                     *call.getCallee(), call.getCalleeFunctionType());
+  decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
+  decl.setVisibility(SymbolTable::Visibility::Private);
+}
+
+std::string mydump(Operation *op) {
+  std::string rv;
+  auto flags = OpPrintingFlags();
+  flags.printGenericOpForm(true);
+  flags.printValueUsers();
+  flags.enableDebugInfo(true, true);
+  llvm::raw_string_ostream s(rv);
+  op->print(s, flags);
+  llvm::errs() << rv << "\n\n";
   return rv;
 }
 

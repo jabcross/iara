@@ -151,7 +151,7 @@ template <> struct GetMLIRType<long unsigned int> {
   }
 };
 
-template <> struct GetMLIRType<byte> {
+template <> struct GetMLIRType<i8> {
   static Type get(MLIRContext *context) { return IntegerType::get(context, 8); }
 };
 

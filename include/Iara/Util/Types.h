@@ -4,10 +4,15 @@
 #include <cstdint>
 #include <gtl/phmap.hpp>
 #include <llvm/ADT/SmallVector.h>
-#include <span>
+
+using i8 = int8_t;
+using u8 = uint8_t;
+
+using i32 = int32_t;
+using u32 = uint64_t;
 
 using i64 = int64_t;
-using std::byte;
+using u64 = uint64_t;
 
 template <class... T> using Vec = llvm::SmallVector<T...>;
 template <class T> using PairOf = std::pair<T, T>;
