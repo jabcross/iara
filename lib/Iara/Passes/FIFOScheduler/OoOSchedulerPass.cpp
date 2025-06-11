@@ -168,7 +168,7 @@ struct OoOSchedulerPass::Impl {
 
     for (size_t i = 0; i < num_buffers; i++) {
 
-      // arg1 is a pointer to the first chunk.
+      // arg1 is a pointer to the first chunk. we want the `data` field.
 
       // get pointer from array
       auto pointer_to_pointer = CREATE(LLVM::GEPOp,
@@ -177,7 +177,7 @@ struct OoOSchedulerPass::Impl {
                                        opaque_ptr_type,
                                        chunk_type(),
                                        func_builder.getBlock()->getArgument(1),
-                                       {(i32)i, 0});
+                                       {(i32)i, 2 /* `data field` */});
 
       auto pointer_to_data = CREATE(LLVM::LoadOp,
                                     func_builder,

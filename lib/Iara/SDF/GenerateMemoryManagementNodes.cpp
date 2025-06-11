@@ -37,8 +37,8 @@ void populateAllocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
 EdgeOp createEdgeAdaptor(Value produced, Type consumed) {
   auto builder = OpBuilder(produced.getDefiningOp());
   builder.setInsertionPointAfterValue(produced);
-  auto edge = CREATE(EdgeOp, builder, produced.getDefiningOp()->getLoc(),
-                     consumed, produced);
+  auto edge = CREATE(
+      EdgeOp, builder, produced.getDefiningOp()->getLoc(), consumed, produced);
   return edge;
 }
 
@@ -53,10 +53,15 @@ SmallVector<Value> createAllocations(ValueRange values) {
     auto builder = OpBuilder(node);
     // Create alloc node
     auto alloc_node =
-        CREATE(NodeOp, builder, node->getLoc(),
+        CREATE(NodeOp,
+               builder,
+               node->getLoc(),
                {UnrankedTensorType::get(
                    dyn_cast<RankedTensorType>(val.getType()).getElementType())},
-               "iara_runtime_alloc", {}, {}, {});
+               "iara_runtime_alloc",
+               {},
+               {},
+               {});
     auto edge = createEdgeAdaptor(alloc_node.getOut().front(), val.getType());
     rv.push_back(edge.getOut());
   }
@@ -80,9 +85,14 @@ SmallVector<NodeOp> createDeallocations(ValueRange values) {
     auto builder = OpBuilder(edge);
     builder.setInsertionPointAfter(edge);
     // Create dealloc node
-    auto dealloc_node =
-        CREATE(NodeOp, builder, edge->getLoc(), {}, "iara_runtime_dealloc",
-               {placeholder_value}, {val}, {});
+    auto dealloc_node = CREATE(NodeOp,
+                               builder,
+                               edge->getLoc(),
+                               {},
+                               "iara_runtime_dealloc",
+                               {placeholder_value},
+                               {val},
+                               {});
 
     rv.push_back(dealloc_node);
   }
@@ -202,7 +212,8 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
         .prod_rate = -2,
         .cons_rate = first_edge_info.prod_rate,
         .cons_arg_idx = alloc_edge->getUses().begin()->getOperandNumber(),
-        .delay_offset = 0,
+        .delay_offset =
+            first_edge_info.delay_offset + first_edge_info.delay_size,
         .delay_size = 0,
         .first_chunk_size = first_edge_info.first_chunk_size,
         .next_chunk_sizes = first_edge_info.next_chunk_sizes,
@@ -229,9 +240,14 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
       llvm::to_vector(old_node.getIn().getTypes());
   new_result_types.append(to_vector(old_node->getResultTypes()));
 
-  auto new_node =
-      CREATE(NodeOp, builder, old_node->getLoc(), new_result_types,
-             old_node.getImpl(), old_node.getParams(), {}, new_node_inputs);
+  auto new_node = CREATE(NodeOp,
+                         builder,
+                         old_node->getLoc(),
+                         new_result_types,
+                         old_node.getImpl(),
+                         old_node.getParams(),
+                         {},
+                         new_node_inputs);
 
   assert(new_node_inputs.size() == new_result_types.size());
   data.node_static_info[new_node] = data.node_static_info[old_node];

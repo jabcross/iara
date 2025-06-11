@@ -31,11 +31,13 @@ struct SDF_OoO_FIFO {
   Span<const char> delay_data;
   SDF_OoO_Node *consumer;
   SDF_OoO_Node *producer;
+  SDF_OoO_FIFO *next_in_chain;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.
 
   void push(Chunk chunk);
+  void propagate_delays(Chunk chunk);
 
 private:
   PairOf<i64> get_consumer_seq(i64 ooo_offset);

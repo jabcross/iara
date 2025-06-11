@@ -8,8 +8,7 @@
 #include "Iara/Util/Types.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
-#include "mlir/IR/Builders.h"
-#include <bits/types/locale_t.h>
+#include "mlir/IR/Builders.h" #include < bits / types / locale_t.h>
 #include <boost/pfr/core.hpp>
 #include <boost/pfr/traits.hpp>
 #include <llvm/ADT/ArrayRef.h>
@@ -46,10 +45,13 @@ struct CodegenStaticData {
 
   Impl *pimpl;
 
-  CodegenStaticData(ModuleOp module, OpBuilder module_builder,
+  CodegenStaticData(ModuleOp module,
+                    OpBuilder module_builder,
                     std::span<SDF_OoO_Node> node_infos,
-                    std::span<SDF_OoO_FIFO> edge_infos, std::span<NodeOp> nodes,
-                    std::span<EdgeOp> edges, std::span<LLVMFuncOp> wrappers);
+                    std::span<SDF_OoO_FIFO> edge_infos,
+                    std::span<NodeOp> nodes,
+                    std::span<EdgeOp> edges,
+                    std::span<LLVMFuncOp> wrappers);
 
   std::function<std::vector<Value>(OpBuilder builder, Location loc)>
   codegenStaticData();

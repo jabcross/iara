@@ -25,7 +25,7 @@ public:
 
   // Returns a portion of the beginning of the chunk, and shrinks this one
   // accordingly
-  Chunk take(i64 amount) {
+  Chunk take_front(i64 amount) {
     assert(data_size >= amount);
     Chunk rv = *this;
     rv.data_size = amount;
@@ -36,6 +36,16 @@ public:
       release();
     }
     return rv;
+  }
+
+  // Returns a portion of the end of the chunk, and shrinks this one
+  // accordingly
+  Chunk take_back(i64 amount) {
+    assert(data_size >= amount);
+    auto back = *this;
+    auto front = back.take_front(back.data_size - amount);
+    *this = front;
+    return back;
   }
 
   void release() { *this = Chunk(); }

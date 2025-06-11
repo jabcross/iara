@@ -14,10 +14,14 @@ extern "C" void kickstart_alloc(SDF_OoO_Node *alloc) {
   auto remaining_firings = alloc->info.total_firings;
   assert(remaining_firings > 0);
   i64 ooo_offset = 0;
-  if (fifo.info.delay_size > 0) {
-    ooo_offset += fifo.info.delay_size;
+  i64 total_delays = fifo.info.delay_offset + fifo.info.delay_size;
+  if (total_delays > 0) {
+    auto chunk = Chunk::allocate(fifo.info.first_chunk_size, 0);
+    auto delays = chunk.take_front(total_delays);
+    fifo.propagate_delays(delays);
+    ooo_offset += total_delays;
     remaining_firings -= 1;
-    fifo.push(Chunk::allocate(fifo.info.first_chunk_size, 0));
+    fifo.push(chunk);
   }
   while (remaining_firings > 0) {
     fifo.push(Chunk::allocate(fifo.info.next_chunk_sizes, ooo_offset));
