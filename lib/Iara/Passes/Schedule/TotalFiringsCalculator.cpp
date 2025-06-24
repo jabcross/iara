@@ -1,5 +1,4 @@
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/LowerToTasksPass.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include <llvm/ADT/STLExtras.h>
@@ -22,8 +21,8 @@ mlir::LogicalResult LowerToTasksPass::calculateTotalFirings(ActorOp actor) {
   // Generate input file.
 
   std::error_code input_error_code;
-  llvm::raw_fd_ostream input_file{input_filename, input_error_code,
-                                  llvm::sys::fs::FileAccess::FA_Write};
+  llvm::raw_fd_ostream input_file{
+      input_filename, input_error_code, llvm::sys::fs::FileAccess::FA_Write};
 
   auto nodes = actor.getOps<NodeOp>() | IntoVector();
 

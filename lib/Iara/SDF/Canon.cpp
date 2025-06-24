@@ -100,7 +100,6 @@ LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(Value value, i64 size) {
 }
 
 LogicalResult expandToBroadcast(OpResult &value) {
-  auto module = value.getDefiningOp()->getParentOfType<ModuleOp>();
   OpBuilder builder(value.getOwner());
   builder.setInsertionPointAfter(value.getOwner());
 

@@ -67,9 +67,8 @@ std::string stringifyType(Type type) {
   return {safe_name};
 }
 
-std::pair<func::FuncOp, OpBuilder>
-createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
-                                Location loc) {
+std::pair<func::FuncOp, OpBuilder> createEmptyVoidFunctionWithBody(
+    OpBuilder builder, StringRef name, Location loc) {
   auto rv =
       builder.create<func::FuncOp>(loc, name, builder.getFunctionType({}, {}));
   auto entry = rv.addEntryBlock();
@@ -137,7 +136,10 @@ void ensureFuncDeclExists(func::CallOp call) {
   }
 
   auto decl = CREATE(
-      func::FuncOp, builder, module.getLoc(), call.getCallee(),
+      func::FuncOp,
+      builder,
+      module.getLoc(),
+      call.getCallee(),
       builder.getFunctionType(call->getOperandTypes(), call->getResultTypes()));
   decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
   decl.setVisibility(SymbolTable::Visibility::Private);
@@ -160,8 +162,11 @@ void ensureFuncDeclExists(LLVM::CallOp call) {
     return;
   }
 
-  auto decl = CREATE(LLVM::LLVMFuncOp, builder, module.getLoc(),
-                     *call.getCallee(), call.getCalleeFunctionType());
+  auto decl = CREATE(LLVM::LLVMFuncOp,
+                     builder,
+                     module.getLoc(),
+                     *call.getCallee(),
+                     call.getCalleeFunctionType());
   decl->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
   decl.setVisibility(SymbolTable::Visibility::Private);
 }
@@ -177,5 +182,7 @@ std::string mydump(Operation *op) {
   llvm::errs() << rv << "\n\n";
   return rv;
 }
+
+Operation *parent(Operation *op) { return op->getParentOp(); }
 
 } // namespace iara::util::mlir

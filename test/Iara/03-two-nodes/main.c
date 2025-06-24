@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void run();
+void iara_runtime_init();
+void iara_runtime_run_iteration(int64_t graph_iteration);
 
 void a(int val[1]) {
   printf("Hello ");
@@ -16,6 +17,7 @@ void b(int val[1]) {
 }
 
 int main() {
-  run();
+  iara_runtime_init();
+  iara_runtime_run_iteration(0);
   return 0;
 }

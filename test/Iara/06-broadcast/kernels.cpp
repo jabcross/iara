@@ -4,8 +4,10 @@
 
 pthread_mutex_t mutex;
 
+extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
+
 extern "C" {
-void run();
 
 void a(int val[1]) {
   printf("Broadcast!\n");
@@ -29,7 +31,8 @@ void c(int val[1]) {
 
 int main() {
   pthread_mutex_init(&mutex, NULL);
-  run();
+  iara_runtime_init();
+  iara_runtime_run_iteration(0);
   return 0;
 }
 }

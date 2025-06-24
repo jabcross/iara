@@ -1,6 +1,6 @@
 #ifndef MLIR_IARA_MLIR_UTIL_H
 #define MLIR_IARA_MLIR_UTIL_H
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include "OpCreateHelper.h"
 #include <cstdint>
 #include <functional>
@@ -54,9 +54,8 @@ inline i64 getNextPowerOf10(i64 n) {
   return rv;
 }
 
-std::pair<func::FuncOp, OpBuilder>
-createEmptyVoidFunctionWithBody(OpBuilder builder, StringRef name,
-                                Location loc);
+std::pair<func::FuncOp, OpBuilder> createEmptyVoidFunctionWithBody(
+    OpBuilder builder, StringRef name, Location loc);
 OpOperand &appendOperand(Operation *op, Value val);
 void moveBlockAfter(Block *to_move, Block *after_this);
 void viewGraph(Operation *op);
@@ -125,6 +124,7 @@ template <> struct MLIRTypeOf<i64> {
 };
 
 std::string mydump(Operation *op);
+Operation *parent(Operation *op);
 
 class AttrAccessor {
 public:
@@ -180,7 +180,6 @@ template <class T> inline auto operator|(T &&lhs, AssertNonNull rhs) {
   }
   return std::forward<T>(lhs);
 }
-
 void ensureFuncDeclExists(func::CallOp call);
 void ensureFuncDeclExists(LLVM::CallOp call);
 

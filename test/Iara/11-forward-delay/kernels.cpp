@@ -5,26 +5,25 @@
 
 std::mutex m;
 
-extern "C" void a(int32_t out[1]) {
-  out[0] = 4;
+extern "C" void iara_runtime_init(int64_t num_threads);
+extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
+
+extern "C" void a(int32_t out[2]) {
+  static int counter = 0;
   m.lock();
-  fprintf(stderr, "A sent: %d\n", out[0]);
-  fflush(stderr);
+  out[0] = counter++;
+  out[1] = counter++;
   m.unlock();
 }
 
-extern "C" void b(const int32_t in[1]) {
-  m.lock();
-  fprintf(stderr, "B received: %d\n", in[0]);
-  fflush(stderr);
-  printf("%d ", in[0]);
-  fflush(stdout);
-  m.unlock();
+extern "C" void b(const int32_t in[3]) {
+  printf("%d %d %d ", in[0], in[1], in[2]);
 }
-
-extern "C" void run();
 
 extern "C" int main() {
-  run();
+  iara_runtime_init(1);
+  iara_runtime_run_iteration(0);
+  printf("\n");
+  iara_runtime_run_iteration(1);
   return 0;
 }

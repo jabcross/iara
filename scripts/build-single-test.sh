@@ -57,14 +57,14 @@ source $PATH_TO_TEST_SOURCES/extra_args.sh
 pwd
 pwd >&2
 
-iara-opt --flatten --$SCHEDULER_MODE $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null
+\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt --flatten --$SCHEDULER_MODE $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null"
 
 sh -x mlir-to-llvmir.sh schedule.mlir
 
 shopt -s nullglob
 
 echo building schedule
-clang++ -g -xir -c schedule.ll -o schedule.o
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "clang++ -g -xir -c schedule.ll -o schedule.o"
 RC=$?
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
@@ -80,7 +80,7 @@ echo building c kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
   for c_file in $PATH_TO_TEST_SOURCES/*.c; do
     echo "Compiling $c_file"
-    clang++ -g -xc -c "$c_file" $INCLUDES $EXTRA_KERNEL_ARGS
+    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "clang++ -g -xc -c "$c_file" $INCLUDES $EXTRA_KERNEL_ARGS"
     RC=$?
     echo c kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -94,7 +94,7 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    clang++ -g -xc++ -std=c++20 -c "$cpp_file" $INCLUDES
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "clang++ -g -xc++ -std=c++20 -c "$cpp_file" $INCLUDES"
     RC=$?
     echo cpp kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -105,7 +105,7 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
 fi
 
 echo building runtime
-clang++ -g -xc++ -std=c++20 -fopenmp=libomp $SCHEDULER_SOURCES $INCLUDES
+\time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ -g -xc++ -std=c++20 -fopenmp=libomp $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
 echo executable return code: $?
 if [ $RC -ne 0 ]; then
@@ -114,7 +114,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-clang++ -g -lomp -lpthread -fuse-ld=mold $EXTRA_LINKER_ARGS *.o $INCLUDES
+\time -f 'linking took %E and returned code %x' bash -xc "clang++ -g -lomp -lpthread -fuse-ld=mold $EXTRA_LINKER_ARGS *.o $INCLUDES"
 RC=$?
 echo linker return code: $?
 if [ $RC -ne 0 ]; then

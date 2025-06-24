@@ -1,4 +1,4 @@
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include "IaraRuntime/Chunk.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
@@ -9,26 +9,7 @@
 extern std::span<SDF_OoO_Node> iara_runtime_nodes;
 extern std::span<SDF_OoO_FIFO> iara_runtime_edges;
 
-extern "C" void kickstart_alloc(SDF_OoO_Node *alloc) {
-  auto &fifo = **alloc->output_fifos.ptr;
-  auto remaining_firings = alloc->info.total_firings;
-  assert(remaining_firings > 0);
-  i64 ooo_offset = 0;
-  i64 total_delays = fifo.info.delay_offset + fifo.info.delay_size;
-  if (total_delays > 0) {
-    auto chunk = Chunk::allocate(fifo.info.first_chunk_size, 0);
-    auto delays = chunk.take_front(total_delays);
-    fifo.propagate_delays(delays);
-    ooo_offset += total_delays;
-    remaining_firings -= 1;
-    fifo.push(chunk);
-  }
-  while (remaining_firings > 0) {
-    fifo.push(Chunk::allocate(fifo.info.next_chunk_sizes, ooo_offset));
-    remaining_firings -= 1;
-    ooo_offset += fifo.info.next_chunk_sizes;
-  }
-}
+i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 
 extern "C" void iara_runtime_alloc(i64 seq, Chunk *chunk) {
   chunk->allocated = (i8 *)malloc(chunk->data_size);
@@ -36,4 +17,27 @@ extern "C" void iara_runtime_alloc(i64 seq, Chunk *chunk) {
 
 extern "C" void iara_runtime_dealloc(i64 seq, Chunk *chunk) {
   free(chunk->allocated);
+}
+
+extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
+  for (auto &node : iara_runtime_nodes) {
+    if (node.needs_priming()) {
+      for (i64 i = graph_iteration * node.info.total_iter_firings,
+               e = i + node.info.total_iter_firings;
+           i < e;
+           i++) {
+        node.prime(i);
+      }
+    }
+  }
+}
+
+extern "C" void iara_runtime_init(i64 num_threads) {
+  for (auto &node : iara_runtime_nodes) {
+    node.init();
+  }
+  for (auto &node : iara_runtime_nodes) {
+    if (node.info.isAlloc())
+      node.fireAlloc(0);
+  }
 }

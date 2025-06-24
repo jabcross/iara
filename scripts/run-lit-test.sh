@@ -40,8 +40,8 @@ fi
 
 # Run the test
 if [[ $IGNORE_RESULT -eq 1 ]]; then
-	llvm-lit -v "${REMAINING_ARGS[@]}" "${IARA_DIR}/build/test/Iara/${TEST_NAME}"
+	llvm-lit -a "${REMAINING_ARGS[@]}" "${IARA_DIR}/build/test/Iara/${TEST_NAME}"
 	exit 0
 else
-	llvm-lit -v "${REMAINING_ARGS[@]}" "${IARA_DIR}/build/test/Iara/${TEST_NAME}"
+	llvm-lit -a "${REMAINING_ARGS[@]}" "${IARA_DIR}/build/test/Iara/${TEST_NAME}"
 fi

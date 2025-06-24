@@ -91,9 +91,6 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
 
     let extraClassDeclaration = [{
         bool isFlat();
-        auto getInoutPairs(){
-            return llvm::zip_first(getInout(), getResults());
-        }
         auto getPureOuts(){
             return getResults().drop_front(getInout().size());
         }

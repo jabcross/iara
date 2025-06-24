@@ -27,20 +27,40 @@ using namespace iara::util::range;
 
 enum class Direction { Forward, Backward };
 
+bool isDeallocEdge(EdgeOp edge) { return edge.getConsumerNode().isDealloc(); }
+
+Vec<EdgeOp> getInoutChain(EdgeOp edge) {
+  Vec<EdgeOp> rv;
+  auto first = findFirstEdgeOfChain(edge);
+  EdgeOp iter = first;
+  while (iter) {
+    rv.push_back(iter);
+    iter = followInoutChainForwards(iter);
+  }
+  return rv;
+}
+
+NodeOp findFirstNodeOfChain(EdgeOp edge) {
+  return findFirstEdgeOfChain(edge).getProducerNode();
+}
+
 Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
   Vec<Vec<EdgeOp>> chains;
   for (auto edge : actor.getOps<EdgeOp>()) {
     // Only once per inout chain.
     if (iara::followInoutChainBackwards(edge))
       continue;
-    Vec<EdgeOp> chain;
-    while (edge) {
-      chain.push_back(edge);
-      edge = followInoutChainForwards(edge);
-    }
-    chains.push_back(chain);
+    chains.push_back(getInoutChain(edge));
   }
   return chains;
+}
+
+Vec<InoutPair> getInoutPairs(NodeOp node) {
+  Vec<InoutPair> rv;
+  for (auto [i, o] : llvm::zip_first(node.getInout(), node.getResults())) {
+    rv.emplace_back(i, o);
+  }
+  return rv;
 }
 
 LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data);
@@ -62,12 +82,13 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
         .input_bytes = input_bytes,
         .num_inputs = (i64)inputs.size(),
         .rank = -1,
-        .total_firings = -1,
+        .total_iter_firings = -1,
+        .needs_priming = 1,
     };
   }
   return success(annotateNodeRanks(actor, data).succeeded() &&
                  annotateTotalFirings(actor, data).succeeded());
-}
+} // namespace iara::sdf
 
 LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data);
 
@@ -94,8 +115,8 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
         .delay_offset = -1,
         .delay_size = -1,
         // To fill in in the buffer sizing calculator.
-        .first_chunk_size = -1,
-        .next_chunk_sizes = -1,
+        .block_size_with_delays = -1,
+        .block_size_no_delays = -1,
         .prod_alpha = -1,
         .prod_beta = -1,
         .cons_alpha = -1,
@@ -104,6 +125,20 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   }
 
   return annotateDelayInfo(actor, data);
+}
+
+bool isInout(EdgeOp edge) {
+  return llvm::is_contained(getInoutPairs(edge.getProducerNode()) |
+                                Map([](auto p) { return p.out; }),
+                            edge.getIn()) &&
+         llvm::is_contained(edge.getConsumerNode().getInout(), edge.getOut());
+}
+
+void breakInout(EdgeOp edge) {
+  edge.getProducerNode().dump();
+  edge.dump();
+  edge.getConsumerNode().dump();
+  llvm_unreachable("Todo: break inout.");
 }
 
 LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
@@ -123,9 +158,13 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
 
   std::queue<std::pair<Operation *, int>> bfs{};
 
-  Operation *start_node = *actor.getOps<NodeOp>().begin();
-
-  bfs.push({start_node, 0});
+  // Start from all sources.
+  for (auto node : actor.getOps<NodeOp>()) {
+    if (node.getAllInputs().size() > 0)
+      continue;
+    Operation *op = node;
+    bfs.emplace(op, 1);
+  }
 
   auto flood_fill = [&](Operation *op, int rank) {
     auto node = dyn_cast<NodeOp>(op);
@@ -134,9 +173,9 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
     }
     if (node)
       setRank(node, rank);
-    for (auto operand : op->getOperands()) {
-      bfs.push({operand.getDefiningOp(), rank - 1});
-    }
+    // for (auto operand : op->getOperands()) {
+    //   bfs.push({operand.getDefiningOp(), rank - 1});
+    // }
     for (auto user : op->getUsers()) {
       bfs.push({user, rank + 1});
     }
@@ -151,7 +190,9 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   for (auto edge : actor.getOps<EdgeOp>()) {
     if (data.node_static_info[edge.getConsumerNode()].rank <=
         data.node_static_info[edge.getProducerNode()].rank) {
-      edge.emitError("Backwards edge.");
+      if (isInout(edge)) {
+        breakInout(edge);
+      }
       // todo: implement buffer
     }
   }
@@ -187,7 +228,7 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
     }
   }
 
-  if (analyseOOOBufferSizes(actor, data).failed())
+  if (analyseVirtualBufferSizes(actor, data).failed())
     return failure();
 
   // Fill out the delay offsets.
@@ -249,7 +290,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
     }
     for (auto [direction, edge, neighbor] : getNeighbors(node)) {
       Rational flow_ratio = edge.getFlowRatio().normalized();
-      if (direction == Direction::Forward) {
+      if (direction == Direction::Backward) {
         flow_ratio = flow_ratio.reciprocal();
       }
       auto neighbor_firings = total_firings[node] * flow_ratio;
@@ -257,8 +298,8 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
         if (total_firings[neighbor] != neighbor_firings) {
           node->emitError(
               "Graph is not admissible (inconsistent iteration numbers ")
-              << llvm::formatv("{0} and {1}", total_firings[neighbor],
-                               neighbor_firings)
+              << llvm::formatv(
+                     "{0} and {1}", total_firings[neighbor], neighbor_firings)
               << "\n";
           // node->dump();
           // neighbor->dump();
@@ -274,15 +315,16 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
 
   // All iteration numbers must be integers. Multiply all by lcm of
   // denominators.
-  i64 mult = std::reduce(denominators.begin(), denominators.end(), 1,
+  i64 mult = std::reduce(denominators.begin(),
+                         denominators.end(),
+                         1,
                          [](auto a, auto b) { return std::lcm(a, b); });
 
   for (auto [node, firings] : total_firings) {
     firings = firings * mult;
     firings = firings.normalized();
     assert(firings.denom == 1);
-    auto total_firings = mult * firings.num;
-    data.node_static_info[node].total_firings = total_firings;
+    data.node_static_info[node].total_iter_firings = firings.num;
   }
   return success();
 }

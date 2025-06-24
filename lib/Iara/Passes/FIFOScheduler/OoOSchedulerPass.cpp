@@ -1,6 +1,5 @@
 #include "Iara/Codegen/Codegen.h"
 #include "Iara/Codegen/GetMLIRType.h"
-#include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/FIFOScheduler/OoOSchedulerPass.h"
 #include "Iara/SDF/Canon.h"
@@ -13,9 +12,7 @@
 #include "IaraRuntime/DynamicQueueScheduler.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
-#include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <cstddef>
-#include <iterator>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -243,9 +240,7 @@ struct OoOSchedulerPass::Impl {
 
   void codegenEdgeInit(OpBuilder builder, EdgeOp edge, SDF_OoO_FIFO &info) {}
 
-  FailureOr<FuncOp> convertToFunction(ActorOp actor, StaticAnalysisData &data) {
-    auto [main_func, main_func_builder] = createEmptyVoidFunctionWithBody(
-        OpBuilder(actor), actor.getSymName(), actor.getLoc());
+  LogicalResult codegenStaticData(ActorOp actor, StaticAnalysisData &data) {
 
     // fill out infos
 
@@ -259,6 +254,7 @@ struct OoOSchedulerPass::Impl {
     DenseMap<EdgeOp, size_t> runtime_edge_data_index;
     DenseMap<EdgeOp, SDF_OoO_FIFO *> runtime_edge_data;
 
+    DenseMap<NodeOp, Vec<SDF_OoO_FIFO *>> input_fifos;
     DenseMap<NodeOp, Vec<SDF_OoO_FIFO *>> output_fifos;
     DenseMap<EdgeOp, ArrayRef<char>> delay_data;
 
@@ -274,7 +270,7 @@ struct OoOSchedulerPass::Impl {
       runtime_node_data_index[node] = _node_infos.size() - 1;
       info.info = data.node_static_info[node];
       info.wrapper = (SDF_OoO_Node::WrapperType *)&dummy_ptrs[i];
-      info.semaphore_map = nullptr;
+      info.sema_variant.null = nullptr;
     }
 
     std::span<SDF_OoO_Node> node_infos(_node_infos);
@@ -291,6 +287,8 @@ struct OoOSchedulerPass::Impl {
           &node_infos[runtime_node_data_index[edge.getConsumerNode()]];
       info.producer =
           &node_infos[runtime_node_data_index[edge.getProducerNode()]];
+      info.alloc_node =
+          &node_infos[runtime_node_data_index[findFirstNodeOfChain(edge)]];
 
       if (info.info.delay_size > 0) {
         auto delay = edge->getAttrOfType<DenseArrayAttr>("delay");
@@ -305,6 +303,20 @@ struct OoOSchedulerPass::Impl {
     std::span<SDF_OoO_FIFO> edge_infos{_edge_infos};
 
     for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
+
+      input_fifos[node].reserve(
+          node.getAllInputs()
+              .size()); // prevent it from moving around in memory?
+      for (auto input : node.getAllInputs()) {
+        auto edge = cast<EdgeOp>(input.getDefiningOp());
+        input_fifos[node].push_back(runtime_edge_data[edge]);
+      }
+      for (auto edge_info : input_fifos[node]) {
+        assert(edge_info != nullptr);
+      }
+      info.input_fifos = Span<SDF_OoO_FIFO *>{input_fifos[node].begin(),
+                                              input_fifos[node].size()};
+
       output_fifos[node].reserve(
           node.getAllOutputs()
               .size()); // prevent it from moving around in memory?
@@ -334,51 +346,10 @@ struct OoOSchedulerPass::Impl {
                                                      {edges},
                                                      {wrappers});
 
-    auto node_info_ptrs =
-        codegenBuilder.codegenStaticData()(main_func_builder, actor.getLoc());
-
-    // Init nodes
-
-    auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
-    auto init_func = CREATE(LLVM::LLVMFuncOp,
-                            mod_builder,
-                            module.getLoc(),
-                            "iara_runtime_node_init",
-                            LLVM::LLVMFunctionType::get(
-                                LLVMVoidType::get(ctx()), {opaque_ptr_type}));
-
-    for (auto [i, node, info, ptr] :
-         enumerate(nodes, node_infos, node_info_ptrs)) {
-
-      CREATE(LLVM::CallOp, main_func_builder, node.getLoc(), init_func, {ptr});
-    }
-
-    // kickstart allocs
-
-    auto kickstart_func =
-        CREATE(LLVM::LLVMFuncOp,
-               mod_builder,
-               module.getLoc(),
-               "kickstart_alloc",
-               LLVM::LLVMFunctionType::get(LLVMVoidType::get(ctx()),
-                                           {opaque_ptr_type}));
-
-    for (auto [i, node, info, ptr] :
-         enumerate(nodes, node_infos, node_info_ptrs)) {
-      if (!node.isAlloc())
-        continue;
-
-      CREATE(LLVM::CallOp,
-             main_func_builder,
-             node.getLoc(),
-             kickstart_func,
-             {ptr});
-    }
-
-    CREATE(LLVM::ReturnOp, main_func_builder, main_func.getLoc(), ValueRange{});
+    codegenBuilder.codegenStaticData();
 
     actor->erase();
-    return main_func;
+    return success();
   }
 
   LogicalResult runOnOperation(ModuleOp module) {
@@ -390,7 +361,7 @@ struct OoOSchedulerPass::Impl {
     return success(
         succeeded(static_analysis) &&
         succeeded(generateAllocsAndFrees(main_actor, *static_analysis)) &&
-        succeeded(convertToFunction(main_actor, *static_analysis)));
+        succeeded(codegenStaticData(main_actor, *static_analysis)));
   }
 };
 

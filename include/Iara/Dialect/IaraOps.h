@@ -10,7 +10,7 @@
 #define IARA_IARAOPS_H
 
 #include "Iara/Dialect/IaraDialect.h"
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/rational.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"

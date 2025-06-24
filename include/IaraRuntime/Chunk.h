@@ -1,7 +1,7 @@
 #ifndef IARARUNTIME_MEMREF1D_H
 #define IARARUNTIME_MEMREF1D_H
 
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -16,7 +16,7 @@
 struct Chunk {
 
   i8 *allocated = nullptr;
-  i64 ooo_offset = 0;
+  i64 virtual_offset = 0;
   i8 *data;
   i64 data_size;
 
@@ -31,7 +31,7 @@ public:
     rv.data_size = amount;
     data += amount;
     data_size -= amount;
-    ooo_offset += amount;
+    virtual_offset += amount;
     if (data_size == 0) {
       release();
     }
@@ -51,15 +51,17 @@ public:
   void release() { *this = Chunk(); }
 
   static Chunk make_empty() { return Chunk(); }
-  static Chunk allocate(i64 size, i64 ooo_offset) {
+  static Chunk allocate(i64 size, i64 virtual_offset) {
     auto allocated = (i8 *)malloc(size);
     return Chunk{
         .allocated = allocated,
-        .ooo_offset = ooo_offset,
+        .virtual_offset = virtual_offset,
         .data = allocated,
         .data_size = size,
     };
   }
+
+  bool is_empty() { return data_size == 0; }
 };
 
 #endif

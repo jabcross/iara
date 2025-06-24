@@ -7,8 +7,8 @@
 namespace iara::sdf {
 using namespace iara::dialect;
 
-LogicalResult analyseOOOBufferSizes(ActorOp actor,
-                                    iara::sdf::StaticAnalysisData &data) {
+LogicalResult analyseVirtualBufferSizes(ActorOp actor,
+                                        iara::sdf::StaticAnalysisData &data) {
   auto chains = getInoutChains(actor);
   for (auto &chain : chains) {
 
@@ -37,8 +37,8 @@ LogicalResult analyseOOOBufferSizes(ActorOp actor,
     for (auto [i, edge] : enumerate(chain)) {
       auto &info = data.edge_static_info[edge];
 
-      info.first_chunk_size = first_buffer_size;
-      info.next_chunk_sizes = next_buffer_sizes;
+      info.block_size_with_delays = first_buffer_size;
+      info.block_size_no_delays = next_buffer_sizes;
       info.prod_alpha = buffer_values->alpha[i];
       info.prod_beta = buffer_values->beta[i];
       info.cons_alpha = buffer_values->alpha[i + 1];

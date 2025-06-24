@@ -10,6 +10,7 @@ struct SDF_OoO_RuntimeData {
   Span<SDF_OoO_FIFO> fifo_infos;
 };
 
-extern "C" void kickstart_alloc(SDF_OoO_Node *alloc);
+extern "C" void iara_runtime_init(i64 num_threads);
+extern "C" void iara_runtime_run_iteration(i64 graph_iteration);
 
 #endif // IARA_RUNTIME_SDF_OOO_SCHEDULER_H

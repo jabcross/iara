@@ -13,7 +13,20 @@ namespace iara::sdf {
 
 using namespace dialect;
 
+bool isDeallocEdge(EdgeOp edge);
+
+Vec<EdgeOp> getInoutChain(EdgeOp edge);
+
+NodeOp findFirstNodeOfChain(EdgeOp edge);
+
 Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor);
+
+struct InoutPair {
+  Value in;
+  Value out;
+};
+
+Vec<InoutPair> getInoutPairs(NodeOp node);
 
 struct SDFNode : NodeOp {
   inline i64 total_firings() {

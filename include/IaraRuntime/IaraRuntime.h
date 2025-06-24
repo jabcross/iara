@@ -1,7 +1,7 @@
 #ifndef IARA_RUNTIME_H
 #define IARA_RUNTIME_H
 
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -28,7 +28,8 @@ extern const i64 iara_runtime_num_edges;
 
 extern "C" void iara_runtime_processDependency(i64 first_prod_iteration,
                                                i64 last_prod_iteration,
-                                               i64 edge_id, byte *buffer_root);
+                                               i64 edge_id,
+                                               byte *buffer_root);
 
 extern "C" void iara_runtime_createRuntime();
 

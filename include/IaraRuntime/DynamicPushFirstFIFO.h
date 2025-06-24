@@ -1,7 +1,7 @@
 #ifndef IARA_RUNTIME_DYNAMIC_PUSH_FIRST_FIFO_H
 #define IARA_RUNTIME_DYNAMIC_PUSH_FIRST_FIFO_H
 
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -31,8 +31,7 @@ extern "C" void iara_fifo_runtime_DynamicPushFirstFifo_push(void *fifo,
                                                             i64 sequence_number,
                                                             byte *data);
 
-extern "C" byte *
-iara_fifo_runtime_DynamicPushFirstFifo_pop(void *fifo, i64 size,
-                                           i64 sequence_number);
+extern "C" byte *iara_fifo_runtime_DynamicPushFirstFifo_pop(
+    void *fifo, i64 size, i64 sequence_number);
 
 #endif

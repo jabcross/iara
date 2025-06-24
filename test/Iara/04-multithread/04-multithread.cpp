@@ -5,7 +5,8 @@
 
 using namespace std::chrono_literals;
 
-extern "C" void run();
+extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
 
 extern "C" void a(size_t val[1]) {
   std::this_thread::sleep_for(500ms);
@@ -26,6 +27,7 @@ extern "C" void c(size_t a[1], size_t b[1]) {
 }
 
 int main() {
-  run();
+  iara_runtime_init();
+  iara_runtime_run_iteration(0);
   return 0;
 }

@@ -1,4 +1,4 @@
-#include "Iara/Util/Types.h"
+#include "Iara/Util/CommonTypes.h"
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringExtras.h>

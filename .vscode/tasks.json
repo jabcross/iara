@@ -1,37 +1,37 @@
 {
   "version": "2.0.0",
   "inputs": [
-    // {
-    //   "id": "test",
-    //   "type": "command",
-    //   "command": "extension.commandvariable.pickStringRemember",
-    //   "args": {
-    //     "options": [
-    //       "03-two-nodes",
-    //       "04-multithread",
-    //       "05-cholesky",
-    //       "06-broadcast",
-    //       "07-ownership",
-    //       "09-hierarchy",
-    //       "10-multi-rate",
-    //       "11-forward-delay"
-    //     ],
-    //     "description": "Which test to run",
-    //     "key": "pickedTest",
-    //   }
-    // },
-    // {
-    //   "id": "scheduler",
-    //   "type": "command",
-    //   "command": "extension.commandvariable.pickStringRemember",
-    //   "args": {
-    //     "options": [
-    //       "ooo-scheduler"
-    //     ],
-    //     "description": "Which scheduler to use",
-    //     "key": "pickedScheduler"
-    //   }
-    // },
+    {
+      "id": "test",
+      "type": "command",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "options": [
+          "03-two-nodes",
+          "04-multithread",
+          "05-cholesky",
+          "06-broadcast",
+          "07-ownership",
+          "09-hierarchy",
+          "10-multi-rate",
+          "11-forward-delay"
+        ],
+        "description": "Which test to run",
+        "key": "pickedTest",
+      }
+    },
+    {
+      "id": "scheduler",
+      "type": "command",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "options": [
+          "ooo-scheduler"
+        ],
+        "description": "Which scheduler to use",
+        "key": "pickedScheduler"
+      }
+    },
     {
       "id": "remember_test",
       "type": "command",
@@ -95,7 +95,21 @@
     {
       "label": "Build test",
       "type": "shell",
-      "command": "scripts/build-test.sh test/Iara/${input:remember_test} ${input:remember_scheduler}",
+      "command": "scripts/build-single-test.sh test/Iara/${input:remember_test} ${input:remember_scheduler}",
+      "options": {
+        "env": {
+          "MOLD_PATH": "/usr/bin/mold",
+          // "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
+        }
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Build test (pick)",
+      "type": "shell",
+      "command": "scripts/build-single-test.sh test/Iara/${input:test} ${input:scheduler}",
       "options": {
         "env": {
           "MOLD_PATH": "/usr/bin/mold",

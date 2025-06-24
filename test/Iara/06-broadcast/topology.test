@@ -1,6 +1,6 @@
 // RUN: export SCHEDULER_MODE=$SCHEDULER_MODE
 // RUN: pwd >&2
-// RUN: build-test.sh .
+// RUN: build-single-test.sh .
 // RUN: pwd >&2
 // RUN: ls build >&2
 // RUN: ./build/a.out > ./build/output.txt

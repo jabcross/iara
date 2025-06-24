@@ -10,7 +10,6 @@
 
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/LowerToTasksPass.h"
 #include "mlir/Pass/Pass.h"
 #include <memory>
 

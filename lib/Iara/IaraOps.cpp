@@ -6,8 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Dialect/IaraDialect.h"
+#include "Iara/Dialect/IaraOps.h"
+#include "Iara/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/rational.h"
@@ -39,6 +40,7 @@
 
 using namespace iara::util::range;
 using namespace iara::util::mlir;
+using namespace iara::sdf;
 
 namespace iara {
 
@@ -187,7 +189,7 @@ llvm::SmallVector<mlir::Value> NodeOp::getAllOutputs() {
 // Returns the operand that corresponds to this output, if they form an inout
 // pair. Null otherwise.
 Value NodeOp::getMatchingInoutInput(Value output) {
-  for (auto [in, out] : getInoutPairs()) {
+  for (auto [in, out] : getInoutPairs(*this)) {
     if (out == output)
       return in;
   }
@@ -197,7 +199,7 @@ Value NodeOp::getMatchingInoutInput(Value output) {
 // Returns the result that corresponds to this input, if they form an inout
 // pair. Null otherwise.
 Value NodeOp::getMatchingInoutOutput(Value input) {
-  for (auto [in, out] : getInoutPairs()) {
+  for (auto [in, out] : getInoutPairs(*this)) {
     if (in == input)
       return out;
   }
@@ -205,8 +207,8 @@ Value NodeOp::getMatchingInoutOutput(Value input) {
 }
 
 func::CallOp NodeOp::convertToCallOp() {
-  auto call_op = CREATE(func::CallOp, OpBuilder{*this}, getLoc(), getImpl(), {},
-                        getOperands());
+  auto call_op = CREATE(
+      func::CallOp, OpBuilder{*this}, getLoc(), getImpl(), {}, getOperands());
   erase();
   return call_op;
 }

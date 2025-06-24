@@ -2,12 +2,10 @@
 #ifndef IARA_CODEGEN_GETMLIRTYPE_H
 #define IARA_CODEGEN_GETMLIRTYPE_H
 
-#include "Iara/Codegen/Codegen.h"
-#include "Iara/Util/Types.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
+#include "Iara/Util/CommonTypes.h"
+#include "Iara/Util/Span.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
-#include <array>
 #include <boost/pfr/core.hpp>
 #include <cerrno>
 #include <cstdio>
@@ -19,11 +17,8 @@
 #include <mlir/IR/Types.h>
 #include <mlir/IR/ValueRange.h>
 #include <mlir/Support/TypeID.h>
-#include <ostream>
 #include <tuple>
 #include <type_traits>
-#include <typeinfo>
-#include <unordered_map>
 namespace iara::codegen {
 using namespace mlir;
 
@@ -65,14 +60,14 @@ template <typename T> struct GetMLIRType<std::vector<T> *> {
 template <class... Args> struct tag {};
 
 template <class T, class... Args>
-inline void fillWithTypes(MLIRContext *context, std::vector<Type> &types,
-                          tag<T, Args...>) {
+inline void
+fillWithTypes(MLIRContext *context, std::vector<Type> &types, tag<T, Args...>) {
   types.push_back(getMLIRType<T>(context));
   fillWithTypes(context, types, tag<Args...>{});
 }
 
-inline void fillWithTypes(MLIRContext *context, std::vector<Type> &types,
-                          tag<>) {}
+inline void
+fillWithTypes(MLIRContext *context, std::vector<Type> &types, tag<>) {}
 
 template <class... Args> auto getTypes(MLIRContext *context) {
   std::vector<Type> types;

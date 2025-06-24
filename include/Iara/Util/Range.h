@@ -1,7 +1,7 @@
 #ifndef UTIL_UTIL_H
 #define UTIL_UTIL_H
 
-#include "Types.h"
+#include "CommonTypes.h"
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -65,7 +65,7 @@ template <class R> struct OwnedElementType {
 template <class F> struct Filter {
   using type = F;
   F f;
-  Filter(F &&f) : f(f) {};
+  Filter(F &&f) : f(f){};
 };
 template <typename F> Filter(F) -> Filter<F>;
 
@@ -96,8 +96,12 @@ MapMember(Ret (Base::*)(Args...)) -> MapMember<Base, Ret, false, Args...>;
 template <typename Base, typename Ret, typename... Args>
 MapMember(Ret (Base::*)(Args...) const) -> MapMember<Base, Ret, true, Args...>;
 
-template <typename R, typename Base, typename Ret, bool is_const,
-          typename... Args, class T = decltype(std::begin(std::declval<R>()))>
+template <typename R,
+          typename Base,
+          typename Ret,
+          bool is_const,
+          typename... Args,
+          class T = decltype(std::begin(std::declval<R>()))>
 auto pipe(R &&range, MapMember<Base, Ret, is_const, Args...> &&transform)
     -> auto {
   return llvm::map_range(std::forward<R>(range),
@@ -153,9 +157,10 @@ template <class R> auto pipe(R &&range, IntoVector) -> auto {
   return llvm::to_vector(range);
 }
 
-template <
-    unsigned Size, typename R,
-    template <typename element_type, unsigned> typename CT = llvm::SmallVector>
+template <unsigned Size,
+          typename R,
+          template <typename element_type, unsigned>
+          typename CT = llvm::SmallVector>
 CT<typename OwnedElementType<R>::type, Size> pipe(R &&Range,
                                                   Into<std::nullptr_t> &&) {
   return {std::begin(Range), std::end(Range)};
@@ -252,7 +257,8 @@ template <class T> auto pipe(T &c, Copy) -> auto {
 
 // based on
 // https://stackoverflow.com/questions/17805969/writing-universal-memoization-function-in-c11
-template <typename... Args, typename F,
+template <typename... Args,
+          typename F,
           typename R = std::invoke_result_t<F, Args...>>
 auto memoize(F fn) {
   llvm::DenseMap<std::tuple<Args...>, R> table;

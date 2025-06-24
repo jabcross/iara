@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD 23 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# set(CMAKE_C_COMPILER clang)
+# set(CMAKE_CXX_COMPILER clang++)
+
 add_compile_definitions("IARA_DEBUG")
 add_compile_definitions("IARA_COMPILER")
 
@@ -58,3 +61,5 @@ if(MLIR_ENABLE_BINDINGS_PYTHON)
 endif()
 add_subdirectory(test)
 add_subdirectory(iara-opt)
+
+string(REPLACE "-fno-lifetime-dse" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

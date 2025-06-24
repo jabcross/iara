@@ -4,6 +4,12 @@
 #include <span>
 #include <vector>
 
+#ifdef IARA_COMPILER
+  #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
+  #include <mlir/IR/MLIRContext.h>
+  #include <mlir/IR/Types.h>
+#endif
+
 template <class T> struct Span {
   T *ptr = nullptr;
   size_t extents = 0;
@@ -19,15 +25,26 @@ template <class T> struct Span {
   static Span<T> from(const std::vector<T> &vec) {
     if (vec.empty())
       return {};
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-qual"
     return {(T *)&*vec.cbegin(), vec.size()};
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
   }
 
   inline size_t size() const { return extents; }
 
   inline std::span<T> asSpan() { return std::span<T>{ptr, extents}; }
 };
+
+#ifdef IARA_COMPILER
+
+inline mlir::Type getSpanType(mlir::MLIRContext *context) {
+  return mlir::LLVM::LLVMStructType::getLiteral(
+      context,
+      {mlir::LLVM::LLVMPointerType ::get(context),
+       mlir::IntegerType::get(context, 64)});
+}
+
+#endif
 
 #endif

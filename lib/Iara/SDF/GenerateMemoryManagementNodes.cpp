@@ -1,5 +1,6 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/SDF/SDF.h"
+#include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Range.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
@@ -30,8 +31,9 @@ void populateAllocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
   alloc_edge_info.cons_beta = first_edge_info.prod_beta;
   alloc_edge_info.delay_offset = first_edge_info.delay_offset;
   alloc_edge_info.delay_size = 0;
-  alloc_edge_info.first_chunk_size = first_edge_info.first_chunk_size;
-  alloc_edge_info.next_chunk_sizes = first_edge_info.next_chunk_sizes;
+  alloc_edge_info.block_size_with_delays =
+      first_edge_info.block_size_with_delays;
+  alloc_edge_info.block_size_no_delays = first_edge_info.block_size_no_delays;
 }
 
 EdgeOp createEdgeAdaptor(Value produced, Type consumed) {
@@ -118,40 +120,36 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     auto last_edge = followInoutChainBackwards(dealloc_edge);
     auto &last_edge_info = data.edge_static_info[last_edge];
     auto &dealloc_node_info = data.node_static_info[dealloc_node];
-    i64 alpha_firing = last_edge_info.cons_alpha > 0;
-    auto [beta_firings, rem] =
-        std::lldiv((last_node_info.total_firings - last_edge_info.cons_alpha) *
-                       last_edge_info.cons_rate,
-                   last_edge_info.next_chunk_sizes);
-    assert(rem == 0);
 
     dealloc_node_info = SDF_OoO_Node::StaticInfo{
         .id = i64(id_range * 30 + last_node_info.id),
-        .input_bytes = -1,
+        .input_bytes = -3,
         .num_inputs = 1,
         .rank = last_node_info.rank + 2,
-        .total_firings = alpha_firing + beta_firings,
+        .total_iter_firings = -3,
+        .needs_priming = 0,
     };
 
     auto &dealloc_edge_info = data.edge_static_info[dealloc_edge];
 
     // -1 = fill out later
-    // -2 = does not apply
+    // -2 = N/A (alloc)
+    // -3 = N/A (dealloc)
 
     dealloc_edge_info = SDF_OoO_FIFO::StaticInfo{
         .id = i64(id_range * 330 + last_node_info.id),
         .local_index = -1, // fill out later
         .prod_rate = last_edge_info.cons_rate,
-        .cons_rate = -2,
+        .cons_rate = -3,
         .cons_arg_idx = 1,
         .delay_offset = 0,
         .delay_size = 0,
-        .first_chunk_size = last_edge_info.first_chunk_size,
-        .next_chunk_sizes = last_edge_info.next_chunk_sizes,
+        .block_size_with_delays = last_edge_info.block_size_with_delays,
+        .block_size_no_delays = last_edge_info.block_size_no_delays,
         .prod_alpha = last_edge_info.cons_alpha,
         .prod_beta = last_edge_info.cons_beta,
-        .cons_alpha = -2,
-        .cons_beta = -2};
+        .cons_alpha = -3,
+        .cons_beta = -3};
   }
 }
 
@@ -160,6 +158,32 @@ void updateLocalIndices(EdgeOp edge, StaticAnalysisData &data, i64 start) {
   if (auto next = followInoutChainForwards(edge)) {
     updateLocalIndices(next, data, start + 1);
   }
+}
+
+// Return how many firings of other nodes depend on this block (no delays)
+// We assume that it's always going to be the same for any non-delay block.
+i64 calculateFiringsPerBlock(NodeOp alloc_node, StaticAnalysisData &data) {
+  auto alloc_edge = cast<EdgeOp>(*alloc_node->getUsers().begin());
+  auto first_edge = followInoutChainForwards(alloc_edge);
+
+  auto first_edge_info = data.edge_static_info[first_edge];
+
+  auto begin = first_edge_info.block_size_with_delays;
+  auto end = begin + first_edge_info.block_size_no_delays;
+
+  i64 dependent_firings_count = 0;
+
+  auto chain = getInoutChain(alloc_edge);
+  for (auto edge : chain) {
+    if (isDeallocEdge(edge))
+      continue;
+    auto [bf, ef] = SDF_OoO_FIFO::getFiringsFromVirtualOffsetRange(
+        first_edge_info, begin, end);
+    auto count = ef - bf;
+    assert(count >= 0);
+    dependent_firings_count += count;
+  }
+  return dependent_firings_count;
 }
 
 void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
@@ -172,7 +196,7 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
                    ->getParentOfType<ActorOp>()
                    .getOps<NodeOp>() |
                IntoVector();
-  auto id_range = getNextPowerOf10(nodes.size() + 1);
+  i64 id_range = getNextPowerOf10(nodes.size() + 1);
 
   for (auto val : vals) {
     auto alloc_edge = cast<EdgeOp>(val.getDefiningOp());
@@ -183,28 +207,23 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     auto &alloc_node_info = data.node_static_info[alloc_node];
     auto &first_edge_info = data.edge_static_info[first_edge];
     auto &first_node_info = data.node_static_info[first_node];
-    i64 alpha_firing = first_edge_info.prod_alpha > 0;
-    auto [beta_firings, rem] = std::lldiv(
-        (first_node_info.total_firings - first_edge_info.prod_alpha) *
-            first_edge_info.prod_rate,
-        first_edge_info.next_chunk_sizes);
-    assert(rem == 0);
 
     first_node_info.input_bytes += first_edge_info.prod_rate;
     first_node_info.num_inputs += 1;
 
     alloc_node_info = SDF_OoO_Node::StaticInfo{
-        .id = i64(id_range * 20 + first_node_info.id),
+        .id = id_range * 20 + first_node_info.id,
         .input_bytes = -2,
         .num_inputs = 0,
         .rank = first_node_info.rank - 2,
-        .total_firings = alpha_firing + beta_firings,
-    };
+        .total_iter_firings = calculateFiringsPerBlock(alloc_node, data),
+        .needs_priming = 0};
 
     auto &alloc_edge_info = data.edge_static_info[alloc_edge];
 
     // -1 = fill out later
-    // -2 = does not apply
+    // -2 = N/A (alloc)
+    // -3 = N/A (dealloc)
 
     alloc_edge_info = SDF_OoO_FIFO::StaticInfo{
         .id = i64(id_range * 220 + first_node_info.id),
@@ -215,8 +234,8 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
         .delay_offset =
             first_edge_info.delay_offset + first_edge_info.delay_size,
         .delay_size = 0,
-        .first_chunk_size = first_edge_info.first_chunk_size,
-        .next_chunk_sizes = first_edge_info.next_chunk_sizes,
+        .block_size_with_delays = first_edge_info.block_size_with_delays,
+        .block_size_no_delays = first_edge_info.block_size_no_delays,
         .prod_alpha = -2,
         .prod_beta = -2,
         .cons_alpha = first_edge_info.prod_alpha,

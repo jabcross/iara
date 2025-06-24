@@ -1,6 +1,0 @@
-#ifndef IARA_INCLUDE_IARA_CODEGEN_STRUCT_H
-#define IARA_INCLUDE_IARA_CODEGEN_STRUCT_H
-
-template <class T> struct StructGenerator {};
-
-#endif // IARA_INCLUDE_IARA_CODEGEN_STRUCT_H
