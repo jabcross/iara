@@ -28,6 +28,9 @@ extern "C" void c(size_t a[1], size_t b[1]) {
 
 int main() {
   iara_runtime_init();
+
+#pragma omp parallel
+#pragma omp single
   iara_runtime_run_iteration(0);
   return 0;
 }

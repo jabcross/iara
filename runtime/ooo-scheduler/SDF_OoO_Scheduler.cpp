@@ -4,6 +4,7 @@
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 
 extern std::span<SDF_OoO_Node> iara_runtime_nodes;
@@ -11,15 +12,23 @@ extern std::span<SDF_OoO_FIFO> iara_runtime_edges;
 
 i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 
+// std::unordered_map<void *, int> allocated_ptrs;
+
 extern "C" void iara_runtime_alloc(i64 seq, Chunk *chunk) {
   chunk->allocated = (i8 *)malloc(chunk->data_size);
 }
 
 extern "C" void iara_runtime_dealloc(i64 seq, Chunk *chunk) {
+  // assert(allocated_ptrs.contains(chunk->allocated));
+  // assert(allocated_ptrs[chunk->allocated] > 0);
+  // fprintf(stderr, "freeing ptr %d\n", allocated_ptrs[chunk->allocated]);
+  // fflush(stderr);
+  // allocated_ptrs[chunk->allocated] *= -1;
   free(chunk->allocated);
 }
 
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
+#pragma omp parallel for
   for (auto &node : iara_runtime_nodes) {
     if (node.needs_priming()) {
       for (i64 i = graph_iteration * node.info.total_iter_firings,
@@ -33,6 +42,7 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
 }
 
 extern "C" void iara_runtime_init(i64 num_threads) {
+  iara_runtime_num_threads = num_threads;
   for (auto &node : iara_runtime_nodes) {
     node.init();
   }

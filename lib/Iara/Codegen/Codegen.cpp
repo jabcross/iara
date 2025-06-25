@@ -1,11 +1,14 @@
 #include "Iara/Codegen/Codegen.h"
 #include "Iara/Codegen/GetMLIRType.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Span.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include <cassert>
+#include <mlir/Dialect/LLVMIR/LLVMAttrs.h>
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -18,6 +21,42 @@ using namespace mlir::LLVM;
 using namespace iara::dialect;
 
 // helper functions
+
+std::string getDebugName(NodeOp node, i64 id) {
+  if (node.isAlloc()) {
+    auto alloc_edge = cast<EdgeOp>(*node->getResult(0).getUsers().begin());
+    auto first_node = alloc_edge.getConsumerNode();
+    auto index = alloc_edge->getUses().begin()->getOperandNumber();
+    return llvm::formatv(
+        "allocNode_{0}[{1}]", getDebugName(first_node, id), index);
+  }
+  if (node.isDealloc()) {
+    auto dealloc_edge = cast<EdgeOp>(node->getOperand(0).getDefiningOp());
+    auto last_node = dealloc_edge.getProducerNode();
+    auto index = util::mlir::getResultIndex(dealloc_edge.getIn());
+    return llvm::formatv(
+        "deallocNode_{0}[{1}]", getDebugName(last_node, id), index);
+  }
+  return llvm::formatv("node_{0}_{1}", id, node.getImpl());
+}
+
+std::string getDebugName(EdgeOp edge, i64 id) {
+  auto prod = edge.getProducerNode();
+  auto cons = edge.getConsumerNode();
+  auto prod_index = util::mlir::getResultIndex(edge.getIn());
+  auto cons_index = edge->getUses().begin()->getOperandNumber();
+  if (prod.isAlloc()) {
+    return llvm::formatv("allocEdge_{0}[{1}]", cons.getImpl(), cons_index);
+  }
+  if (cons.isDealloc()) {
+    return llvm::formatv("deallocNode_{0}[{1}]", prod.getImpl(), prod_index);
+  }
+  return llvm::formatv("edge_{0}[{1}]->{2}[{3}]",
+                       prod.getImpl(),
+                       prod_index,
+                       cons.getImpl(),
+                       cons_index);
+}
 
 Value createConstOp(OpBuilder builder, Location loc, auto val) {
   DEF_OP(Value,
@@ -72,6 +111,7 @@ template <> struct GetMLIRType<SDF_OoO_Node> {
     return LLVM::LLVMStructType::getLiteral(
         context,
         {
+            opaque_ptr,                                     // name
             getMLIRType<SDF_OoO_Node::StaticInfo>(context), // info
             opaque_ptr,                                     // wrapper
             span_type,                                      // input_fifos
@@ -127,6 +167,7 @@ template <> struct GetMLIRType<SDF_OoO_FIFO> {
     return LLVMStructType::getLiteral(
         context,
         {
+            opaque_ptr,                                     // name
             getMLIRType<SDF_OoO_FIFO::StaticInfo>(context), // info
             getSpanType(context),                           // delay_data
             opaque_ptr,                                     // consumer
@@ -252,7 +293,7 @@ struct CodegenStaticData::Impl {
     return {lambda, values_builder};
   }
 
-  Value getWrapper(OpBuilder builder, Location loc, NodeOp node) {
+  Value buildWrapper(OpBuilder builder, Location loc, NodeOp node) {
     auto index = std::find(nodes.begin(), nodes.end(), node) - nodes.begin();
     auto wrapper = wrappers[index];
     return CREATE(AddressOfOp, builder, loc, opaque_ptr, wrapper.getSymName());
@@ -293,8 +334,8 @@ struct CodegenStaticData::Impl {
     return getElementTypeOrSelf(edge.getIn().getType());
   }
 
-  std::string getEdgeDelayName(i64 index) {
-    return (std::string)llvm::formatv("iara_runtime_data_delay_{0}", index);
+  std::string getEdgeDelayName(i64 id) {
+    return (std::string)llvm::formatv("iara_runtime_data_delay_{0}", id);
   }
 
   Value getDelayData(OpBuilder builder,
@@ -330,9 +371,22 @@ struct CodegenStaticData::Impl {
     input_fifos_spans.push_back(input_fifos_placeholder);
     output_fifos_spans.push_back(output_fifos_placeholder);
 
+    // leaked on purpose
+    auto node_name =
+        builder.getStringAttr(getDebugName(node, node_info.info.id));
+
+    auto name_global =
+        LLVM::createGlobalString(node->getLoc(),
+                                 builder,
+                                 node_name,
+                                 node_name,
+                                 LLVM::linkage::Linkage::External,
+                                 true);
+
     {
-      Vec<Value> values = {asValue(builder, loc, node_info.info),
-                           getWrapper(builder, loc, node),
+      Vec<Value> values = {name_global,
+                           asValue(builder, loc, node_info.info),
+                           buildWrapper(builder, loc, node),
                            input_fifos_placeholder,
                            output_fifos_placeholder,
                            getNullPtr(builder, loc)};
@@ -397,8 +451,20 @@ struct CodegenStaticData::Impl {
     alloc_node_ptrs.push_back(alloc_node);
     next_edge_ptrs.push_back(next_in_chain);
 
+    auto edge_name =
+        builder.getStringAttr(getDebugName(edge, edge_info.info.id));
+
+    auto name_global =
+        LLVM::createGlobalString(edge->getLoc(),
+                                 builder,
+                                 edge_name,
+                                 edge_name,
+                                 LLVM::linkage::Linkage::External,
+                                 true);
+
     {
-      Vec<Value> values = {static_info,
+      Vec<Value> values = {name_global,
+                           static_info,
                            getDelayData(builder, loc, edge, edge_info),
                            consumer,
                            producer,
@@ -539,13 +605,13 @@ struct CodegenStaticData::Impl {
       auto stitch_span = [&](Span<SDF_OoO_FIFO *> &list,
                              const char *suffix,
                              Value old) {
-        auto [inserter, builder] =
-            makeGlobalArray((std::string)llvm::formatv(
-                                "iara_runtime_data_node_{0}_{1}", i, suffix),
-                            opaque_ptr,
-                            alignof(SDF_OoO_FIFO),
-                            module.getLoc(),
-                            list.size());
+        auto [inserter, builder] = makeGlobalArray(
+            (std::string)llvm::formatv(
+                "iara_runtime_data_node_{0}_{1}", node_info.info.id, suffix),
+            opaque_ptr,
+            alignof(SDF_OoO_FIFO),
+            module.getLoc(),
+            list.size());
 
         for (auto [i_e, edge_info] : llvm::enumerate(list.asSpan())) {
           auto edge = info_to_edge[edge_info];
@@ -562,13 +628,13 @@ struct CodegenStaticData::Impl {
 
         auto node_struct_builder = OpBuilder(old.getDefiningOp());
         auto loc = node.getLoc();
-        Value new_span =
-            makeSpan(node_struct_builder,
-                     loc,
-                     opaque_ptr,
-                     (std::string)llvm::formatv(
-                         "iara_runtime_data_node_{0}_{1}", i, suffix),
-                     list.asSpan().size());
+        Value new_span = makeSpan(
+            node_struct_builder,
+            loc,
+            opaque_ptr,
+            (std::string)llvm::formatv(
+                "iara_runtime_data_node_{0}_{1}", node_info.info.id, suffix),
+            list.asSpan().size());
         old.replaceAllUsesWith(new_span);
         old.getDefiningOp()->erase();
         assert(module.verify().succeeded());

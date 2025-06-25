@@ -5,7 +5,7 @@
 
 std::mutex m;
 
-extern "C" void iara_runtime_init(int64_t num_threads);
+extern "C" void iara_runtime_init();
 extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
 
 extern "C" void a(int32_t out[2]) {

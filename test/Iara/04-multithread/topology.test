@@ -25,4 +25,4 @@ iara.actor @run  {
   iara.node @c in %1, %2 : tensor<1xi64> , tensor<1xi64>
 }
 
-// CHECK: Ran
+// CHECK: Ran in different threads

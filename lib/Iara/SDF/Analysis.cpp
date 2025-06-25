@@ -12,6 +12,12 @@ LogicalResult analyseVirtualBufferSizes(ActorOp actor,
   auto chains = getInoutChains(actor);
   for (auto &chain : chains) {
 
+    llvm::errs() << "Sizing chain:\n";
+
+    for (auto edge : chain) {
+      edge->dump();
+    }
+
     Vec<i64> rates, delays;
 
     rates.push_back(data.edge_static_info[chain.front()].prod_rate);
@@ -30,8 +36,7 @@ LogicalResult analyseVirtualBufferSizes(ActorOp actor,
       return failure();
     }
 
-    auto first_buffer_size =
-        buffer_values->alpha.back() * rates.back() + delays.back();
+    auto first_buffer_size = buffer_values->alpha.back() * rates.back();
     auto next_buffer_sizes = buffer_values->beta.back() * rates.back();
 
     for (auto [i, edge] : enumerate(chain)) {

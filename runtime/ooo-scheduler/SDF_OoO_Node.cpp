@@ -4,7 +4,9 @@
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
+#include <unordered_set>
 
 struct SDF_OoO_Node::NormalSemaphore {
 
@@ -18,8 +20,8 @@ struct SDF_OoO_Node::NormalSemaphore {
   };
 
   struct LastArgs {
-    i64 cons_seq;
-    SDF_OoO_Node *_this;
+    bool *may_fire;
+    Span<Chunk> *args;
   };
 
   static void first_time_func(FirstArgs &f_args, Span<Chunk> &kernel_args) {
@@ -45,7 +47,8 @@ struct SDF_OoO_Node::NormalSemaphore {
   };
 
   static void last_time_func(LastArgs &l_args, Span<Chunk> &kernel_args) {
-    l_args._this->fire(l_args.cons_seq, kernel_args);
+    *l_args.may_fire = true;
+    *l_args.args = kernel_args;
   };
 
   using Semaphore = keyed_semaphore::KeyedSemaphore<Span<Chunk>,
@@ -64,8 +67,7 @@ struct SDF_OoO_Node::AllocSemaphore {
   struct EntryData {};
 
   struct FirstArgs {
-    SDF_OoO_Node *_this;
-    i64 seq;
+    bool *may_alloc;
   };
 
   struct EveryTimeArgs {};
@@ -74,7 +76,7 @@ struct SDF_OoO_Node::AllocSemaphore {
 
   static void first_time_func(FirstArgs &f_args, EntryData &kernel_args) {
     // Init args vector with appropriate size.
-    f_args._this->fireAlloc(f_args.seq);
+    *f_args.may_alloc = true;
   };
 
   static void every_time_func(EveryTimeArgs &et_args, EntryData &kernel_args){};
@@ -101,9 +103,28 @@ void SDF_OoO_Node::consume(i64 seq,
       NormalSemaphore::EveryTimeArgs{.data = std::move(chunk),
                                      .arg_idx = arg_idx,
                                      .first_of_firing = (offset_partial == 0)};
-  auto l = NormalSemaphore::LastArgs{seq, this};
+
+  bool may_fire = false;
+  Span<Chunk> args;
+
+  auto l = NormalSemaphore::LastArgs{&may_fire, &args};
+
+  // fprintf(stderr,
+  //         "Consume %ld of %s[%ld] (chunk %ld:%ld)\n",
+  //         seq,
+  //         name,
+  //         arg_idx,
+  //         chunk.virtual_offset,
+  //         chunk.virtual_offset + chunk.data_size);
+  // fflush(stderr);
+
+  // will set may_fire to true if it's the last dependency.
   sema_variant.normal->semaphore.arrive(
       seq, chunk.data_size, info.input_bytes + info.needs_priming, f, e, l);
+
+  if (may_fire) {
+    fire(seq, args);
+  }
 }
 
 void SDF_OoO_Node::dealloc(i64 current_buffer_size,
@@ -112,7 +133,7 @@ void SDF_OoO_Node::dealloc(i64 current_buffer_size,
                            Chunk chunk) {
   i64 seq = 0;
   i64 off = chunk.virtual_offset;
-  if (chunk.virtual_offset > first_buffer_size) {
+  if (chunk.virtual_offset >= first_buffer_size) {
     auto pair =
         lldiv(chunk.virtual_offset - first_buffer_size, next_buffer_sizes);
     seq = pair.quot + 1;
@@ -121,16 +142,32 @@ void SDF_OoO_Node::dealloc(i64 current_buffer_size,
   auto f = NormalSemaphore::FirstArgs{this};
   auto e = NormalSemaphore::EveryTimeArgs{
       .data = chunk, .arg_idx = 0, .first_of_firing = (off == 0)};
-  auto l = NormalSemaphore::LastArgs{seq, this};
+
+  bool may_fire = false;
+  Span<Chunk> args;
+
+  auto l = NormalSemaphore::LastArgs{&may_fire, &args};
+
   sema_variant.normal->semaphore.arrive(
       seq, chunk.data_size, current_buffer_size, f, e, l);
+
+  if (may_fire) {
+    fire(seq, args);
+  }
 }
 
 void SDF_OoO_Node::prime(i64 seq) {
 
+  // fprintf(stderr,
+  //         "Priming %ld of %s (total firings %ld)\n",
+  //         seq,
+  //         name,
+  //         info.total_iter_firings);
+  // fflush(stderr);
+
   // Schedule the allocation of the memory, if needed
   for (auto fifo : input_fifos.asSpan()) {
-    auto [b, e] = fifo->firingToVirtualOffsetRange(seq);
+    auto [b, e] = fifo->firingOfConsToVirtualOffsetRange(seq);
     auto block = fifo->getSingleBlockNumberFromVirtualOffset(b);
     fifo->alloc_node->ensureAlloc(block);
   }
@@ -138,14 +175,27 @@ void SDF_OoO_Node::prime(i64 seq) {
   auto f = NormalSemaphore::FirstArgs{this};
   auto e = NormalSemaphore::EveryTimeArgs{
       .data = Chunk::make_empty(), .arg_idx = -1, .first_of_firing = 0};
-  auto l = NormalSemaphore::LastArgs{seq, this};
+
+  bool may_fire = false;
+  Span<Chunk> args;
+
+  auto l = NormalSemaphore::LastArgs{&may_fire, &args};
   sema_variant.normal->semaphore.arrive(
       seq, 1, info.input_bytes + info.needs_priming, f, e, l);
+
+  if (may_fire) {
+    fire(seq, args);
+  }
 }
 
 void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
+
+  // fprintf(stderr, "Firing %ld of %s\n", seq, name);
+  // fflush(stderr);
   assert((i64)args.extents == info.num_inputs);
+#pragma omp task
   wrapper(seq, args.ptr);
+#pragma omp taskwait
   assert(output_fifos.extents == 0 || (output_fifos.extents == args.extents));
   for (size_t i = 0; i < output_fifos.extents; i++) {
     output_fifos.ptr[i]->push(args.ptr[i]);
@@ -155,6 +205,9 @@ void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
 
 void SDF_OoO_Node::fireAlloc(i64 seq) {
   auto alloc_fifo = *output_fifos.ptr;
+
+  // fprintf(stderr, "fireAlloc %ld of %s\n", seq, name);
+  // fflush(stderr);
 
   if (seq == 0) {
     i64 virtual_offset = 0;
@@ -179,9 +232,6 @@ void SDF_OoO_Node::fireAlloc(i64 seq) {
 
 // Uses the alloc node's semaphore to schedule the allocation.
 void SDF_OoO_Node::ensureAlloc(i64 firing) {
-  SDF_OoO_Node::AllocSemaphore::FirstArgs f{this, firing};
-  SDF_OoO_Node::AllocSemaphore::EveryTimeArgs e{};
-  SDF_OoO_Node::AllocSemaphore::LastArgs l{};
 
   // Placeholder: figure out a way to keep which blocks were already allocated
   // without an infinitely growing map.
@@ -190,8 +240,27 @@ void SDF_OoO_Node::ensureAlloc(i64 firing) {
   if (firing == 0)
     return;
 
+  // fprintf(stderr,
+  //         "ensureAlloc %ld of %s (expected dependents = %ld)\n",
+  //         firing,
+  //         name,
+  //         info.total_iter_firings);
+
+  // fflush(stderr);
+
+  bool may_alloc = false;
+
+  SDF_OoO_Node::AllocSemaphore::FirstArgs f{&may_alloc};
+  SDF_OoO_Node::AllocSemaphore::EveryTimeArgs e{};
+  SDF_OoO_Node::AllocSemaphore::LastArgs l{};
+
   sema_variant.alloc->semaphore.arrive(
-      info.id, 1, info.total_iter_firings, f, e, l);
+      firing, 1, info.total_iter_firings, f, e, l);
+
+  if (may_alloc) {
+#pragma omp task
+    fireAlloc(firing);
+  }
 }
 
 void SDF_OoO_Node::init() {

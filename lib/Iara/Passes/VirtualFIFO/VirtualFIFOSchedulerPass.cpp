@@ -1,7 +1,8 @@
 #include "Iara/Codegen/Codegen.h"
 #include "Iara/Codegen/GetMLIRType.h"
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/FIFOScheduler/OoOSchedulerPass.h"
+#include "Iara/Passes/VirtualFIFO/BreakLoops.h"
+#include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
 #include "Iara/SDF/Canon.h"
 #include "Iara/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
@@ -47,19 +48,19 @@ using namespace iara::sdf::canon;
 using namespace iara::sdf;
 using namespace iara::util::mlir;
 
-namespace iara::passes::fifo {
+namespace iara::passes::virtualfifo {
 
 using namespace func;
 using namespace iara::codegen;
 
-struct OoOSchedulerPass::Impl {
-  OoOSchedulerPass *pass;
+struct VirtualFIFOSchedulerPass::Impl {
+  VirtualFIFOSchedulerPass *pass;
   DenseMap<EdgeOp, Value> runtime_fifo_pointers;
   DenseMap<EdgeOp, LLVM::GlobalOp> edge_info_global_ops;
   DenseMap<NodeOp, LLVM::GlobalOp> node_infos;
   DenseMap<EdgeOp, LLVM::GlobalOp> delay_values;
 
-  Impl(OoOSchedulerPass *pass) : pass(pass) {}
+  Impl(VirtualFIFOSchedulerPass *pass) : pass(pass) {}
 
   MLIRContext *ctx() { return &pass->getContext(); }
 
@@ -354,10 +355,13 @@ struct OoOSchedulerPass::Impl {
 
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
+    breakLoops(main_actor);
     if (failed(sdf::canon::canonicalize(main_actor))) {
       return failure();
     };
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
+    StaticAnalysisData &data = *static_analysis;
+
     return success(
         succeeded(static_analysis) &&
         succeeded(generateAllocsAndFrees(main_actor, *static_analysis)) &&
@@ -365,11 +369,11 @@ struct OoOSchedulerPass::Impl {
   }
 };
 
-void OoOSchedulerPass::runOnOperation() {
+void VirtualFIFOSchedulerPass::runOnOperation() {
   pimpl = new Impl{this};
   if (pimpl->runOnOperation(getOperation()).failed()) {
     signalPassFailure();
   };
 }
 
-} // namespace iara::passes::fifo
+} // namespace iara::passes::virtualfifo

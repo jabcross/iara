@@ -40,6 +40,7 @@ struct SDF_OoO_FIFO {
 
   static constexpr size_t static_info_num_fields = 13;
 
+  char *name;
   StaticInfo info;
   Span<const char> delay_data;
   SDF_OoO_Node *consumer;
@@ -57,11 +58,9 @@ struct SDF_OoO_FIFO {
 
   // Given an edge and its consumer's sequence number, return the range it
   // affects in the virtual buffer
-  inline std::pair<i64, i64> firingToVirtualOffsetRange(i64 seq) {
-    i64 zero = info.delay_offset;
-    if (seq == 0)
-      return {zero, zero + info.cons_rate};
-    i64 begin = zero + (seq - 1) * info.cons_rate;
+  inline std::pair<i64, i64> firingOfConsToVirtualOffsetRange(i64 cons_seq) {
+    i64 zero = info.block_size_with_delays - info.cons_rate * info.cons_alpha;
+    i64 begin = zero + cons_seq * info.cons_rate;
     i64 end = begin + info.cons_rate;
     return {begin, end};
   }

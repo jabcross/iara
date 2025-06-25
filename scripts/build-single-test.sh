@@ -16,6 +16,8 @@ FOLDER_NAME=$(basename $(realpath $1))
 PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
 PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 
+$IARA_DIR/scripts/build.sh
+
 cd $PATH_TO_TEST_BUILD_DIR
 
 if [[ $(basename $(realpath ..)) != "Iara" ]]; then
@@ -50,7 +52,7 @@ echo SCHEDULER_SOURCES = \"$SCHEDULER_SOURCES\"
 #   exit 1
 # fi
 
-INCLUDES="$INCLUDES -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$LLVM_DIR/build/lib/clang/*/include"
+INCLUDES="$INCLUDES -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$LLVM_DIR/build/lib/clang/*/include -I$LLVM_DIR/ -fopenmp=libomp -lomp -lpthread"
 
 source $PATH_TO_TEST_SOURCES/extra_args.sh
 
@@ -64,8 +66,8 @@ sh -x mlir-to-llvmir.sh schedule.mlir
 shopt -s nullglob
 
 echo building schedule
-\time -f 'compiling schedule took %E and returned code %x' bash -xc "clang++ -g -xir -c schedule.ll -o schedule.o"
-RC=$?
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ -g $INCLUDES -xir -c schedule.ll -o schedule.o"
+RC
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
   echo "Error: Failed to build schedule"b
@@ -80,7 +82,7 @@ echo building c kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
   for c_file in $PATH_TO_TEST_SOURCES/*.c; do
     echo "Compiling $c_file"
-    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "clang++ -g -xc -c "$c_file" $INCLUDES $EXTRA_KERNEL_ARGS"
+    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "ccache clang -g  $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
     RC=$?
     echo c kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -94,7 +96,7 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "clang++ -g -xc++ -std=c++20 -c "$cpp_file" $INCLUDES"
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "ccache clang -g $INCLUDES -xc++ -std=c++20 $INCLUDES -c "$cpp_file""
     RC=$?
     echo cpp kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -105,7 +107,8 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
 fi
 
 echo building runtime
-\time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ -g -xc++ -std=c++20 -fopenmp=libomp $SCHEDULER_SOURCES $INCLUDES"
+\time -f 'compiling runtime took %E and returned code %x' bash -xc "ccache clang++ -g $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+# \time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
 echo executable return code: $?
 if [ $RC -ne 0 ]; then
@@ -114,7 +117,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "clang++ -g -lomp -lpthread -fuse-ld=mold $EXTRA_LINKER_ARGS *.o $INCLUDES"
+\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -fopenmp=libomp -g -fuse-ld=mold $INCLUDES $EXTRA_LINKER_ARGS *.o"
 RC=$?
 echo linker return code: $?
 if [ $RC -ne 0 ]; then

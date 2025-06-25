@@ -33,6 +33,9 @@ using namespace util::mlir;
 using namespace LLVM;
 using namespace iara::dialect;
 
+std::string getDebugName(NodeOp edge, i64 id);
+std::string getDebugName(EdgeOp edge, i64 id);
+
 struct CodegenStaticData {
 
   struct Impl;

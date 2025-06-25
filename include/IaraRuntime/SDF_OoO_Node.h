@@ -33,6 +33,7 @@ struct SDF_OoO_Node {
                            // are ready, 1 if needs to be scheduled by run_iter
 
     bool isAlloc() { return input_bytes == -2; }
+    bool isDealloc() { return input_bytes == -3; }
   };
 
   static constexpr size_t static_info_num_fields = 6;
@@ -40,6 +41,7 @@ struct SDF_OoO_Node {
   // END WARNING
 
   // data
+  char *name;
   StaticInfo info;
   WrapperType *wrapper;
   Span<SDF_OoO_FIFO *> input_fifos;

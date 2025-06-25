@@ -25,11 +25,12 @@ iara.actor @c {
 
 
 iara.actor @run  {
-  %0 = iara.node @a out: tensor<4xf32>
-  %e1 = iara.edge %0 : tensor<4xf32> -> f32
-  %1,%2 = iara.node @b in %e1, %3 : f32, tensor<2xf32> out: f32, tensor<2xf32>
-  %3 = iara.edge %2 : tensor<2xf32> -> tensor<2xf32> {delay = array<i32: 0, 0>}
-  iara.node @c in %1: f32
+  %n0 = iara.node @a out: tensor<1xf32>
+  %e1 = iara.edge %n0 : tensor<1xf32> -> f32
+  %n1_0,%n1_1 = iara.node @b in %e1, %e2 : f32, tensor<2xf32> out: f32, tensor<2xf32>
+  %e2 = iara.edge %n1_1 : tensor<2xf32> -> tensor<2xf32> {delay = array<f32: 0.0, 0.0>}
+  %e3 = iara.edge %n1_0 : f32 -> tensor<10xf32>
+  iara.node @c in %e3: tensor<10xf32>
 } { }
 
-// CHECK: 0 1 2 3 4
+// CHECK: 0 1 3 3 3 3 3 3 3 3

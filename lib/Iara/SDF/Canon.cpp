@@ -4,6 +4,7 @@
 #include "Iara/Util/Range.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
@@ -33,12 +34,20 @@ LogicalResult canonicalizeTypes(ActorOp actor) {
   return success();
 }
 
-std::string getBroadcastName(i64 size, Type type) {
+std::string getBroadcastName(i64 size, Type type, bool reuse_first) {
+  if (reuse_first && size == 1) {
+    llvm_unreachable("Pointless node");
+  }
+  if (reuse_first)
+    return llvm::formatv("iara_broadcast_r_{0}x{1}", size, stringifyType(type));
+  if (size == 1)
+    return llvm::formatv("iara_copy_{0}", stringifyType(type));
   return llvm::formatv("iara_broadcast_{0}x{1}", size, stringifyType(type));
 }
 
-LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(Value value, i64 size) {
-  std::string name = getBroadcastName(size, value.getType());
+LLVM::LLVMFuncOp
+getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
+  std::string name = getBroadcastName(size, value.getType(), reuse_first);
 
   // check if exists
 
@@ -66,7 +75,13 @@ LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(Value value, i64 size) {
 
   auto opaque_ptr = LLVM::LLVMPointerType::get(module_builder.getContext());
 
-  for (auto i = 0; i < size; i++) {
+  auto num_args = size;
+
+  if (reuse_first == false) {
+    num_args++;
+  }
+
+  for (auto i = 0; i < num_args; i++) {
     arg_types.push_back(opaque_ptr);
   }
 
@@ -196,8 +211,8 @@ LogicalResult expandImplicitEdgesAndBroadcasts(ActorOp actor) {
 }
 
 LogicalResult canonicalize(ActorOp actor) {
-  return expandImplicitEdgesAndBroadcasts(actor);
-  actor.dump();
+  return success(canonicalizeTypes(actor).succeeded() &&
+                 expandImplicitEdgesAndBroadcasts(actor).succeeded());
 }
 
 } // namespace iara::sdf::canon

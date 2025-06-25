@@ -60,6 +60,15 @@ OpOperand &appendOperand(Operation *op, Value val);
 void moveBlockAfter(Block *to_move, Block *after_this);
 void viewGraph(Operation *op);
 
+inline i64 getResultIndex(Value val) {
+  for (auto v : val.getDefiningOp()->getOpResults()) {
+    if (val == v) {
+      return v.getResultNumber();
+    }
+  }
+  llvm_unreachable("broken value");
+}
+
 // Follows a linear chain of uses until an operation of the given type is
 // found. Returns null if a fork, dead end or cycle is found.
 template <class T> T followChainUntilNext(Value val) {

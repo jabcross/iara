@@ -1,10 +1,17 @@
+#include "Iara/Codegen/Codegen.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/SDF/SDF.h"
 #include "Iara/Util/CommonTypes.h"
+#include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "IaraRuntime/SDF_OoO_FIFO.h"
 #include "IaraRuntime/SDF_OoO_Node.h"
 #include <cassert>
+#include <cinttypes>
+#include <cstdint>
+#include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Value.h>
 #include <mlir/IR/ValueRange.h>
@@ -54,6 +61,8 @@ SmallVector<Value> createAllocations(ValueRange values) {
     auto node = val.getDefiningOp<NodeOp>();
     auto builder = OpBuilder(node);
     // Create alloc node
+    mydump(parent(node));
+
     auto alloc_node =
         CREATE(NodeOp,
                builder,
@@ -77,8 +86,8 @@ SmallVector<NodeOp> createDeallocations(ValueRange values) {
     return rv;
 
   // Replace with edge id once its generated
-  auto placeholder_value = getPlaceholderValue(
-      values[0].getDefiningOp()->getParentOfType<ModuleOp>());
+  // auto placeholder_value = getPlaceholderValue(
+  //     values[0].getDefiningOp()->getParentOfType<ModuleOp>());
   for (auto original_val : values) {
     auto edge = createEdgeAdaptor(
         original_val,
@@ -92,7 +101,7 @@ SmallVector<NodeOp> createDeallocations(ValueRange values) {
                                edge->getLoc(),
                                {},
                                "iara_runtime_dealloc",
-                               {placeholder_value},
+                               {},
                                {val},
                                {});
 
@@ -110,7 +119,6 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
   auto nodes =
       dealloc_nodes.front()->getParentOfType<ActorOp>().getOps<NodeOp>() |
       IntoVector();
-  auto id_range = getNextPowerOf10(nodes.size() + 1);
 
   for (auto dealloc_node : dealloc_nodes) {
     auto dealloc_edge =
@@ -121,14 +129,33 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     auto &last_edge_info = data.edge_static_info[last_edge];
     auto &dealloc_node_info = data.node_static_info[dealloc_node];
 
+    auto dealloc_node_id = [&]() {
+      std::string id =
+          llvm::formatv("40{0}0{1}",
+                        last_node_info.id,
+                        util::mlir::getResultIndex(dealloc_edge.getIn()) + 1);
+      i64 rv;
+      bool failed = StringRef(id).getAsInteger(10, rv);
+      assert(!failed);
+      return rv;
+    }();
+
     dealloc_node_info = SDF_OoO_Node::StaticInfo{
-        .id = i64(id_range * 30 + last_node_info.id),
+        .id = dealloc_node_id,
         .input_bytes = -3,
         .num_inputs = 1,
         .rank = last_node_info.rank + 2,
         .total_iter_firings = -3,
         .needs_priming = 0,
     };
+
+    auto dealloc_edge_id = [&]() {
+      std::string id = llvm::formatv("2{0}", dealloc_node_id);
+      i64 rv;
+      bool failed = StringRef(id).getAsInteger(10, rv);
+      assert(!failed);
+      return rv;
+    }();
 
     auto &dealloc_edge_info = data.edge_static_info[dealloc_edge];
 
@@ -137,7 +164,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     // -3 = N/A (dealloc)
 
     dealloc_edge_info = SDF_OoO_FIFO::StaticInfo{
-        .id = i64(id_range * 330 + last_node_info.id),
+        .id = dealloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = last_edge_info.cons_rate,
         .cons_rate = -3,
@@ -211,8 +238,20 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     first_node_info.input_bytes += first_edge_info.prod_rate;
     first_node_info.num_inputs += 1;
 
+    auto operand_index =
+        alloc_edge.getOut().getUses().begin()->getOperandNumber();
+
+    auto alloc_node_id = [&]() {
+      std::string id =
+          llvm::formatv("30{0}0{1}", first_node_info.id, operand_index);
+      i64 rv;
+      bool failed = StringRef(id).getAsInteger(10, rv);
+      assert(!failed);
+      return rv;
+    }();
+
     alloc_node_info = SDF_OoO_Node::StaticInfo{
-        .id = id_range * 20 + first_node_info.id,
+        .id = alloc_node_id,
         .input_bytes = -2,
         .num_inputs = 0,
         .rank = first_node_info.rank - 2,
@@ -221,12 +260,20 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
 
     auto &alloc_edge_info = data.edge_static_info[alloc_edge];
 
+    auto alloc_edge_id = [&]() {
+      std::string id = llvm::formatv("2{0}", alloc_node_id);
+      i64 rv;
+      bool failed = StringRef(id).getAsInteger(10, rv);
+      assert(!failed);
+      return rv;
+    }();
+
     // -1 = fill out later
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
     alloc_edge_info = SDF_OoO_FIFO::StaticInfo{
-        .id = i64(id_range * 220 + first_node_info.id),
+        .id = alloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = -2,
         .cons_rate = first_edge_info.prod_rate,

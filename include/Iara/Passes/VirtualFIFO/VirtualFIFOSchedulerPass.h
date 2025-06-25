@@ -1,9 +1,10 @@
-#ifndef IARA_PASSES_LOWERTOFIFO_H
-#define IARA_PASSES_LOWERTOFIFO_H
+#ifndef IARA_PASSES_VIRTUALFIFO_VIRTUALFIFOSCHEDULERPASS_H
+#define IARA_PASSES_VIRTUALFIFO_VIRTUALFIFOSCHEDULERPASS_H
 
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
+#include "IaraRuntime/SDF_OoO_Scheduler.h"
 #include <mlir/Analysis/Presburger/Matrix.h>
 #include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -15,7 +16,7 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/Pass/Pass.h>
 
-namespace iara::passes::fifo {
+namespace iara::passes::virtualfifo {
 
 using namespace iara::util::range;
 using namespace iara::util::mlir;
@@ -25,37 +26,32 @@ template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
 
-struct DynamicPushFirstFIFOSchedulerPass
-    : public PassWrapper<DynamicPushFirstFIFOSchedulerPass,
+struct VirtualFIFOSchedulerPass
+    : public PassWrapper<VirtualFIFOSchedulerPass,
                          OperationPass<::mlir::ModuleOp>> {
   struct Impl;
-  ::llvm::StringRef getArgument() const override {
-    return "dynamic-push-first-fifo-scheduler";
-  }
+  ::llvm::StringRef getArgument() const override { return "ooo-scheduler"; }
   ::llvm::StringRef getDescription() const override {
-    return "Converts SDF dataflow to a runtime with dynamic FIFOs. This "
-           "version has non-blocking pushs and blocking pops.";
+    return "Converts SDF dataflow to a runtime with out-of-order FIFOs.";
   }
   static constexpr ::llvm::StringLiteral getPassName() {
-    return ::llvm::StringLiteral("DynamicPushFirstFIFOSchedulerPass");
+    return ::llvm::StringLiteral("OoOSchedulerPass");
   }
 
   Impl *pimpl;
 
-  ::llvm::StringRef getName() const override {
-    return "DynamicFIFOSchedulerPass";
-  }
+  ::llvm::StringRef getName() const override { return "OoOSchedulerPass"; }
 
   void runOnOperation() final override;
 };
 
-inline void registerDynamicPushFirstFIFOSchedulerPass() {
+inline void registerOoOSchedulerPass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
     return std::make_unique<
-        iara::passes::fifo::DynamicPushFirstFIFOSchedulerPass>();
+        iara::passes::virtualfifo::VirtualFIFOSchedulerPass>();
   });
 }
 
-} // namespace iara::passes::fifo
+} // namespace iara::passes::virtualfifo
 
 #endif

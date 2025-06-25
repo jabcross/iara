@@ -9,8 +9,15 @@
 #include <memory>
 #include <regex>
 #include <span>
+#include <unordered_set>
 
 // todo: alignment
+
+// #ifndef IARA_COMPILER
+
+// extern std::unordered_map<void *, int> allocated_ptrs;
+
+// #endif
 
 // Type that represents a chunk of memory.
 struct Chunk {
@@ -52,7 +59,14 @@ public:
 
   static Chunk make_empty() { return Chunk(); }
   static Chunk allocate(i64 size, i64 virtual_offset) {
+
+    static int x = 1;
     auto allocated = (i8 *)malloc(size);
+    // #ifndef IARA_COMPILER
+    //     allocated_ptrs[allocated] = x++;
+    //     fprintf(stderr, "allocating ptr %d\n", x - 1);
+    //     fflush(stderr);
+    // #endif
     return Chunk{
         .allocated = allocated,
         .virtual_offset = virtual_offset,
