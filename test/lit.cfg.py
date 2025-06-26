@@ -51,7 +51,7 @@ config.iara_libs_dir = os.path.join(config.iara_obj_root, "lib")
 config.substitutions.append(("%iara_libs", config.iara_libs_dir))
 
 # Tweak the PATH to include the tools dir.
-llvm_config.with_environment("PATH", config.llvm_tools_dir, append_path=True)
+# llvm_config.with_environment("PATH", config.llvm_tools_dir, append_path=True)
 
 tool_dirs = [config.iara_tools_dir, config.llvm_tools_dir]
 tools = [

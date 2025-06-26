@@ -1,0 +1,31 @@
+iara.actor @_random {
+    iara.out : tensor<MATRIXNUMELEMENTSxf32>
+}
+
+iara.actor @add {
+    iara.in : tensor<1xf32>
+    iara.in : tensor<1xf32>
+    iara.out : tensor<1xf32>
+}
+
+iara.actor @multiply {
+    iara.in : tensor<MATRIXNUMELEMENTSxf32>
+    iara.in : tensor<MATRIXNUMELEMENTSxf32>
+    iara.out : tensor<MATRIXNUMELEMENTSxf32>
+}
+
+iara.actor @out {
+    iara.in : tensor<MATRIXNUMELEMENTSxf32>
+}
+
+iara.actor @run  {
+  %a = iara.node @random out: tensor<MATRIXNUMELEMENTSxf32>
+  %b = iara.node @random out: tensor<MATRIXNUMELEMENTSxf32>
+  %ab = iara.node @multiply in %a, %b : tensor<MATRIXNUMELEMENTSxf32>, tensor<MATRIXNUMELEMENTSxf32> out: tensor<MATRIXNUMELEMENTSxf32>
+  %e_ab = iara.edge %ab: tensor<MATRIXNUMELEMENTSxf32> -> tensor<1xf32>
+  %c = iara.node @random out: tensor<MATRIXNUMELEMENTSxf32>
+  %e_c = iara.edge %c: tensor<MATRIXNUMELEMENTSxf32> -> tensor<1xf32>
+  %ab_plus_c = iara.node @add in %e_ab, %e_c : tensor<1xf32>, tensor<1xf32> out: tensor<1xf32>
+  %e_result = iara.edge %ab_plus_c: tensor<1xf32> -> tensor<MATRIXNUMELEMENTSxf32>
+  iara.node @out in %e_result : tensor<MATRIXNUMELEMENTSxf32>
+} { }

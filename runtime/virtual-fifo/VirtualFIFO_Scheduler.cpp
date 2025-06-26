@@ -1,14 +1,13 @@
 #include "Iara/Util/CommonTypes.h"
-#include "IaraRuntime/Chunk.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
-#include "IaraRuntime/SDF_OoO_Scheduler.h"
+#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 
-extern std::span<SDF_OoO_Node> iara_runtime_nodes;
-extern std::span<SDF_OoO_FIFO> iara_runtime_edges;
+extern std::span<VirtualFIFO_Node> iara_runtime_nodes;
+extern std::span<VirtualFIFO_Edge> iara_runtime_edges;
 
 i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 
@@ -28,13 +27,13 @@ extern "C" void iara_runtime_dealloc(i64 seq, Chunk *chunk) {
 }
 
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
-#pragma omp parallel for
   for (auto &node : iara_runtime_nodes) {
     if (node.needs_priming()) {
       for (i64 i = graph_iteration * node.info.total_iter_firings,
                e = i + node.info.total_iter_firings;
            i < e;
            i++) {
+#pragma omp task
         node.prime(i);
       }
     }

@@ -4,8 +4,8 @@
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/rational.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cmath>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -85,6 +85,7 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
         .total_iter_firings = -1,
         .needs_priming = 1,
     };
+    node["id"] = info.id;
   }
   return success(annotateNodeRanks(actor, data).succeeded() &&
                  annotateTotalFirings(actor, data).succeeded());
@@ -97,20 +98,20 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data);
 LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   auto nodes = actor.getOps<NodeOp>() | IntoVector();
   auto id_range = getNextPowerOf10(nodes.size() + 1);
-  for (auto [i, e] : llvm::enumerate(actor.getOps<EdgeOp>())) {
-    auto &info = data.edge_static_info[e];
-    auto prod_info = data.node_static_info[e.getProducerNode()];
-    auto cons_info = data.node_static_info[e.getConsumerNode()];
+  for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
+    auto &info = data.edge_static_info[edge];
+    auto prod_info = data.node_static_info[edge.getProducerNode()];
+    auto cons_info = data.node_static_info[edge.getConsumerNode()];
     auto id = prod_info.id * id_range * 10 + cons_info.id;
     // if first of chain
 
-    info = SDF_OoO_FIFO::StaticInfo{
+    info = VirtualFIFO_Edge::StaticInfo{
         .id = id,
         // To fill in after alloc and dealloc generation.
         .local_index = -1,
-        .prod_rate = e.getProdRate(),
-        .cons_rate = e.getConsRate(),
-        .cons_arg_idx = e->getUses().begin()->getOperandNumber(),
+        .prod_rate = edge.getProdRate(),
+        .cons_rate = edge.getConsRate(),
+        .cons_arg_idx = edge->getUses().begin()->getOperandNumber(),
         // To fill in in the delay info calculation.
         .delay_offset = -1,
         .delay_size = -1,
@@ -122,6 +123,7 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
         .cons_alpha = -1,
         .cons_beta = -1,
     };
+    edge["id"] = info.id;
   }
 
   return annotateDelayInfo(actor, data);
@@ -293,7 +295,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
       if (direction == Direction::Backward) {
         flow_ratio = flow_ratio.reciprocal();
       }
-      auto neighbor_firings = total_firings[node] * flow_ratio;
+      auto neighbor_firings = (total_firings[node] * flow_ratio).normalized();
       if (total_firings.contains(neighbor)) {
         if (total_firings[neighbor] != neighbor_firings) {
           node->emitError(

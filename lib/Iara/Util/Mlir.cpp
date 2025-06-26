@@ -171,7 +171,7 @@ void ensureFuncDeclExists(LLVM::CallOp call) {
   decl.setVisibility(SymbolTable::Visibility::Private);
 }
 
-std::string mydump(Operation *op) {
+std::string tostring(Operation *op) {
   std::string rv;
   auto flags = OpPrintingFlags();
   flags.printGenericOpForm(true);
@@ -179,7 +179,7 @@ std::string mydump(Operation *op) {
   flags.enableDebugInfo(true, true);
   llvm::raw_string_ostream s(rv);
   op->print(s, flags);
-  llvm::errs() << rv << "\n\n";
+  // llvm::errs() << rv << "\n\n";
   return rv;
 }
 

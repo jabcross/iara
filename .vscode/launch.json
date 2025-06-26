@@ -30,7 +30,7 @@
       "command": "extension.commandvariable.pickStringRemember",
       "args": {
         "options": [
-          "ooo-scheduler"
+          "virtual-fifo"
         ],
         "description": "Which scheduler to use",
         "key": "pickedScheduler"
@@ -62,6 +62,46 @@
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
+      "environment": [
+        {
+          "name": "POLYGEIST_MLIR_CLANG_BIN",
+          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
+        },
+        {
+          "name": "LLVM_PROJECT",
+          "value": "${workspaceFolder}/../Polygeist/llvm-project"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "build.sh",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) Compiler (file)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--flatten",
+        "-mlir-print-stacktrace-on-diagnostic",
+        "--mlir-print-ir-after-failure",
+        "--${input:scheduler}",
+        "${file}"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
       "environment": [
         {
           "name": "POLYGEIST_MLIR_CLANG_BIN",
@@ -129,6 +169,22 @@
       ],
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "preLaunchTask": "Build test",
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Launch",
+      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build/a.out",
+      "args": [],
+      "cwd": "${workspaceFolder}/test/Iara/03-two-nodes/build/"
+    },
+    {
+      "name": "(lldb) Runtime (file)",
+      "type": "lldb-dap",
+      "request": "launch",
+      "program": "${fileDirname}/a.out",
+      "args": [],
+      "cwd": "${fileDirname}",
     },
     {
       "type": "lldb",

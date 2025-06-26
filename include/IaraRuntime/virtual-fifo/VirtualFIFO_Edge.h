@@ -2,13 +2,13 @@
 #define IARA_RUNTIME_SDF_OOO_FIFO_H
 
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/Chunk.h"
+#include "IaraRuntime/virtual-fifo/Chunk.h"
 #include <cstdlib>
 
-struct SDF_OoO_Node;
+struct VirtualFIFO_Node;
 
 // SDF Out of Order Fifo.
-struct SDF_OoO_FIFO {
+struct VirtualFIFO_Edge {
 
   struct ConsData {
     i64 seq;
@@ -43,10 +43,10 @@ struct SDF_OoO_FIFO {
   char *name;
   StaticInfo info;
   Span<const char> delay_data;
-  SDF_OoO_Node *consumer;
-  SDF_OoO_Node *producer;
-  SDF_OoO_Node *alloc_node;
-  SDF_OoO_FIFO *next_in_chain;
+  VirtualFIFO_Node *consumer;
+  VirtualFIFO_Node *producer;
+  VirtualFIFO_Node *alloc_node;
+  VirtualFIFO_Edge *next_in_chain;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.
@@ -59,6 +59,13 @@ struct SDF_OoO_FIFO {
   // Given an edge and its consumer's sequence number, return the range it
   // affects in the virtual buffer
   inline std::pair<i64, i64> firingOfConsToVirtualOffsetRange(i64 cons_seq) {
+    // fprintf(stderr, "calculating offset from consumer firing %ld\n",
+    // cons_seq); fprintf(
+    //     stderr, "block size with delays is %ld\n",
+    //     info.block_size_with_delays);
+    // fprintf(stderr, "cons rate is %ld\n", info.cons_rate);
+    // fprintf(stderr, "cons alpha is %ld\n", info.cons_alpha);
+    // fflush(stderr);
     i64 zero = info.block_size_with_delays - info.cons_rate * info.cons_alpha;
     i64 begin = zero + cons_seq * info.cons_rate;
     i64 end = begin + info.cons_rate;
@@ -67,6 +74,18 @@ struct SDF_OoO_FIFO {
 
   // Given a virtual offset, return which block contains its memory
   inline i64 getSingleBlockNumberFromVirtualOffset(i64 virtual_offset) {
+    // fprintf(
+    //     stderr, "calculating block number from offset %ld\n",
+    //     virtual_offset);
+    // fprintf(
+    //     stderr, "block size with delays is %ld\n",
+    //     info.block_size_with_delays);
+    // fprintf(stderr,
+    //         "block size with no delays is %ld\n",
+    //         info.block_size_no_delays);
+
+    // fflush(stderr);
+
     if (virtual_offset < info.block_size_with_delays)
       return 0;
     return 1 + (virtual_offset - info.block_size_with_delays) /
@@ -75,7 +94,7 @@ struct SDF_OoO_FIFO {
 
   // Given a virtual offset range, return which firings overlap with it
   inline static std::pair<i64, i64>
-  getFiringsFromVirtualOffsetRange(StaticInfo &info, i64 begin, i64 end) {
+  getConsFiringsFromVirtualOffsetRange(StaticInfo &info, i64 begin, i64 end) {
     assert(end - begin >= 1);
     auto firing_begin = info.getConsumerSlice(begin).seq;
     auto firing_end = info.getConsumerSlice(end - 1).seq + 1;

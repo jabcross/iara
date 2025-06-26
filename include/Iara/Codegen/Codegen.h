@@ -2,8 +2,8 @@
 #define IARA_UTIL_CODEGEN_H
 
 #include "Iara/Dialect/IaraOps.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include "mlir/IR/Builders.h"
 #include <boost/pfr/core.hpp>
 #include <boost/pfr/traits.hpp>
@@ -33,8 +33,8 @@ using namespace util::mlir;
 using namespace LLVM;
 using namespace iara::dialect;
 
-std::string getDebugName(NodeOp edge, i64 id);
-std::string getDebugName(EdgeOp edge, i64 id);
+std::string getDebugName(NodeOp edge);
+std::string getDebugName(EdgeOp edge);
 
 struct CodegenStaticData {
 
@@ -44,8 +44,8 @@ struct CodegenStaticData {
 
   CodegenStaticData(ModuleOp module,
                     OpBuilder module_builder,
-                    std::span<SDF_OoO_Node> node_infos,
-                    std::span<SDF_OoO_FIFO> edge_infos,
+                    std::span<VirtualFIFO_Node> node_infos,
+                    std::span<VirtualFIFO_Edge> edge_infos,
                     std::span<NodeOp> nodes,
                     std::span<EdgeOp> edges,
                     std::span<LLVMFuncOp> wrappers);

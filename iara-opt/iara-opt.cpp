@@ -20,7 +20,7 @@
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
   iara::passes::registerPasses();
-  iara::passes::virtualfifo::registerOoOSchedulerPass();
+  iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
 
   mlir::DialectRegistry registry;
   registry.insert<iara::dialect::IaraDialect,

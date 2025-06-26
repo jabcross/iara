@@ -2,9 +2,14 @@
 #define IARA_PASSES_VIRTUALFIFO_VIRTUALFIFOSCHEDULERPASS_H
 
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/CommonTypes.h"
+#include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
-#include "IaraRuntime/SDF_OoO_Scheduler.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Scheduler.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/IR/Argument.h>
+#include <llvm/Support/CommandLine.h>
 #include <mlir/Analysis/Presburger/Matrix.h>
 #include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -15,37 +20,45 @@
 #include <mlir/Dialect/Tensor/IR/Tensor.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/Pass/Pass.h>
+#include <mlir/Support/LLVM.h>
 
 namespace iara::passes::virtualfifo {
 
 using namespace iara::util::range;
 using namespace iara::util::mlir;
-using util::Rational;
-template <class T> using Vec = llvm::SmallVector<T>;
-template <class T> using Pair = std::pair<T, T>;
 using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
+using util::Rational;
 
 struct VirtualFIFOSchedulerPass
     : public PassWrapper<VirtualFIFOSchedulerPass,
                          OperationPass<::mlir::ModuleOp>> {
+
+  VirtualFIFOSchedulerPass() = default;
+  VirtualFIFOSchedulerPass(const VirtualFIFOSchedulerPass &pass) {};
+
+  Option<std::string> main_actor{
+      *this, "main-actor", llvm::cl::desc("Name of actor to schedule")};
+
   struct Impl;
-  ::llvm::StringRef getArgument() const override { return "ooo-scheduler"; }
+  ::llvm::StringRef getArgument() const override { return "virtual-fifo"; }
   ::llvm::StringRef getDescription() const override {
     return "Converts SDF dataflow to a runtime with out-of-order FIFOs.";
   }
   static constexpr ::llvm::StringLiteral getPassName() {
-    return ::llvm::StringLiteral("OoOSchedulerPass");
+    return ::llvm::StringLiteral("VirtualFIFOSchedulerPass");
   }
 
   Impl *pimpl;
 
-  ::llvm::StringRef getName() const override { return "OoOSchedulerPass"; }
+  ::llvm::StringRef getName() const override {
+    return "VirtualFIFOSchedulerPass";
+  }
 
   void runOnOperation() final override;
 };
 
-inline void registerOoOSchedulerPass() {
+inline void registerVirtualFIFOSchedulerPass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
     return std::make_unique<
         iara::passes::virtualfifo::VirtualFIFOSchedulerPass>();

@@ -9,6 +9,6 @@ export POLYGEIST_DIR="$PROJECTS_DIR/Polygeist"
 export POLYGEIST_BUILD="\$POLYGEIST_DIR/build"
 export LLVM_DIR="$PROJECTS_DIR/Polygeist/llvm-project"
 export LLVM_BUILD="\$LLVM_DIR/build"
-export PATH="\$IARA_DIR/scripts:\$POLYGEIST_BUILD/bin:\$IARA_DIR/build/bin:\$LLVM_DIR/build/bin:\$PATH"
+export PATH="\$PATH:\$IARA_DIR/scripts:\$POLYGEIST_BUILD/bin:\$IARA_DIR/build/bin:\$LLVM_DIR/build/bin"
 export PS1="(iara)\$PS1"
 EOF

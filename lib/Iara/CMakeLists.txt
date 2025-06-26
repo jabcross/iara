@@ -16,8 +16,8 @@ add_mlir_dialect_library(MLIRIara
         SDF/GenerateMemoryManagementNodes.cpp
         SDF/SDF.cpp
         SDF/Analysis.cpp
-        ../../runtime/ooo-scheduler/SDF_OoO_FIFO.cpp
-        ../../runtime/ooo-scheduler/SDF_OoO_Node.cpp
+        ../../runtime/virtual-fifo/Common.cpp
+        # ../../runtime/virtual-fifo/VirtualFIFO_Edge.cpp
 
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/Iara

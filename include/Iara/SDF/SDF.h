@@ -2,8 +2,9 @@
 #define IARA_UTIL_SDF_H
 
 #include "Iara/Dialect/IaraOps.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "Iara/Util/CompilerTypes.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
@@ -61,8 +62,8 @@ struct SDFEdge : EdgeOp {
 };
 
 struct StaticAnalysisData {
-  DenseMap<EdgeOp, SDF_OoO_FIFO::StaticInfo> edge_static_info;
-  DenseMap<NodeOp, SDF_OoO_Node::StaticInfo> node_static_info;
+  DenseMap<EdgeOp, VirtualFIFO_Edge::StaticInfo> edge_static_info;
+  DenseMap<NodeOp, VirtualFIFO_Node::StaticInfo> node_static_info;
 };
 
 FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor);

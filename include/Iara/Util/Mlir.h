@@ -132,7 +132,7 @@ template <> struct MLIRTypeOf<i64> {
   IntegerType get(MLIRContext *ctx) { return IntegerType::get(ctx, 64); }
 };
 
-std::string mydump(Operation *op);
+std::string tostring(Operation *op);
 Operation *parent(Operation *op);
 
 class AttrAccessor {

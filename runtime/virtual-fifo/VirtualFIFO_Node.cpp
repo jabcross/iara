@@ -1,103 +1,18 @@
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/Chunk.h"
-#include "IaraRuntime/KeyedSemaphore.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/KeyedSemaphore.h"
+#include "IaraRuntime/virtual-fifo/SDFSemaphores.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
-#include <unordered_set>
+#include <gtl/phmap.hpp>
 
-struct SDF_OoO_Node::NormalSemaphore {
-
-  struct FirstArgs {
-    SDF_OoO_Node *_this;
-  };
-  struct EveryTimeArgs {
-    Chunk data;
-    i64 arg_idx;
-    bool first_of_firing;
-  };
-
-  struct LastArgs {
-    bool *may_fire;
-    Span<Chunk> *args;
-  };
-
-  static void first_time_func(FirstArgs &f_args, Span<Chunk> &kernel_args) {
-    // Init args vector with appropriate size.
-    kernel_args.extents = f_args._this->info.num_inputs;
-    kernel_args.ptr = (Chunk *)calloc(sizeof(Chunk), kernel_args.extents);
-  };
-
-  static void every_time_func(EveryTimeArgs &et_args,
-                              Span<Chunk> &kernel_args) {
-    auto &[new_chunk, idx, first] = et_args;
-
-    if (new_chunk.is_empty()) {
-      return;
-    }
-
-    auto &old_chunk = kernel_args.ptr[idx];
-    assert(kernel_args.size() > (size_t)idx);
-    // only the first chunk of a firing contains the right pointer.
-    if (first) {
-      old_chunk = new_chunk;
-    }
-  };
-
-  static void last_time_func(LastArgs &l_args, Span<Chunk> &kernel_args) {
-    *l_args.may_fire = true;
-    *l_args.args = kernel_args;
-  };
-
-  using Semaphore = keyed_semaphore::KeyedSemaphore<Span<Chunk>,
-                                                    FirstArgs,
-                                                    EveryTimeArgs,
-                                                    LastArgs,
-                                                    first_time_func,
-                                                    every_time_func,
-                                                    last_time_func>;
-
-  Semaphore semaphore;
-};
-
-struct SDF_OoO_Node::AllocSemaphore {
-
-  struct EntryData {};
-
-  struct FirstArgs {
-    bool *may_alloc;
-  };
-
-  struct EveryTimeArgs {};
-
-  struct LastArgs {};
-
-  static void first_time_func(FirstArgs &f_args, EntryData &kernel_args) {
-    // Init args vector with appropriate size.
-    *f_args.may_alloc = true;
-  };
-
-  static void every_time_func(EveryTimeArgs &et_args, EntryData &kernel_args){};
-
-  static void last_time_func(LastArgs &l_args, EntryData &kernel_args){};
-
-  using Semaphore = keyed_semaphore::KeyedSemaphore<EntryData,
-                                                    FirstArgs,
-                                                    EveryTimeArgs,
-                                                    LastArgs,
-                                                    first_time_func,
-                                                    every_time_func,
-                                                    last_time_func>;
-
-  Semaphore semaphore;
-};
-
-void SDF_OoO_Node::consume(i64 seq,
-                           Chunk chunk,
-                           i64 arg_idx,
-                           i64 offset_partial) {
+void VirtualFIFO_Node::consume(i64 seq,
+                               Chunk chunk,
+                               i64 arg_idx,
+                               i64 offset_partial) {
   auto f = NormalSemaphore::FirstArgs{this};
   auto e =
       NormalSemaphore::EveryTimeArgs{.data = std::move(chunk),
@@ -127,10 +42,10 @@ void SDF_OoO_Node::consume(i64 seq,
   }
 }
 
-void SDF_OoO_Node::dealloc(i64 current_buffer_size,
-                           i64 first_buffer_size,
-                           i64 next_buffer_sizes,
-                           Chunk chunk) {
+void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
+                               i64 first_buffer_size,
+                               i64 next_buffer_sizes,
+                               Chunk chunk) {
   i64 seq = 0;
   i64 off = chunk.virtual_offset;
   if (chunk.virtual_offset >= first_buffer_size) {
@@ -156,7 +71,7 @@ void SDF_OoO_Node::dealloc(i64 current_buffer_size,
   }
 }
 
-void SDF_OoO_Node::prime(i64 seq) {
+void VirtualFIFO_Node::prime(i64 seq) {
 
   // fprintf(stderr,
   //         "Priming %ld of %s (total firings %ld)\n",
@@ -168,8 +83,23 @@ void SDF_OoO_Node::prime(i64 seq) {
   // Schedule the allocation of the memory, if needed
   for (auto fifo : input_fifos.asSpan()) {
     auto [b, e] = fifo->firingOfConsToVirtualOffsetRange(seq);
+    // fprintf(stderr,
+    //         "virtual offset of firing %ld of node %s is %ld:%ld\n",
+    //         seq,
+    //         name,
+    //         b,
+    //         e);
+    // fflush(stderr);
     auto block = fifo->getSingleBlockNumberFromVirtualOffset(b);
-    fifo->alloc_node->ensureAlloc(block);
+    // fprintf(stderr, "block number of range %ld:%ld is %ld\n", b, e, block);
+    // fflush(stderr);
+
+#pragma omp task
+    {
+      // fprintf(stderr, "firing %ld of node %s calling ensureAlloc\n", seq,
+      // name); fflush(stderr);
+      fifo->alloc_node->ensureAlloc(block);
+    }
   }
 
   auto f = NormalSemaphore::FirstArgs{this};
@@ -188,7 +118,7 @@ void SDF_OoO_Node::prime(i64 seq) {
   }
 }
 
-void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
+void VirtualFIFO_Node::fire(i64 seq, Span<Chunk> args) {
 
   // fprintf(stderr, "Firing %ld of %s\n", seq, name);
   // fflush(stderr);
@@ -203,7 +133,7 @@ void SDF_OoO_Node::fire(i64 seq, Span<Chunk> args) {
   free(args.ptr);
 }
 
-void SDF_OoO_Node::fireAlloc(i64 seq) {
+void VirtualFIFO_Node::fireAlloc(i64 seq) {
   auto alloc_fifo = *output_fifos.ptr;
 
   // fprintf(stderr, "fireAlloc %ld of %s\n", seq, name);
@@ -231,7 +161,7 @@ void SDF_OoO_Node::fireAlloc(i64 seq) {
 }
 
 // Uses the alloc node's semaphore to schedule the allocation.
-void SDF_OoO_Node::ensureAlloc(i64 firing) {
+void VirtualFIFO_Node::ensureAlloc(i64 firing) {
 
   // Placeholder: figure out a way to keep which blocks were already allocated
   // without an infinitely growing map.
@@ -241,7 +171,7 @@ void SDF_OoO_Node::ensureAlloc(i64 firing) {
     return;
 
   // fprintf(stderr,
-  //         "ensureAlloc %ld of %s (expected dependents = %ld)\n",
+  //         "ensureAlloc: firing %ld of %s (expected dependents = %ld)\n",
   //         firing,
   //         name,
   //         info.total_iter_firings);
@@ -250,20 +180,19 @@ void SDF_OoO_Node::ensureAlloc(i64 firing) {
 
   bool may_alloc = false;
 
-  SDF_OoO_Node::AllocSemaphore::FirstArgs f{&may_alloc};
-  SDF_OoO_Node::AllocSemaphore::EveryTimeArgs e{};
-  SDF_OoO_Node::AllocSemaphore::LastArgs l{};
+  VirtualFIFO_Node::AllocSemaphore::FirstArgs f{&may_alloc};
+  VirtualFIFO_Node::AllocSemaphore::EveryTimeArgs e{};
+  VirtualFIFO_Node::AllocSemaphore::LastArgs l{};
 
   sema_variant.alloc->semaphore.arrive(
       firing, 1, info.total_iter_firings, f, e, l);
 
   if (may_alloc) {
-#pragma omp task
     fireAlloc(firing);
   }
 }
 
-void SDF_OoO_Node::init() {
+void VirtualFIFO_Node::init() {
   if (info.isAlloc()) {
     sema_variant.alloc = new AllocSemaphore{};
   } else {

@@ -1,5 +1,6 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/SDF/Canon.h"
+#include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"

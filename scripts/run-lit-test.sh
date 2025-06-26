@@ -13,7 +13,7 @@ IGNORE_RESULT=0
 
 cd $IARA_DIR
 
-export SCHEDULER_MODE=ooo-scheduler
+export SCHEDULER_MODE=virtual-fifo
 
 # Parse arguments
 for arg in "$@"; do

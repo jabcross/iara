@@ -3,12 +3,13 @@
 
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/Chunk.h"
+#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include <cstddef>
 
-struct SDF_OoO_FIFO;
+struct VirtualFIFO_Edge;
 
-struct SDF_OoO_Node {
+struct VirtualFIFO_Node {
 
   struct NormalSemaphore;
   struct AllocSemaphore;
@@ -29,6 +30,8 @@ struct SDF_OoO_Node {
     i64 rank = -1;
     i64 total_iter_firings = -1; // For normal nodes, it is the number of times
                                  // it fires in an iteration.
+                                 // For alloc nodes, it is the number of firings
+                                 // that depend on a (delay-less) block
     i64 needs_priming = 1; // for normal nodes: 0 if can run whenever the inputs
                            // are ready, 1 if needs to be scheduled by run_iter
 
@@ -44,8 +47,8 @@ struct SDF_OoO_Node {
   char *name;
   StaticInfo info;
   WrapperType *wrapper;
-  Span<SDF_OoO_FIFO *> input_fifos;
-  Span<SDF_OoO_FIFO *> output_fifos;
+  Span<VirtualFIFO_Edge *> input_fifos;
+  Span<VirtualFIFO_Edge *> output_fifos;
   Semaphore sema_variant{nullptr};
 
   // methods
@@ -73,6 +76,6 @@ struct SDF_OoO_Node {
   void kickstart_alloc(i64 graph_iteration);
 };
 
-extern "C" void iara_runtime_node_init(SDF_OoO_Node *node);
+extern "C" void iara_runtime_node_init(VirtualFIFO_Node *node);
 
 #endif // IARA_RUNTIME_SDF_NODE_H

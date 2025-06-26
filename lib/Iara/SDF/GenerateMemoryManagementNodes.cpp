@@ -4,8 +4,8 @@
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
 #include <cinttypes>
 #include <cstdint>
@@ -61,7 +61,7 @@ SmallVector<Value> createAllocations(ValueRange values) {
     auto node = val.getDefiningOp<NodeOp>();
     auto builder = OpBuilder(node);
     // Create alloc node
-    mydump(parent(node));
+    tostring(parent(node));
 
     auto alloc_node =
         CREATE(NodeOp,
@@ -140,7 +140,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
       return rv;
     }();
 
-    dealloc_node_info = SDF_OoO_Node::StaticInfo{
+    dealloc_node_info = VirtualFIFO_Node::StaticInfo{
         .id = dealloc_node_id,
         .input_bytes = -3,
         .num_inputs = 1,
@@ -148,6 +148,8 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
         .total_iter_firings = -3,
         .needs_priming = 0,
     };
+
+    dealloc_node["id"] = dealloc_node_id;
 
     auto dealloc_edge_id = [&]() {
       std::string id = llvm::formatv("2{0}", dealloc_node_id);
@@ -163,7 +165,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    dealloc_edge_info = SDF_OoO_FIFO::StaticInfo{
+    dealloc_edge_info = VirtualFIFO_Edge::StaticInfo{
         .id = dealloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = last_edge_info.cons_rate,
@@ -177,6 +179,8 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
         .prod_beta = last_edge_info.cons_beta,
         .cons_alpha = -3,
         .cons_beta = -3};
+
+    dealloc_edge["id"] = dealloc_edge_id;
   }
 }
 
@@ -204,8 +208,9 @@ i64 calculateFiringsPerBlock(NodeOp alloc_node, StaticAnalysisData &data) {
   for (auto edge : chain) {
     if (isDeallocEdge(edge))
       continue;
-    auto [bf, ef] = SDF_OoO_FIFO::getFiringsFromVirtualOffsetRange(
-        first_edge_info, begin, end);
+    auto &edge_info = data.edge_static_info[edge];
+    auto [bf, ef] = VirtualFIFO_Edge::getConsFiringsFromVirtualOffsetRange(
+        edge_info, begin, end);
     auto count = ef - bf;
     assert(count >= 0);
     dependent_firings_count += count;
@@ -250,13 +255,15 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
       return rv;
     }();
 
-    alloc_node_info = SDF_OoO_Node::StaticInfo{
+    alloc_node_info = VirtualFIFO_Node::StaticInfo{
         .id = alloc_node_id,
         .input_bytes = -2,
         .num_inputs = 0,
         .rank = first_node_info.rank - 2,
         .total_iter_firings = calculateFiringsPerBlock(alloc_node, data),
         .needs_priming = 0};
+
+    alloc_node["id"] = alloc_node_id;
 
     auto &alloc_edge_info = data.edge_static_info[alloc_edge];
 
@@ -272,7 +279,7 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    alloc_edge_info = SDF_OoO_FIFO::StaticInfo{
+    alloc_edge_info = VirtualFIFO_Edge::StaticInfo{
         .id = alloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = -2,
@@ -287,6 +294,8 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
         .prod_beta = -2,
         .cons_alpha = first_edge_info.prod_alpha,
         .cons_beta = first_edge_info.prod_beta};
+
+    alloc_edge["id"] = alloc_node_id;
 
     updateLocalIndices(alloc_edge, data, 0);
   }

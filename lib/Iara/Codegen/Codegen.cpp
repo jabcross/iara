@@ -1,11 +1,12 @@
 #include "Iara/Codegen/Codegen.h"
 #include "Iara/Codegen/GetMLIRType.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
 #include <mlir/Dialect/LLVMIR/LLVMAttrs.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -22,40 +23,57 @@ using namespace iara::dialect;
 
 // helper functions
 
-std::string getDebugName(NodeOp node, i64 id) {
+std::string getDebugName(NodeOp node) {
   if (node.isAlloc()) {
     auto alloc_edge = cast<EdgeOp>(*node->getResult(0).getUsers().begin());
     auto first_node = alloc_edge.getConsumerNode();
     auto index = alloc_edge->getUses().begin()->getOperandNumber();
-    return llvm::formatv(
-        "allocNode_{0}[{1}]", getDebugName(first_node, id), index);
+    return llvm::formatv("allocNode_{3}_{2}_{0}[{1}]\0",
+                         first_node.getImpl(),
+                         index,
+                         (i64)first_node["id"],
+                         (i64)node["id"]);
   }
   if (node.isDealloc()) {
     auto dealloc_edge = cast<EdgeOp>(node->getOperand(0).getDefiningOp());
     auto last_node = dealloc_edge.getProducerNode();
     auto index = util::mlir::getResultIndex(dealloc_edge.getIn());
-    return llvm::formatv(
-        "deallocNode_{0}[{1}]", getDebugName(last_node, id), index);
+    return llvm::formatv("deallocNode_{3}_{2}_{0}[{1}]\0",
+                         last_node.getImpl(),
+                         index,
+                         (i64)last_node["id"],
+                         (i64)node["id"]);
   }
-  return llvm::formatv("node_{0}_{1}", id, node.getImpl());
+  return llvm::formatv("node_{0}_{1}\0", (i64)node["id"], node.getImpl());
 }
 
-std::string getDebugName(EdgeOp edge, i64 id) {
+std::string getDebugName(EdgeOp edge) {
   auto prod = edge.getProducerNode();
   auto cons = edge.getConsumerNode();
   auto prod_index = util::mlir::getResultIndex(edge.getIn());
   auto cons_index = edge->getUses().begin()->getOperandNumber();
   if (prod.isAlloc()) {
-    return llvm::formatv("allocEdge_{0}[{1}]", cons.getImpl(), cons_index);
+    return llvm::formatv("allocEdge_{3}_{0}_{1}[{2}]\0",
+                         (i64)cons["id"],
+                         cons.getImpl(),
+                         cons_index,
+                         (i64)edge["id"]);
   }
   if (cons.isDealloc()) {
-    return llvm::formatv("deallocNode_{0}[{1}]", prod.getImpl(), prod_index);
+    return llvm::formatv("deallocNode_{3}_{0}_{1}[{2}]\0",
+                         (i64)prod["id"],
+                         prod.getImpl(),
+                         prod_index,
+                         (i64)edge["id"]);
   }
-  return llvm::formatv("edge_{0}[{1}]->{2}[{3}]",
+  return llvm::formatv("edge_{6}_{4}_{0}[{1}]->{5}_{2}[{3}]\0",
                        prod.getImpl(),
                        prod_index,
                        cons.getImpl(),
-                       cons_index);
+                       cons_index,
+                       (i64)prod["id"],
+                       (i64)cons["id"],
+                       (i64)edge["id"]);
 }
 
 Value createConstOp(OpBuilder builder, Location loc, auto val) {
@@ -94,16 +112,17 @@ Value getEmptySpan(OpBuilder builder, Location loc) {
 
 // struct codegen
 
-template <> struct GetMLIRType<SDF_OoO_Node::StaticInfo> {
+template <> struct GetMLIRType<VirtualFIFO_Node::StaticInfo> {
   static Type get(MLIRContext *context) {
-    Vec<Type> node_info_struct_field_types{SDF_OoO_Node::static_info_num_fields,
-                                           mlir::IntegerType::get(context, 64)};
+    Vec<Type> node_info_struct_field_types{
+        VirtualFIFO_Node::static_info_num_fields,
+        mlir::IntegerType::get(context, 64)};
     return LLVM::LLVMStructType::getLiteral(context,
                                             node_info_struct_field_types);
   }
 };
 
-template <> struct GetMLIRType<SDF_OoO_Node> {
+template <> struct GetMLIRType<VirtualFIFO_Node> {
   static Type get(MLIRContext *context) {
     auto opaque_ptr = LLVM::LLVMPointerType::get(context);
     auto span_type = LLVM::LLVMStructType::getLiteral(
@@ -111,17 +130,19 @@ template <> struct GetMLIRType<SDF_OoO_Node> {
     return LLVM::LLVMStructType::getLiteral(
         context,
         {
-            opaque_ptr,                                     // name
-            getMLIRType<SDF_OoO_Node::StaticInfo>(context), // info
-            opaque_ptr,                                     // wrapper
-            span_type,                                      // input_fifos
-            span_type,                                      // output_fifos
-            opaque_ptr,                                     // semaphore
+            opaque_ptr,                                         // name
+            getMLIRType<VirtualFIFO_Node::StaticInfo>(context), // info
+            opaque_ptr,                                         // wrapper
+            span_type,                                          // input_fifos
+            span_type,                                          // output_fifos
+            opaque_ptr,                                         // semaphore
         });
   }
 };
 
-Value asValue(OpBuilder builder, Location loc, SDF_OoO_Node::StaticInfo &info) {
+Value asValue(OpBuilder builder,
+              Location loc,
+              VirtualFIFO_Node::StaticInfo &info) {
 
   using namespace iara::codegen;
 
@@ -132,12 +153,12 @@ Value asValue(OpBuilder builder, Location loc, SDF_OoO_Node::StaticInfo &info) {
                      info.total_iter_firings,
                      info.needs_priming};
 
-  assert(values.size() == SDF_OoO_Node::static_info_num_fields);
+  assert(values.size() == VirtualFIFO_Node::static_info_num_fields);
   Value static_info =
       CREATE(LLVM::UndefOp,
              builder,
              loc,
-             iara::codegen::getMLIRType<SDF_OoO_Node::StaticInfo>(
+             iara::codegen::getMLIRType<VirtualFIFO_Node::StaticInfo>(
                  builder.getContext()));
 
   i64 index = 0;
@@ -152,28 +173,29 @@ Value asValue(OpBuilder builder, Location loc, SDF_OoO_Node::StaticInfo &info) {
   return static_info;
 }
 
-template <> struct GetMLIRType<SDF_OoO_FIFO::StaticInfo> {
+template <> struct GetMLIRType<VirtualFIFO_Edge::StaticInfo> {
   static Type get(MLIRContext *context) {
-    Vec<Type> edge_info_struct_field_types{SDF_OoO_FIFO::static_info_num_fields,
-                                           mlir::IntegerType::get(context, 64)};
+    Vec<Type> edge_info_struct_field_types{
+        VirtualFIFO_Edge::static_info_num_fields,
+        mlir::IntegerType::get(context, 64)};
     return LLVM::LLVMStructType::getLiteral(context,
                                             edge_info_struct_field_types);
   }
 };
 
-template <> struct GetMLIRType<SDF_OoO_FIFO> {
+template <> struct GetMLIRType<VirtualFIFO_Edge> {
   static Type get(MLIRContext *context) {
     auto opaque_ptr = LLVM::LLVMPointerType::get(context);
     return LLVMStructType::getLiteral(
         context,
         {
-            opaque_ptr,                                     // name
-            getMLIRType<SDF_OoO_FIFO::StaticInfo>(context), // info
-            getSpanType(context),                           // delay_data
-            opaque_ptr,                                     // consumer
-            opaque_ptr,                                     // producer
-            opaque_ptr,                                     // alloc_node
-            opaque_ptr                                      // next_in_chain
+            opaque_ptr,                                         // name
+            getMLIRType<VirtualFIFO_Edge::StaticInfo>(context), // info
+            getSpanType(context),                               // delay_data
+            opaque_ptr,                                         // consumer
+            opaque_ptr,                                         // producer
+            opaque_ptr,                                         // alloc_node
+            opaque_ptr                                          // next_in_chain
         });
   }
 };
@@ -181,8 +203,8 @@ template <> struct GetMLIRType<SDF_OoO_FIFO> {
 struct CodegenStaticData::Impl {
 
   ModuleOp module;
-  std::span<SDF_OoO_Node> node_infos;
-  std::span<SDF_OoO_FIFO> edge_infos;
+  std::span<VirtualFIFO_Node> node_infos;
+  std::span<VirtualFIFO_Edge> edge_infos;
   std::span<NodeOp> nodes;
   std::span<EdgeOp> edges;
   std::span<LLVMFuncOp> wrappers;
@@ -196,11 +218,11 @@ struct CodegenStaticData::Impl {
   std::vector<Value> alloc_node_ptrs;
   std::vector<Value> next_edge_ptrs;
 
-  DenseMap<SDF_OoO_FIFO *, EdgeOp> info_to_edge;
-  DenseMap<EdgeOp, SDF_OoO_FIFO *> edge_to_info;
+  DenseMap<VirtualFIFO_Edge *, EdgeOp> info_to_edge;
+  DenseMap<EdgeOp, VirtualFIFO_Edge *> edge_to_info;
 
-  DenseMap<SDF_OoO_Node *, NodeOp> info_to_node;
-  DenseMap<NodeOp, SDF_OoO_Node *> node_to_info;
+  DenseMap<VirtualFIFO_Node *, NodeOp> info_to_node;
+  DenseMap<NodeOp, VirtualFIFO_Node *> node_to_info;
 
   Type i64type;
   Type opaque_ptr;
@@ -209,8 +231,8 @@ struct CodegenStaticData::Impl {
 
   Impl(ModuleOp module,
        OpBuilder module_builder,
-       std::span<SDF_OoO_Node> node_infos,
-       std::span<SDF_OoO_FIFO> edge_infos,
+       std::span<VirtualFIFO_Node> node_infos,
+       std::span<VirtualFIFO_Edge> edge_infos,
        std::span<NodeOp> nodes,
        std::span<EdgeOp> edges,
        std::span<LLVMFuncOp> wrappers)
@@ -341,7 +363,7 @@ struct CodegenStaticData::Impl {
   Value getDelayData(OpBuilder builder,
                      Location loc,
                      EdgeOp edge,
-                     SDF_OoO_FIFO &info) {
+                     VirtualFIFO_Edge &info) {
     if (info.info.delay_size == 0)
       return getEmptySpan(builder, loc);
     return makeSpan(builder,
@@ -352,7 +374,7 @@ struct CodegenStaticData::Impl {
   }
 
   Value makeNodeInfo(OpBuilder builder,
-                     SDF_OoO_Node &node_info,
+                     VirtualFIFO_Node &node_info,
                      NodeOp node,
                      Location loc) {
 
@@ -363,7 +385,7 @@ struct CodegenStaticData::Impl {
            UndefOp,
            builder,
            loc,
-           getMLIRType<SDF_OoO_Node>(builder.getContext()));
+           getMLIRType<VirtualFIFO_Node>(builder.getContext()));
 
     auto input_fifos_placeholder = getEmptySpan(builder, loc);
     auto output_fifos_placeholder = getEmptySpan(builder, loc);
@@ -372,8 +394,7 @@ struct CodegenStaticData::Impl {
     output_fifos_spans.push_back(output_fifos_placeholder);
 
     // leaked on purpose
-    auto node_name =
-        builder.getStringAttr(getDebugName(node, node_info.info.id));
+    auto node_name = builder.getStringAttr(getDebugName(node));
 
     auto name_global =
         LLVM::createGlobalString(node->getLoc(),
@@ -400,7 +421,7 @@ struct CodegenStaticData::Impl {
   }
 
   Value makeEdgeInfo(OpBuilder builder,
-                     SDF_OoO_FIFO &edge_info,
+                     VirtualFIFO_Edge &edge_info,
                      EdgeOp edge,
                      Location loc) {
 
@@ -420,12 +441,12 @@ struct CodegenStaticData::Impl {
         edge_info.info.cons_beta,
     };
 
-    assert(static_info_data.size() == SDF_OoO_FIFO::static_info_num_fields);
+    assert(static_info_data.size() == VirtualFIFO_Edge::static_info_num_fields);
 
-    Type edge_struct_type = getMLIRType<SDF_OoO_FIFO>(ctx);
+    Type edge_struct_type = getMLIRType<VirtualFIFO_Edge>(ctx);
 
     Value static_info = CREATE(
-        UndefOp, builder, loc, getMLIRType<SDF_OoO_FIFO::StaticInfo>(ctx));
+        UndefOp, builder, loc, getMLIRType<VirtualFIFO_Edge::StaticInfo>(ctx));
 
     {
       i64 index = 0;
@@ -451,8 +472,7 @@ struct CodegenStaticData::Impl {
     alloc_node_ptrs.push_back(alloc_node);
     next_edge_ptrs.push_back(next_in_chain);
 
-    auto edge_name =
-        builder.getStringAttr(getDebugName(edge, edge_info.info.id));
+    auto edge_name = builder.getStringAttr(getDebugName(edge));
 
     auto name_global =
         LLVM::createGlobalString(edge->getLoc(),
@@ -555,15 +575,15 @@ struct CodegenStaticData::Impl {
       }
     }
 
-    auto node_struct_type = getMLIRType<SDF_OoO_Node>(ctx);
-    auto edge_struct_type = getMLIRType<SDF_OoO_FIFO>(ctx);
+    auto node_struct_type = getMLIRType<VirtualFIFO_Node>(ctx);
+    auto edge_struct_type = getMLIRType<VirtualFIFO_Edge>(ctx);
 
     // node infos
     {
       auto [inserter, builder] =
           makeGlobalArray("iara_runtime_data__node_infos",
-                          getMLIRType<SDF_OoO_Node>(ctx),
-                          alignof(SDF_OoO_Node),
+                          getMLIRType<VirtualFIFO_Node>(ctx),
+                          alignof(VirtualFIFO_Node),
                           module.getLoc(),
                           nodes.size());
 
@@ -576,8 +596,8 @@ struct CodegenStaticData::Impl {
     {
       auto [inserter, builder] =
           makeGlobalArray("iara_runtime_data__edge_infos",
-                          getMLIRType<SDF_OoO_FIFO>(ctx),
-                          alignof(SDF_OoO_FIFO),
+                          getMLIRType<VirtualFIFO_Edge>(ctx),
+                          alignof(VirtualFIFO_Edge),
                           module.getLoc(),
                           edges.size());
 
@@ -602,14 +622,14 @@ struct CodegenStaticData::Impl {
         assert(edge_info != nullptr);
       }
 
-      auto stitch_span = [&](Span<SDF_OoO_FIFO *> &list,
+      auto stitch_span = [&](Span<VirtualFIFO_Edge *> &list,
                              const char *suffix,
                              Value old) {
         auto [inserter, builder] = makeGlobalArray(
             (std::string)llvm::formatv(
                 "iara_runtime_data_node_{0}_{1}", node_info.info.id, suffix),
             opaque_ptr,
-            alignof(SDF_OoO_FIFO),
+            alignof(VirtualFIFO_Edge),
             module.getLoc(),
             list.size());
 
@@ -658,7 +678,7 @@ struct CodegenStaticData::Impl {
                                            alloc_node_ptrs,
                                            next_edge_ptrs)) {
 
-      auto replace = [&](SDF_OoO_Node *node, Value old) {
+      auto replace = [&](VirtualFIFO_Node *node, Value old) {
         auto index = node - &*node_infos.begin();
         auto builder = OpBuilder(old.getDefiningOp());
         auto loc = old.getLoc();
@@ -739,8 +759,8 @@ struct CodegenStaticData::Impl {
 
 CodegenStaticData::CodegenStaticData(ModuleOp module,
                                      OpBuilder module_builder,
-                                     std::span<SDF_OoO_Node> node_infos,
-                                     std::span<SDF_OoO_FIFO> edge_infos,
+                                     std::span<VirtualFIFO_Node> node_infos,
+                                     std::span<VirtualFIFO_Edge> edge_infos,
                                      std::span<NodeOp> nodes,
                                      std::span<EdgeOp> edges,
                                      std::span<LLVMFuncOp> wrappers) {

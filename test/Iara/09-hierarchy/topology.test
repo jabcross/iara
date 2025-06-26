@@ -1,11 +1,11 @@
-// RUN: mkdir -p `dirname %s`/build
-// RUN: rm -f `dirname %s`/build/*
-// RUN:   iara-opt --flatten --sdf-to-tasks >`dirname %s`/build/schedule.mlir  %s
-// RUN: mlir-to-llvmir.sh < `dirname %s`/build/schedule.mlir > `dirname %s`/build/schedule.ll
-// RUN: clang++ -DDIM=3 -DNB=3 -lomp -xir `dirname %s`/build/schedule.ll -xc "`dirname %s`/main.c" -o `dirname %s`/build/a.out
-// RUN: `dirname %s`/build/a.out > `dirname %s`/build/output.txt
-// RUN: FileCheck %s < `dirname %s`/build/output.txt
-// Two nodes
+// RUN: export SCHEDULER_MODE=$SCHEDULER_MODE
+// RUN: export IARA_FLAGS="--flatten --$SCHEDULER_MODE='main-actor=c'"
+// RUN: pwd >&2
+// RUN: build-single-test.sh .
+// RUN: pwd >&2
+// RUN: ls build >&2
+// RUN: ./build/a.out > ./build/output.txt
+// RUN: FileCheck %s < ./build/output.txt
 
 iara.actor @foo {
   iara.out: i32

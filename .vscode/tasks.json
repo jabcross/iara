@@ -26,7 +26,7 @@
       "command": "extension.commandvariable.pickStringRemember",
       "args": {
         "options": [
-          "ooo-scheduler"
+          "virtual-fifo"
         ],
         "description": "Which scheduler to use",
         "key": "pickedScheduler"

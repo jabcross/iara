@@ -2,28 +2,47 @@
 #define IARA_RUNTIME_FIRST_COMPLETER_TASK_H
 
 #include "Iara/Util/CommonTypes.h"
+#include "IaraRuntime/virtual-fifo/MutexHashMap.h"
 #include <cstdio>
+#include <gtl/phmap.hpp>
 #include <iostream>
 
 namespace keyed_semaphore {
 
+#ifdef IARA_USE_MUTEX_HASHMAP
+template <class Key, class Value>
+using ParallelHashMap = MutexHashMap<Key, Value>;
+
+#else
+template <class Key, class Value>
+using ParallelHashMap =
+    gtl::parallel_flat_hash_map<Key,
+                                Value,
+                                gtl::priv::hash_default_hash<Key>,
+                                gtl::priv::hash_default_eq<Key>,
+                                std::allocator<std::pair<const Key, Value>>,
+                                4,
+                                std::mutex>;
+#endif
+
 // A semaphore to manage dependencies, delegating the creation of the task to
 // the first dependency to arrive.
-template <class Data,
+template <template <class Key, class Value> class HashMap,
+          class Data,
           class FirstArgs,
           class EveryTimeArgs,
           class LastArgs,
           void first_time_func(FirstArgs &, Data &),
           void every_time_func(EveryTimeArgs &, Data &),
           void last_time_func(LastArgs &, Data &)>
+
 struct KeyedSemaphore {
   struct Entry {
     i64 remaining_resources;
     Data data;
   };
 
-  ParallelHashMap<i64, Entry> map{};
-  using Iterator = ParallelHashMap<i64, Entry>::iterator;
+  HashMap<i64, Entry> map{};
 
   // The first dependency to access this key will execute `first_time_func`. The
   // last one will execute `last_time_func`. Each dependency will decrement the
@@ -122,6 +141,7 @@ struct KeyedSemaphore {
         // fprintf(stderr, "Last semaphore trigger at %lu\n", (size_t)_this);
         // fflush(stderr);
         _last_time_func(last_args, entry.data);
+        erase = true;
       }
     };
 

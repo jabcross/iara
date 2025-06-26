@@ -9,10 +9,9 @@
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/Chunk.h"
-#include "IaraRuntime/DynamicQueueScheduler.h"
-#include "IaraRuntime/SDF_OoO_FIFO.h"
-#include "IaraRuntime/SDF_OoO_Node.h"
+#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstddef>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -93,7 +92,7 @@ struct VirtualFIFOSchedulerPass::Impl {
   LLVM::LLVMFuncOp getOrCodegenNodeWrapper(ModuleOp module,
                                            OpBuilder mod_builder,
                                            NodeOp node,
-                                           SDF_OoO_Node &info) {
+                                           VirtualFIFO_Node &info) {
 
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
     if (node.isAlloc()) {
@@ -217,17 +216,30 @@ struct VirtualFIFOSchedulerPass::Impl {
   ActorOp getMainActor(ModuleOp module) {
     // At this point, there should be only one actor with a body.
 
+    DenseSet<ActorOp> not_top_level;
     Vec<ActorOp> definitions;
+
+    if (pass->main_actor.hasValue()) {
+      auto actor = module.lookupSymbol<ActorOp>(pass->main_actor.getValue());
+      if (!actor)
+        llvm::errs() << "Provided actor name not found: "
+                     << pass->main_actor.getValue();
+      assert(actor && "Provided actor name not found");
+      return actor;
+    }
 
     for (auto actor : module.getOps<ActorOp>()) {
       if (actor.isKernelDeclaration()) {
+        continue;
+      }
+      if (not_top_level.contains(actor)) {
         continue;
       }
       definitions.push_back(actor);
     }
     if (definitions.size() > 1) {
       module->emitError("At this point, the graph should have had only one "
-                        "definition; there "
+                        "top level candidate; there "
                         "are ")
           << definitions.size() << " here.";
       llvm_unreachable("");
@@ -239,7 +251,8 @@ struct VirtualFIFOSchedulerPass::Impl {
     return definitions[0];
   }
 
-  void codegenEdgeInit(OpBuilder builder, EdgeOp edge, SDF_OoO_FIFO &info) {}
+  void codegenEdgeInit(OpBuilder builder, EdgeOp edge, VirtualFIFO_Edge &info) {
+  }
 
   LogicalResult codegenStaticData(ActorOp actor, StaticAnalysisData &data) {
 
@@ -253,30 +266,30 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     DenseMap<NodeOp, size_t> runtime_node_data_index;
     DenseMap<EdgeOp, size_t> runtime_edge_data_index;
-    DenseMap<EdgeOp, SDF_OoO_FIFO *> runtime_edge_data;
+    DenseMap<EdgeOp, VirtualFIFO_Edge *> runtime_edge_data;
 
-    DenseMap<NodeOp, Vec<SDF_OoO_FIFO *>> input_fifos;
-    DenseMap<NodeOp, Vec<SDF_OoO_FIFO *>> output_fifos;
+    DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> input_fifos;
+    DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> output_fifos;
     DenseMap<EdgeOp, ArrayRef<char>> delay_data;
 
     std::vector<char> dummy_ptrs(nodes.size(), ' ');
 
     [[maybe_unused]] auto &x = llvm::errs();
 
-    std::vector<SDF_OoO_Node> _node_infos;
+    std::vector<VirtualFIFO_Node> _node_infos;
     node_infos.reserve(nodes.size());
 
     for (auto [i, node] : llvm::enumerate(nodes)) {
       auto &info = _node_infos.emplace_back();
       runtime_node_data_index[node] = _node_infos.size() - 1;
       info.info = data.node_static_info[node];
-      info.wrapper = (SDF_OoO_Node::WrapperType *)&dummy_ptrs[i];
+      info.wrapper = (VirtualFIFO_Node::WrapperType *)&dummy_ptrs[i];
       info.sema_variant.null = nullptr;
     }
 
-    std::span<SDF_OoO_Node> node_infos(_node_infos);
+    std::span<VirtualFIFO_Node> node_infos(_node_infos);
 
-    std::vector<SDF_OoO_FIFO> _edge_infos;
+    std::vector<VirtualFIFO_Edge> _edge_infos;
     _edge_infos.reserve(edges.size());
 
     for (auto [i, edge] : llvm::enumerate(edges)) {
@@ -301,7 +314,7 @@ struct VirtualFIFOSchedulerPass::Impl {
       }
     }
 
-    std::span<SDF_OoO_FIFO> edge_infos{_edge_infos};
+    std::span<VirtualFIFO_Edge> edge_infos{_edge_infos};
 
     for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
 
@@ -315,8 +328,8 @@ struct VirtualFIFOSchedulerPass::Impl {
       for (auto edge_info : input_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.input_fifos = Span<SDF_OoO_FIFO *>{input_fifos[node].begin(),
-                                              input_fifos[node].size()};
+      info.input_fifos = Span<VirtualFIFO_Edge *>{input_fifos[node].begin(),
+                                                  input_fifos[node].size()};
 
       output_fifos[node].reserve(
           node.getAllOutputs()
@@ -328,8 +341,8 @@ struct VirtualFIFOSchedulerPass::Impl {
       for (auto edge_info : output_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.output_fifos = Span<SDF_OoO_FIFO *>{output_fifos[node].begin(),
-                                               output_fifos[node].size()};
+      info.output_fifos = Span<VirtualFIFO_Edge *>{output_fifos[node].begin(),
+                                                   output_fifos[node].size()};
     }
 
     std::vector<LLVM::LLVMFuncOp> wrappers;
@@ -349,7 +362,12 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     codegenBuilder.codegenStaticData();
 
-    actor->erase();
+    auto actors = module.getOps<ActorOp>() | IntoVector();
+
+    for (auto actor : actors) {
+      actor->erase();
+    }
+
     return success();
   }
 
