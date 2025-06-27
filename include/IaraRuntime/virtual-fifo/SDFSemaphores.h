@@ -24,6 +24,11 @@ struct VirtualFIFO_Node::NormalSemaphore {
     // Init args vector with appropriate size.
     kernel_args.extents = f_args._this->info.num_inputs;
     kernel_args.ptr = (Chunk *)calloc(kernel_args.extents, sizeof(Chunk));
+    // fprintf(stderr,
+    //         "alloc args %#016lx of size %ld\n",
+    //         (size_t)kernel_args.ptr,
+    //         kernel_args.extents * sizeof(Chunk));
+    // fflush(stderr);
   };
 
   static void every_time_func(EveryTimeArgs &et_args,

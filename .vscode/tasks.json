@@ -52,8 +52,8 @@
   "tasks": [
     {
       "type": "shell",
-      "command": "build.sh",
-      "label": "build.sh",
+      "command": "build-iara.sh",
+      "label": "build-iara.sh",
       "problemMatcher": "$msCompile"
     },
     {
@@ -90,7 +90,7 @@
     {
       "label": "Make SIFT topology",
       "type": "shell",
-      "command": "bash -c 'cd ${workspaceFolder} ; scripts/build.sh && mkdir -p test/Iara/08-SIFT/build && python scripts/dif-to-iara.py test/Iara/08-SIFT/topology.dif > test/Iara/08-SIFT/build/topology.mlir' "
+      "command": "bash -c 'cd ${workspaceFolder} ; scripts/build-iara.sh && mkdir -p test/Iara/08-SIFT/build && python scripts/dif-to-iara.py test/Iara/08-SIFT/topology.dif > test/Iara/08-SIFT/build/topology.mlir' "
     },
     {
       "label": "Build test",

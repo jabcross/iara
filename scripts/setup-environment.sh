@@ -61,4 +61,4 @@ cmake -G Ninja .. -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DCLANG_DIR=$LLVM_DI
 /usr/bin/time -o polygeist-build-time.txt ninja ;'
 
 cd $PROJECTS_DIR/iara
-/usr/bin/time -o iara-build-time.txt sh scripts/build.sh
+/usr/bin/time -o iara-build-time.txt sh scripts/build-iara.sh

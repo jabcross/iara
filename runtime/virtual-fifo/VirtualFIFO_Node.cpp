@@ -59,7 +59,7 @@ void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
       .data = chunk, .arg_idx = 0, .first_of_firing = (off == 0)};
 
   bool may_fire = false;
-  Span<Chunk> args;
+  Span<Chunk> args = {nullptr, 0};
 
   auto l = NormalSemaphore::LastArgs{&may_fire, &args};
 
@@ -119,18 +119,24 @@ void VirtualFIFO_Node::prime(i64 seq) {
 }
 
 void VirtualFIFO_Node::fire(i64 seq, Span<Chunk> args) {
-
+  auto ptr = args.ptr;
   // fprintf(stderr, "Firing %ld of %s\n", seq, name);
   // fflush(stderr);
   assert((i64)args.extents == info.num_inputs);
 #pragma omp task
-  wrapper(seq, args.ptr);
+  {
+    wrapper(seq, args.ptr);
+  }
+
 #pragma omp taskwait
+  // output_fifos is empty if it's a dealloc node.
   assert(output_fifos.extents == 0 || (output_fifos.extents == args.extents));
   for (size_t i = 0; i < output_fifos.extents; i++) {
     output_fifos.ptr[i]->push(args.ptr[i]);
   }
-  free(args.ptr);
+  // fprintf(stderr, "freeing %#016lx\n", (size_t)ptr);
+  // fflush(stderr);
+  free(ptr);
 }
 
 void VirtualFIFO_Node::fireAlloc(i64 seq) {
@@ -145,6 +151,11 @@ void VirtualFIFO_Node::fireAlloc(i64 seq) {
     i64 total_delays =
         alloc_fifo->info.delay_offset + alloc_fifo->info.delay_size;
     auto chunk = Chunk::allocate(block_size, virtual_offset);
+    // fprintf(stderr,
+    //         "alloc %#016lx of size %ld\n",
+    //         (size_t)chunk.allocated,
+    //         block_size);
+    // fflush(stderr);
     if (total_delays > 0) {
       auto delays = chunk.take_front(total_delays);
       alloc_fifo->propagate_delays(delays);
@@ -155,8 +166,13 @@ void VirtualFIFO_Node::fireAlloc(i64 seq) {
     i64 virtual_offset = ((seq - 1) * alloc_fifo->info.block_size_no_delays +
                           alloc_fifo->info.block_size_with_delays);
     i64 block_size = alloc_fifo->info.block_size_no_delays;
-
-    alloc_fifo->push(Chunk::allocate(block_size, virtual_offset));
+    auto chunk = Chunk::allocate(block_size, virtual_offset);
+    alloc_fifo->push(chunk);
+    // fprintf(stderr,
+    //         "alloc %#016lx of size %ld\n",
+    //         (size_t)chunk.allocated,
+    //         block_size);
+    // fflush(stderr);
   }
 }
 

@@ -74,7 +74,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build.sh",
+      "preLaunchTask": "build-iara.sh",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -114,7 +114,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build.sh",
+      "preLaunchTask": "build-iara.sh",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -198,7 +198,7 @@
       "name": "(gdb) Attach",
       "type": "cppdbg",
       "request": "attach",
-      "program": "enter program name, for example ${workspaceFolder}/a.out",
+      "program": "${fileDirname}/a.out",
       "MIMode": "gdb",
       "setupCommands": [
         {

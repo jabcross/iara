@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdlib>
+#include <omp.h>
 
 extern "C" void iara_runtime_init();
 extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
@@ -17,13 +18,17 @@ extern "C" void _random(float out[matrix_num_elements]) {
   }
 }
 
-extern "C" void add(float a[1], float b[1], float c[1]) { c[0] = a[0] + b[0]; }
+extern "C" void add(float a[1], float b[1], float c[1]) {
+  c[0] = a[0] + b[0]; //
+}
 
 extern "C" void multiply(float a[matrix_num_elements],
                          float b[matrix_num_elements],
                          float c[matrix_num_elements]) {
-  for (size_t i = 0; i < matrix_num_elements; i++) {
-    for (size_t j = 0; j < matrix_num_elements; j++) {
+  c[0] = a[matrix_num_elements - 1];
+  c[matrix_num_elements - 1] = b[matrix_num_elements - 1];
+  for (size_t i = 0; i < matrix_order; i++) {
+    for (size_t j = 0; j < matrix_order; j++) {
       c[j + matrix_order * i] = 0.0;
       for (size_t k = 0; k < matrix_order; k++) {
         c[j + matrix_order * i] +=

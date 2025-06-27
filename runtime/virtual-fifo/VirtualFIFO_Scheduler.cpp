@@ -20,9 +20,8 @@ extern "C" void iara_runtime_alloc(i64 seq, Chunk *chunk) {
 extern "C" void iara_runtime_dealloc(i64 seq, Chunk *chunk) {
   // assert(allocated_ptrs.contains(chunk->allocated));
   // assert(allocated_ptrs[chunk->allocated] > 0);
-  // fprintf(stderr, "freeing ptr %d\n", allocated_ptrs[chunk->allocated]);
+  // fprintf(stderr, "freeing ptr %#016lx\n", (size_t)chunk->allocated);
   // fflush(stderr);
-  // allocated_ptrs[chunk->allocated] *= -1;
   free(chunk->allocated);
 }
 

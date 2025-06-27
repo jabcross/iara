@@ -1,48 +1,31 @@
 #!/bin/bash
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
-set -x
-
-echo $PATH
-
-# Check if exactly two arguments were provided
-if [ "$#" -lt 1 ]; then
-  echo "Error: At least one argument is required."
-  echo "Usage: $0 <path/to/test> [scheduler-mode]"
+if [[ $MATRIX_ORDER == "" ]]; then
+  echo "must pass in MATRIX_ORDER"
   exit 1
 fi
 
-# Store arguments in variables
+MATRIXNUMELEMENTS=$(($MATRIX_ORDER * $MATRIX_ORDER))
 
-FOLDER_NAME=$(basename $(realpath $1))
+echo "Matrix size: $MATRIXNUMELEMENTS"
 
-PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
-PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
-
-$IARA_DIR/scripts/build-iara.sh
-
-cd $PATH_TO_TEST_BUILD_DIR
-
-if [[ $(basename $(realpath ..)) != "Iara" ]]; then
-  echo "Wrong directory!"
-  exit 1
-fi
+cd $SCRIPT_DIR
 
 mkdir -p build
+
 cd build
 
-rm -rf *
+sed -e "s/MATRIXNUMELEMENTS/$MATRIXNUMELEMENTS/g" ../topology.mlir.template >topology.mlir
 
-rm *.o
+# rebuild compiler
+$IARA_DIR/scripts/build-iara.sh
 
-echo "Building test: $FOLDER_NAME"
-echo ""
+PATH_TO_TEST_SOURCES=$(realpath ..)
+PATH_TO_TEST_BUILD_DIR=$(realpath .)
 
-if [[ $2 != "" ]]; then
-  SCHEDULER_MODE=$2
-fi
-
-if [ ! -d $IARA_DIR/runtime/$SCHEDULER_MODE ]; then
-  echo "Invalid scheduler mode."
+if [[ -z "$SCHEDULER_MODE" ]] || [[ ! -d ${IARA_DIR}/runtime/${SCHEDULER_MODE} ]]; then
+  echo "Invalid SCHEDULER_MODE: \`$SCHEDULER_MODE\`"
   exit 1
 fi
 
@@ -52,13 +35,6 @@ SCHEDULER_SOURCES="-c $IARA_DIR/runtime/$SCHEDULER_MODE/*.c* "
 
 echo SCHEDULER_SOURCES = \"$SCHEDULER_SOURCES\"
 
-# if [ "$SCHEDULER_MODE" == "virtual-fifo" ]; then
-#   SCHEDULER_SOURCES="-c $IARA_DIR/runtime/SDF_OoO*.cpp"
-# else
-#   echo "No recognized scheduler mode: --$SCHEDULER_MODE".
-#   exit 1
-# fi
-
 OMP_INCLUDE=/usr/lib/clang/19/include
 
 INCLUDES="$INCLUDES -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$OMP_INCLUDE"
@@ -67,15 +43,26 @@ if [[ $IARA_FLAGS == "" ]]; then
   IARA_FLAGS="--flatten --$SCHEDULER_MODE='main-actor=run'"
 fi
 
-COMPILER_FLAGS='-stdlib=libc++ -fopenmp '
+COMPILER_FLAGS="-stdlib=libc++ -fopenmp -DMATRIXORDER=$MATRIX_ORDER"
 LINKER_FLAGS='-lomp -lpthread -lc++ -lc++abi'
 
-source $PATH_TO_TEST_SOURCES/extra_args.sh
+# COMPILER_FLAGS="-stdlib=libc++ -DMATRIXORDER=$MATRIX_ORDER"
+# LINKER_FLAGS=' -lc++ -lc++abi'
+
+if [[ -f $PATH_TO_TEST_SOURCES/extra_args.sh ]]; then
+  source $PATH_TO_TEST_SOURCES/extra_args.sh
+fi
 
 pwd
 pwd >&2
 
-\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null"
+\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_BUILD_DIR/topology.mlir >schedule.mlir 2>/dev/null"
+RC=$?
+echo iara-opt return code: $RC
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to run iara"
+  exit 1
+fi
 
 sh -x mlir-to-llvmir.sh schedule.mlir
 
@@ -83,10 +70,10 @@ shopt -s nullglob
 
 echo building schedule
 \time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
-RC
-echo scheduler return code: $?
+RC=$?
+echo scheduler return code: $RC
 if [ $RC -ne 0 ]; then
-  echo "Error: Failed to build schedule"b
+  echo "Error: Failed to build schedule"
   exit 1
 fi
 
@@ -100,7 +87,7 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
     echo "Compiling $c_file"
     \time -f 'compiling c kernels took %E and returned code %x' bash -xc "ccache clang++  -g $COMPILER_FLAGS $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
     RC=$?
-    echo c kernels return code: $?
+    echo c kernels return code: $RC
     if [ $RC -ne 0 ]; then
       echo "Error: Failed to build c files"
       exit 2
@@ -112,9 +99,9 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "ccache clang -v -g $INCLUDES -xc++ -std=c++20 $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "ccache clang -v -g $INCLUDES -xc++ -std=c++20 $COMPILER_FLAGS $INCLUDES -c "$cpp_file""
     RC=$?
-    echo cpp kernels return code: $?
+    echo cpp kernels return code: $RC
     if [ $RC -ne 0 ]; then
       echo "Error: Failed to build cpp files"
       exit 3
@@ -126,7 +113,7 @@ echo building runtime
 \time -f 'compiling runtime took %E and returned code %x' bash -xc "ccache clang++ -ftime-trace --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
 # \time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ --std=c++17 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
-echo executable return code: $?
+echo executable return code: $RC
 if [ $RC -ne 0 ]; then
   echo "Error: Failed to build runtime"
   exit 4
@@ -135,7 +122,7 @@ fi
 echo linking
 \time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o"
 RC=$?
-echo linker return code: $?
+echo linker return code: $RC
 if [ $RC -ne 0 ]; then
   echo "Error: Failed to link"
   exit 5
