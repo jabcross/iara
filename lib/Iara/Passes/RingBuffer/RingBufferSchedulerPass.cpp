@@ -1,17 +1,15 @@
 #include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/VirtualFIFO/BreakLoops.h"
-#include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
-#include "Iara/Passes/VirtualFIFO/Codegen/GetMLIRType.h"
-#include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
-#include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
+#include "Iara/Passes/RingBuffer/Codegen/Codegen.h"
+#include "Iara/Passes/RingBuffer/Codegen/GetMLIRType.h"
+#include "Iara/Passes/RingBuffer/RingBufferSchedulerPass.h"
+#include "Iara/Passes/RingBuffer/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/virtual-fifo/Chunk.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include <cstddef>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -44,22 +42,22 @@
 
 using namespace iara::util::range;
 using namespace iara::dialect::canon;
-using namespace iara::passes::virtualfifo::sdf;
+using namespace iara::passes::ringbuffer::sdf;
 using namespace iara::util::mlir;
 
-namespace iara::passes::virtualfifo {
+namespace iara::passes::ringbuffer {
 
 using namespace func;
-using namespace iara::passes::virtualfifo::codegen;
+using namespace iara::passes::ringbuffer::codegen;
 
-struct VirtualFIFOSchedulerPass::Impl {
-  VirtualFIFOSchedulerPass *pass;
+struct RingBufferSchedulerPass::Impl {
+  RingBufferSchedulerPass *pass;
   DenseMap<EdgeOp, Value> runtime_fifo_pointers;
   DenseMap<EdgeOp, LLVM::GlobalOp> edge_info_global_ops;
   DenseMap<NodeOp, LLVM::GlobalOp> node_infos;
   DenseMap<EdgeOp, LLVM::GlobalOp> delay_values;
 
-  Impl(VirtualFIFOSchedulerPass *pass) : pass(pass) {}
+  Impl(RingBufferSchedulerPass *pass) : pass(pass) {}
 
   MLIRContext *ctx() { return &pass->getContext(); }
 
@@ -80,9 +78,7 @@ struct VirtualFIFOSchedulerPass::Impl {
 
   LLVM::LLVMFunctionType wrapper_type() {
     return LLVM::LLVMFunctionType::get(
-        llvm_void_type(),
-        {IntegerType::get(ctx(), 64), llvm_pointer_type()},
-        false);
+        llvm_void_type(), {llvm_pointer_type()}, false);
   }
 
   // Node wrappers call the kernel function with prepopulated parameters, and
@@ -92,37 +88,9 @@ struct VirtualFIFOSchedulerPass::Impl {
   LLVM::LLVMFuncOp getOrCodegenNodeWrapper(ModuleOp module,
                                            OpBuilder mod_builder,
                                            NodeOp node,
-                                           VirtualFIFO_Node &info) {
+                                           RingBuffer_Node &info) {
 
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
-    if (node.isAlloc()) {
-      if (auto existing =
-              module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_alloc")) {
-        return existing;
-      }
-      auto rv = CREATE(LLVM::LLVMFuncOp,
-                       mod_builder,
-                       module.getLoc(),
-                       "iara_runtime_alloc",
-                       wrapper_type());
-      rv.setVisibility(mlir::SymbolTable::Visibility::Private);
-      rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
-      return rv;
-    }
-    if (node.isDealloc()) {
-      if (auto existing =
-              module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_dealloc")) {
-        return existing;
-      }
-      auto rv = CREATE(LLVM::LLVMFuncOp,
-                       mod_builder,
-                       module.getLoc(),
-                       "iara_runtime_dealloc",
-                       wrapper_type());
-      rv.setVisibility(mlir::SymbolTable::Visibility::Private);
-      rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
-      return rv;
-    }
 
     auto sym_name =
         llvm::formatv("iara_node_wrapper_{0}_{1}", info.info.id, node.getImpl())
@@ -168,13 +136,14 @@ struct VirtualFIFOSchedulerPass::Impl {
       // arg1 is a pointer to the first chunk. we want the `data` field.
 
       // get pointer from array
-      auto pointer_to_pointer = CREATE(LLVM::GEPOp,
-                                       func_builder,
-                                       node.getLoc(),
-                                       opaque_ptr_type,
-                                       chunk_type(),
-                                       func_builder.getBlock()->getArgument(1),
-                                       {(i32)i, 2 /* `data field` */});
+      auto pointer_to_pointer =
+          CREATE(LLVM::GEPOp,
+                 func_builder,
+                 node.getLoc(),
+                 opaque_ptr_type,
+                 chunk_type(),
+                 func_builder.getBlock()->getArgument(0),
+                 {(i32)i, 1 /* data field (1 for ring buffer) */});
 
       auto pointer_to_data = CREATE(LLVM::LoadOp,
                                     func_builder,
@@ -251,8 +220,7 @@ struct VirtualFIFOSchedulerPass::Impl {
     return definitions[0];
   }
 
-  void codegenEdgeInit(OpBuilder builder, EdgeOp edge, VirtualFIFO_Edge &info) {
-  }
+  void codegenEdgeInit(OpBuilder builder, EdgeOp edge, RingBuffer_Edge &info) {}
 
   LogicalResult codegenStaticData(ActorOp actor, StaticAnalysisData &data) {
 
@@ -266,30 +234,29 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     DenseMap<NodeOp, size_t> runtime_node_data_index;
     DenseMap<EdgeOp, size_t> runtime_edge_data_index;
-    DenseMap<EdgeOp, VirtualFIFO_Edge *> runtime_edge_data;
+    DenseMap<EdgeOp, RingBuffer_Edge *> runtime_edge_data;
 
-    DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> input_fifos;
-    DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> output_fifos;
+    DenseMap<NodeOp, Vec<RingBuffer_Edge *>> input_fifos;
+    DenseMap<NodeOp, Vec<RingBuffer_Edge *>> output_fifos;
     DenseMap<EdgeOp, ArrayRef<char>> delay_data;
 
     std::vector<char> dummy_ptrs(nodes.size(), ' ');
 
     [[maybe_unused]] auto &x = llvm::errs();
 
-    std::vector<VirtualFIFO_Node> _node_infos;
+    std::vector<RingBuffer_Node> _node_infos;
     node_infos.reserve(nodes.size());
 
     for (auto [i, node] : llvm::enumerate(nodes)) {
       auto &info = _node_infos.emplace_back();
       runtime_node_data_index[node] = _node_infos.size() - 1;
       info.info = data.node_static_info[node];
-      info.wrapper = (VirtualFIFO_Node::WrapperType *)&dummy_ptrs[i];
-      info.sema_variant.null = nullptr;
+      info.wrapper = (RingBuffer_Node::WrapperType *)&dummy_ptrs[i];
     }
 
-    std::span<VirtualFIFO_Node> node_infos(_node_infos);
+    std::span<RingBuffer_Node> node_infos(_node_infos);
 
-    std::vector<VirtualFIFO_Edge> _edge_infos;
+    std::vector<RingBuffer_Edge> _edge_infos;
     _edge_infos.reserve(edges.size());
 
     for (auto [i, edge] : llvm::enumerate(edges)) {
@@ -301,8 +268,7 @@ struct VirtualFIFOSchedulerPass::Impl {
           &node_infos[runtime_node_data_index[edge.getConsumerNode()]];
       info.producer =
           &node_infos[runtime_node_data_index[edge.getProducerNode()]];
-      info.alloc_node =
-          &node_infos[runtime_node_data_index[findFirstNodeOfChain(edge)]];
+      info.queue = nullptr;
 
       if (info.info.delay_size > 0) {
         auto delay = edge->getAttrOfType<DenseArrayAttr>("delay");
@@ -314,7 +280,7 @@ struct VirtualFIFOSchedulerPass::Impl {
       }
     }
 
-    std::span<VirtualFIFO_Edge> edge_infos{_edge_infos};
+    std::span<RingBuffer_Edge> edge_infos{_edge_infos};
 
     for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
 
@@ -328,8 +294,8 @@ struct VirtualFIFOSchedulerPass::Impl {
       for (auto edge_info : input_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.input_fifos = Span<VirtualFIFO_Edge *>{input_fifos[node].begin(),
-                                                  input_fifos[node].size()};
+      info.input_fifos = Span<RingBuffer_Edge *>{input_fifos[node].begin(),
+                                                 input_fifos[node].size()};
 
       output_fifos[node].reserve(
           node.getAllOutputs()
@@ -341,8 +307,8 @@ struct VirtualFIFOSchedulerPass::Impl {
       for (auto edge_info : output_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.output_fifos = Span<VirtualFIFO_Edge *>{output_fifos[node].begin(),
-                                                   output_fifos[node].size()};
+      info.output_fifos = Span<RingBuffer_Edge *>{output_fifos[node].begin(),
+                                                  output_fifos[node].size()};
     }
 
     std::vector<LLVM::LLVMFuncOp> wrappers;
@@ -373,24 +339,21 @@ struct VirtualFIFOSchedulerPass::Impl {
 
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
-    breakLoops(main_actor);
     if (failed(sdf::canon::canonicalize(main_actor))) {
       return failure();
     };
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
 
-    return success(
-        succeeded(static_analysis) &&
-        succeeded(generateAllocsAndFrees(main_actor, *static_analysis)) &&
-        succeeded(codegenStaticData(main_actor, *static_analysis)));
+    return success(succeeded(static_analysis) &&
+                   succeeded(codegenStaticData(main_actor, *static_analysis)));
   }
 };
 
-void VirtualFIFOSchedulerPass::runOnOperation() {
+void RingBufferSchedulerPass::runOnOperation() {
   pimpl = new Impl{this};
   if (pimpl->runOnOperation(getOperation()).failed()) {
     signalPassFailure();
   };
 }
 
-} // namespace iara::passes::virtualfifo
+} // namespace iara::passes::ringbuffer

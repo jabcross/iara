@@ -30,7 +30,8 @@
       "command": "extension.commandvariable.pickStringRemember",
       "args": {
         "options": [
-          "virtual-fifo"
+          "virtual-fifo",
+          "ring-buffer"
         ],
         "description": "Which scheduler to use",
         "key": "pickedScheduler"

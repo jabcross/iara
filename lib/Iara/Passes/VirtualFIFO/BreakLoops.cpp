@@ -1,6 +1,6 @@
+#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/SDF/Canon.h"
-#include "Iara/SDF/SDF.h"
+#include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/IR/Builders.h>
@@ -11,7 +11,7 @@ namespace iara::passes::virtualfifo {
 void breakEdge(EdgeOp edge) {
   auto builder = OpBuilder(edge);
   LLVM::LLVMFuncOp impl =
-      iara::sdf::canon::getOrCodegenBroadcastImpl(edge.getIn(), 1, false);
+      iara::dialect::canon::getOrCodegenBroadcastImpl(edge.getIn(), 1, false);
   DEF_OP(NodeOp,
          copy_op,
          NodeOp,

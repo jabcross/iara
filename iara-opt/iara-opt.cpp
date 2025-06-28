@@ -15,12 +15,14 @@
 
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraPasses.h"
+#include "Iara/Passes/RingBuffer/RingBufferSchedulerPass.h"
 #include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
   iara::passes::registerPasses();
   iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
+  iara::passes::ringbuffer::registerRingBufferSchedulerPass();
 
   mlir::DialectRegistry registry;
   registry.insert<iara::dialect::IaraDialect,

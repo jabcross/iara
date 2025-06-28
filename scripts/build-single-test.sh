@@ -82,7 +82,7 @@ sh -x mlir-to-llvmir.sh schedule.mlir
 shopt -s nullglob
 
 echo building schedule
-\time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
 RC
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
@@ -112,7 +112,7 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "ccache clang -v -g $INCLUDES -xc++ -std=c++20 $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "ccache clang -g $INCLUDES -xc++ -std=c++20 $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
     RC=$?
     echo cpp kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -123,8 +123,8 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
 fi
 
 echo building runtime
-\time -f 'compiling runtime took %E and returned code %x' bash -xc "ccache clang++ -ftime-trace --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
-# \time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ --std=c++17 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
+\time -f 'compiling runtime took %E and returned code %x' bash -xc "ccache clang++ -ftime-trace --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+# \time -f 'compiling runtime took %E and returned code %x' bash -xc "clang++ --std=c++20 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
 echo executable return code: $?
 if [ $RC -ne 0 ]; then
@@ -133,7 +133,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o"
+\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o"
 RC=$?
 echo linker return code: $?
 if [ $RC -ne 0 ]; then

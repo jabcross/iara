@@ -1,12 +1,11 @@
-#ifndef IARA_PASSES_VIRTUALFIFO_VIRTUALFIFOSCHEDULERPASS_H
-#define IARA_PASSES_VIRTUALFIFO_VIRTUALFIFOSCHEDULERPASS_H
+#ifndef IARA_PASSES_RINGBUFFER_RINGBUFFERSCHEDULERPASS_H
+#define IARA_PASSES_RINGBUFFER_RINGBUFFERSCHEDULERPASS_H
 
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Scheduler.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Argument.h>
 #include <llvm/Support/CommandLine.h>
@@ -22,7 +21,7 @@
 #include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
 
-namespace iara::passes::virtualfifo {
+namespace iara::passes::ringbuffer {
 
 using namespace iara::util::range;
 using namespace iara::util::mlir;
@@ -30,41 +29,41 @@ using mlir::presburger::IntMatrix;
 using mlir::presburger::MPInt;
 using util::Rational;
 
-struct VirtualFIFOSchedulerPass
-    : public PassWrapper<VirtualFIFOSchedulerPass,
+struct RingBufferSchedulerPass
+    : public PassWrapper<RingBufferSchedulerPass,
                          OperationPass<::mlir::ModuleOp>> {
 
-  VirtualFIFOSchedulerPass() = default;
-  VirtualFIFOSchedulerPass(const VirtualFIFOSchedulerPass &pass) {};
+  RingBufferSchedulerPass() = default;
+  RingBufferSchedulerPass(const RingBufferSchedulerPass &pass) {};
 
   Option<std::string> main_actor{
       *this, "main-actor", llvm::cl::desc("Name of actor to schedule")};
 
   struct Impl;
-  ::llvm::StringRef getArgument() const override { return "virtual-fifo"; }
+  ::llvm::StringRef getArgument() const override { return "ring-buffer"; }
   ::llvm::StringRef getDescription() const override {
-    return "Converts SDF dataflow to a runtime with virtual FIFOs.";
+    return "Converts SDF dataflow to a runtime with ring buffers.";
   }
   static constexpr ::llvm::StringLiteral getPassName() {
-    return ::llvm::StringLiteral("VirtualFIFOSchedulerPass");
+    return ::llvm::StringLiteral("RingBufferSchedulerPass");
   }
 
   Impl *pimpl;
 
   ::llvm::StringRef getName() const override {
-    return "VirtualFIFOSchedulerPass";
+    return "ringbufferSchedulerPass";
   }
 
   void runOnOperation() final override;
 };
 
-inline void registerVirtualFIFOSchedulerPass() {
+inline void registerRingBufferSchedulerPass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
     return std::make_unique<
-        iara::passes::virtualfifo::VirtualFIFOSchedulerPass>();
+        iara::passes::ringbuffer::RingBufferSchedulerPass>();
   });
 }
 
-} // namespace iara::passes::virtualfifo
+} // namespace iara::passes::ringbuffer
 
 #endif

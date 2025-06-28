@@ -11,6 +11,7 @@
 
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Util/CommonTypes.h"
+#include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/rational.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -40,6 +41,13 @@ EdgeOp followInoutChainForwards(EdgeOp edge);
 
 EdgeOp findFirstEdgeOfChain(EdgeOp edge);
 EdgeOp findLastEdgeOfChain(EdgeOp edge);
+
+struct InoutPair {
+  Value in;
+  Value out;
+};
+
+Vec<InoutPair> getInoutPairs(NodeOp node);
 
 } // namespace iara
 

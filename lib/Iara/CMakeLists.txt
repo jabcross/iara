@@ -1,23 +1,27 @@
 add_mlir_dialect_library(MLIRIara
-        IaraTypes.cpp
-        IaraDialect.cpp
-        IaraOps.cpp
-        # IaraInterfaces.cpp
+        Dialect/IaraTypes.cpp
+        Dialect/IaraDialect.cpp
+        Dialect/IaraOps.cpp
+        Dialect/Canon.cpp
+
         Passes/FlattenPass.cpp
-        # Passes/LowerToTasksPass.cpp
-        Passes/VirtualFIFO/VirtualFIFOSchedulerPass.cpp
+
+        Passes/RingBuffer/Codegen/Codegen.cpp
+        Passes/RingBuffer/SDF/SDF.cpp
+        Passes/RingBuffer/RingBufferSchedulerPass.cpp
+
+        Passes/VirtualFIFO/Codegen/Codegen.cpp
+        Passes/VirtualFIFO/SDF/Analysis.cpp
+        Passes/VirtualFIFO/SDF/BufferSizeCalculator.cpp
+        Passes/VirtualFIFO/SDF/GenerateMemoryManagementNodes.cpp
+        Passes/VirtualFIFO/SDF/SDF.cpp
         Passes/VirtualFIFO/BreakLoops.cpp
-        Codegen/Codegen.cpp
-        # Passes/Schedule/StaticDataCodegen.cpp
-        # Passes/Schedule/TotalFiringsCalculator.cpp
-        Util/Mlir.cpp
-        SDF/BufferSizeCalculator.cpp
-        SDF/Canon.cpp
-        SDF/GenerateMemoryManagementNodes.cpp
-        SDF/SDF.cpp
-        SDF/Analysis.cpp
+        Passes/VirtualFIFO/VirtualFIFOSchedulerPass.cpp
+
         ../../runtime/virtual-fifo/Common.cpp
         # ../../runtime/virtual-fifo/VirtualFIFO_Edge.cpp
+
+        Util/Mlir.cpp
 
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/Iara

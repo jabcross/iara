@@ -44,20 +44,11 @@ extern VirtualFIFO_Edge *iara_runtime_edges;
 
 extern "C" int main() {
 
-  // omp_set_num_threads(1);
+  omp_set_num_threads(1);
   iara_runtime_init();
 
-#pragma omp parallel
-#pragma omp single
-  {
-    iara_runtime_run_iteration(0);
+  iara_runtime_run_iteration(0);
+  iara_runtime_run_iteration(1);
 
-#pragma omp taskwait
-
-    auto size = iara_runtime_edges[9]
-                    .consumer->sema_variant.normal->semaphore.map.size();
-
-    iara_runtime_run_iteration(1);
-  }
   return 0;
 }
