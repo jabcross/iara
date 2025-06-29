@@ -1,11 +1,9 @@
+#include <IaraRuntime/common/Scheduler.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 pthread_mutex_t mutex;
-
-extern "C" void iara_runtime_init();
-extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
 
 extern "C" {
 
@@ -29,10 +27,14 @@ void c(int val[1]) {
   pthread_mutex_unlock(&mutex);
 }
 
-int main() {
-  pthread_mutex_init(&mutex, NULL);
+void exec() {
+
   iara_runtime_init();
   iara_runtime_run_iteration(0);
-  return 0;
 }
+
+int main() {
+  pthread_mutex_init(&mutex, NULL);
+  iara_runtime_exec(exec);
+  return 0;
 }

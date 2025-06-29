@@ -1,3 +1,4 @@
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Scheduler.h"
 #include <cmath>
 #include <cstdlib>
 #include <omp.h>
@@ -40,13 +41,19 @@ extern "C" void multiply(float a[matrix_num_elements],
 
 extern "C" void out(float a[matrix_num_elements]) {}
 
+void exec() {
+  iara_runtime_init();
+
+  iara_runtime_run_iteration(0);
+
+  printf("end of exec\n");
+}
+
 extern "C" int main() {
 
   // omp_set_num_threads(1);
-  iara_runtime_init();
 
-#pragma omp parallel
-#pragma omp single
-  iara_runtime_run_iteration(0);
+  iara_runtime_exec(exec);
+
   return 0;
 }

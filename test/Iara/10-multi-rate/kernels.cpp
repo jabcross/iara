@@ -1,12 +1,10 @@
+#include <IaraRuntime/common/Scheduler.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
 
-std::mutex m;
-
-extern "C" void iara_runtime_init();
-extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
+static std::mutex m;
 
 extern "C" void a(int32_t out[2]) {
   static int counter = 0;
@@ -20,9 +18,12 @@ extern "C" void b(const int32_t in[3]) {
   printf("%d %d %d\n", in[0], in[1], in[2]);
 }
 
-extern "C" int main() {
+void exec() {
   iara_runtime_init();
   iara_runtime_run_iteration(0);
+}
 
+int main() {
+  iara_runtime_exec(exec);
   return 0;
 }

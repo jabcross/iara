@@ -39,6 +39,16 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
   }
 }
 
+extern "C" void iara_runtime_exec(void (*exec)()) {
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      exec();
+    }
+  }
+}
+
 extern "C" void iara_runtime_init(i64 num_threads) {
   iara_runtime_num_threads = num_threads;
   for (auto &node : iara_runtime_nodes) {

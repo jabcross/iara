@@ -1,3 +1,4 @@
+#include <IaraRuntime/common/Scheduler.h>
 #include <chrono>
 #include <omp.h>
 #include <stdio.h>
@@ -5,9 +6,6 @@
 #include <thread>
 
 using namespace std::chrono_literals;
-
-extern "C" void iara_runtime_init();
-extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
 
 extern "C" void a(size_t val[1]) {
   printf("Arrived on A.\n");
@@ -31,12 +29,12 @@ extern "C" void c(size_t a[1], size_t b[1]) {
   }
 }
 
-int main() {
-
+void exec() {
   iara_runtime_init();
-
-#pragma omp parallel
-#pragma omp single
   iara_runtime_run_iteration(0);
+}
+
+int main() {
+  iara_runtime_exec(exec);
   return 0;
 }

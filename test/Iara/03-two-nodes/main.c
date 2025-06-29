@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-void iara_runtime_init();
-void iara_runtime_run_iteration(int64_t graph_iteration);
+#include <IaraRuntime/common/Scheduler.h>
 
 void a(int val[1]) {
   printf("Hello ");
@@ -16,8 +14,12 @@ void b(int val[1]) {
   printf("World!\n");
 }
 
-int main() {
+void exec(){
   iara_runtime_init();
   iara_runtime_run_iteration(0);
+}
+
+int main() {
+  iara_runtime_exec(exec);
   return 0;
 }

@@ -126,7 +126,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o -o $EXPERIMENT_SUFFIX.bin"
+\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o -o a.out"
 RC=$?
 echo linker return code: $RC
 if [ $RC -ne 0 ]; then

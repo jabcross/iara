@@ -79,7 +79,7 @@ MutexRingBuffer::MutexRingBuffer(size_t p_capacity) {
 
 // Not thread safe
 void MutexRingBuffer::growToFit(size_t capacity) {
-  size_t newcapacity = m_size;
+  size_t newcapacity = m_capacity;
   while (newcapacity < capacity) {
     newcapacity *= newcapacity;
   }
@@ -87,6 +87,7 @@ void MutexRingBuffer::growToFit(size_t capacity) {
 
   size_t front_to_buffer_end = m_buffer + m_capacity - m_front;
   i8 *new_ptr = (i8 *)std::aligned_alloc(64, newcapacity);
+  assert(new_ptr != nullptr);
   if (m_front + m_size <= m_buffer + m_capacity) {
     memcpy(new_ptr, m_front, m_size);
   } else {
