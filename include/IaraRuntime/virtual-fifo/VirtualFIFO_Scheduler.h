@@ -10,5 +10,6 @@ struct VirtualFIFO_RuntimeData {
 
 extern "C" void iara_runtime_init();
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration);
+extern "C" void iara_runtime_exec(void (*)());
 
 #endif // IARA_RUNTIME_VIRTUALFIFOSCHEDULER_H

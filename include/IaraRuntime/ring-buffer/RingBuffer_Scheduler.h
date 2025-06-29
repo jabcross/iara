@@ -8,7 +8,13 @@ struct VirtualFIFO_RuntimeData {
   Span<VirtualFIFO_Edge> fifo_infos;
 };
 
+// Create all data structures
 extern "C" void iara_runtime_init();
+
+// run single iteration
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration);
+
+// call instruction wrapper (delegates underlying runtime)
+extern "C" void iara_runtime_exec(void (*exec)());
 
 #endif // IARA_RUNTIME_VIRTUALFIFOSCHEDULER_H

@@ -42,13 +42,30 @@ extern "C" void run();
 
 extern VirtualFIFO_Edge *iara_runtime_edges;
 
-extern "C" int main() {
-
-  omp_set_num_threads(1);
+void exec() {
   iara_runtime_init();
 
   iara_runtime_run_iteration(0);
   iara_runtime_run_iteration(1);
 
+  printf("end of exec\n");
+}
+
+extern "C" int main() {
+
+  // omp_set_num_threads(4);
+
+  iara_runtime_exec(exec);
+
+  // #pragma omp parallel
+  // #pragma omp single
+  //   {
+  //     iara_runtime_init();
+
+  //     iara_runtime_run_iteration(0);
+  //     iara_runtime_run_iteration(1);
+  //     printf("end of exec\n");
+  //   }
+  //   printf("end of program\n");
   return 0;
 }

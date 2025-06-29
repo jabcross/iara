@@ -57,7 +57,7 @@ struct RingBuffer_Edge {
   void init();
 
   void push(Chunk chunk);
-  void pop(Chunk &chunk);
+  bool tryPop(Chunk &chunk);
 };
 
 #endif

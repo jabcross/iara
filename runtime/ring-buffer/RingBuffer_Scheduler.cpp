@@ -2,25 +2,28 @@
 #include "IaraRuntime/ring-buffer/Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
+#include "IaraRuntime/util/DebugPrint.h"
 #include <cassert>
 #include <coroutine>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
+#include <future>
 #include <llvm/Support/ErrorHandling.h>
+#include <queue>
 #include <semaphore>
 #include <thread>
+#include <utility>
 #include <vector>
 
-extern std::span<RingBuffer_Node> iara_runtime_nodes;
-extern std::span<RingBuffer_Edge> iara_runtime_edges;
+extern Span<RingBuffer_Node> iara_runtime_nodes;
+extern Span<RingBuffer_Edge> iara_runtime_edges;
+
+#ifdef IARA_DEBUGPRINT
+extern std::mutex debug_mutex;
+#endif
 
 i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
-std::vector<std::thread> threads;
-
-template <class F> void callBlockingFunctionFromOpenMPTask(F f) {
-  // assuming this is called from an OpenMP Task
-}
-
 struct sema_wrapper {
   std::binary_semaphore sema;
   constexpr sema_wrapper() : sema(0) {};
@@ -32,35 +35,54 @@ std::counting_semaphore<> iter_ended{0};
 sema_wrapper *semas;
 
 size_t getIndex(RingBuffer_Node &node) {
-  return &node - &iara_runtime_nodes.front();
+  return &node - &iara_runtime_nodes.asSpan().front();
 }
 
 struct node_thread {};
 
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
-  for (auto i = 0; i < iara_runtime_nodes.size(); i++) {
-    semas[i].sema.release();
+
+#pragma omp taskgroup
+  {
+    for (auto &node : iara_runtime_nodes.asSpan()) {
+      auto node_ptr = &node;
+#pragma omp task firstprivate(node_ptr)
+      {
+
+#ifdef IARA_DEBUGPRINT
+        debug_mutex.lock();
+        debugPrintThreadColor("running iteration for node %ld\n",
+                              node_ptr->info.id);
+        debug_mutex.unlock();
+#endif
+        node_ptr->run_iteration();
+      }
+    }
   }
-  for (auto i = 0; i < iara_runtime_nodes.size(); i++) {
-    iter_ended.acquire();
+}
+
+extern "C" void iara_runtime_exec(void (*exec)()) {
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      exec();
+    }
   }
 }
 
 extern "C" void iara_runtime_init() {
+
+  auto threadnum = std::thread::hardware_concurrency();
+
   semas = new sema_wrapper[iara_runtime_nodes.size()];
+
   for (auto i = 0; i < iara_runtime_nodes.size(); i++) {
-    iara_runtime_nodes[i].init();
-    auto ptr = &iara_runtime_nodes[i];
-    std::thread([ptr, i]() {
-      for (auto edge : ptr->output_fifos.asSpan()) {
-        edge->init();
-      }
-      while (true) {
-        semas[i].sema.acquire();
-        ptr->run_iteration();
-        iter_ended.release();
-      }
-      llvm_unreachable("what");
-    }).detach();
-  }
+    // per node
+    iara_runtime_nodes.asSpan()[i].init();
+    auto ptr = &iara_runtime_nodes.asSpan()[i];
+    for (auto edge : ptr->output_fifos.asSpan()) {
+      edge->init();
+    }
+  };
 }

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd $IARA_DIR
+
 # Runs a test (directly, not through lit)
 
 set -x

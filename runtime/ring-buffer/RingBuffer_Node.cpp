@@ -3,9 +3,11 @@
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include <cassert>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <gtl/phmap.hpp>
+#include <thread>
 
 void RingBuffer_Node::init() {};
 
@@ -45,22 +47,37 @@ Span<Chunk> allocWorkingMemory(RingBuffer_Node *node) {
 }
 
 void popInputs(RingBuffer_Node *node, Span<Chunk> working_memory) {
-
-  for (size_t i = 0; i < node->input_fifos.extents; i++) {
-
-    node->input_fifos.ptr[i]->pop(working_memory.ptr[i]);
+#pragma omp taskgroup
+  {
+    for (size_t i = 0; i < node->input_fifos.extents; i++) {
+      auto edge_ptr = node->input_fifos.ptr[i];
+      Chunk c = working_memory.ptr[i];
+#pragma omp task firstprivate(edge_ptr, c)
+      {
+        while (!edge_ptr->tryPop(c)) {
+#pragma omp taskyield
+          std::this_thread::sleep_for(std::chrono::microseconds(1));
+        }
+      }
+    }
   }
 }
 
 void pushOutputs(RingBuffer_Node *node, Span<Chunk> working_memory) {
-  for (size_t output_fifo_index = 0,
-              num_output_fifos = node->output_fifos.extents,
-              arg_index = node->info.num_ins;
-       output_fifo_index < num_output_fifos;
-       output_fifo_index++, arg_index++) {
-
-    node->output_fifos.ptr[output_fifo_index]->push(
-        working_memory.ptr[arg_index]);
+#pragma omp taskgroup
+  {
+    for (size_t output_fifo_index = 0,
+                num_output_fifos = node->output_fifos.extents,
+                arg_index = node->info.num_ins;
+         output_fifo_index < num_output_fifos;
+         output_fifo_index++, arg_index++) {
+      auto edge_ptr = node->output_fifos.ptr[output_fifo_index];
+      Chunk chunk = working_memory.ptr[arg_index];
+#pragma omp task firstprivate(edge_ptr) firstprivate(chunk)
+      {
+        edge_ptr->push(chunk);
+      }
+    }
   }
 }
 

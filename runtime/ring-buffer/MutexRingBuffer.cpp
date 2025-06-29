@@ -1,4 +1,5 @@
 #include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
+#include "IaraRuntime/util/DebugPrint.h"
 #include <cassert>
 #include <condition_variable>
 #include <cstddef>
@@ -6,6 +7,64 @@
 #include <cstring>
 #include <llvm/Support/MathExtras.h>
 #include <mutex>
+
+#ifdef IARA_DEBUGPRINT
+  #define DEBUG(x) x
+
+std::mutex debug_mutex;
+
+void printChunkOfInts(i8 *data, size_t data_size) {
+  auto size = data_size / sizeof(int);
+  auto first = (int *)data;
+
+  for (int i = 0; i < size; i++) {
+    debugPrintThreadColor("%d ", first[i]);
+  }
+  fprintf(stderr, "\n");
+  fflush(stderr);
+}
+
+void printChunkOfFloats(i8 *data, size_t data_size) {
+  auto size = data_size / sizeof(int);
+  auto first = (float *)data;
+
+  for (int i = 0; i < size; i++) {
+    debugPrintThreadColor("%.0f \e[0m", first[i]);
+  }
+  fprintf(stderr, "\n");
+  fflush(stderr);
+}
+
+void dumpQueue(MutexRingBuffer *queue, i64 edge_id) {
+  debugPrintThreadColor("%ld size %lu\n", edge_id, queue->m_size);
+  debugPrintThreadColor("[ ");
+  i8 *data = queue->m_buffer;
+  size_t data_size = queue->m_capacity;
+  printChunkOfFloats(data, data_size);
+  auto f = queue->m_front - queue->m_buffer;
+  auto b = queue->m_back - queue->m_buffer;
+  f /= 4;
+  b /= 4;
+  fprintf(stderr, "  ");
+  for (int i = 0; i < queue->m_capacity / 4 + 1; i++) {
+    if (i == f) {
+      debugPrintThreadColor("F ");
+    } else
+      fprintf(stderr, "  ");
+  }
+  fprintf(stderr, "\n  ");
+  for (int i = 0; i < queue->m_capacity / 4 + 1; i++) {
+    if (i == b) {
+      debugPrintThreadColor("B ");
+    } else
+      fprintf(stderr, "  ");
+  }
+  fprintf(stderr, "\n");
+}
+
+#else
+  #define DEBUG(x)
+#endif
 
 MutexRingBuffer::MutexRingBuffer(size_t p_capacity) {
   // alloc cache line
@@ -43,9 +102,24 @@ void MutexRingBuffer::growToFit(size_t capacity) {
 }
 
 // blocks
-void MutexRingBuffer::push(i8 *data, size_t size) {
+void MutexRingBuffer::push(i8 *data, size_t size, i64 edge_id) {
   assert(m_buffer != nullptr);
+
   m_mutex.lock();
+
+#ifdef IARA_DEBUGPRINT
+  debug_mutex.lock();
+
+  debugPrintThreadColor(
+      "   Pushing %ld bytes from edge %ld queue %#016lx size %lu\n ",
+      size,
+      edge_id,
+      (size_t)this,
+      m_size);
+  printChunkOfFloats(data, size);
+  dumpQueue(this, edge_id);
+#endif
+
   if (m_size + size > m_capacity) {
     growToFit(size + m_size);
   }
@@ -60,14 +134,35 @@ void MutexRingBuffer::push(i8 *data, size_t size) {
     m_back = m_buffer + size - back_to_buffer_end;
     m_size += size;
   }
+
+#ifdef IARA_DEBUGPRINT
+
+  dumpQueue(this, edge_id);
+
+  debug_mutex.unlock();
+
+#endif
   m_mutex.unlock();
-  m_cv.notify_one();
 }
 
-// blocks
-void MutexRingBuffer::pop(i8 *data, size_t size) {
-  std::unique_lock<std::mutex> lk(m_mutex);
-  m_cv.wait(lk, [&] { return m_size >= size; });
+bool MutexRingBuffer::tryPop(i8 *data, size_t size, i64 edge_id) {
+  if (!m_mutex.try_lock())
+    return false;
+  if (m_size < size) {
+    m_mutex.unlock();
+    return false;
+  }
+
+#ifdef IARA_DEBUGPRINT
+  debug_mutex.lock();
+  debugPrintThreadColor(
+      "   Popping %ld bytes from edge %ld queue %#016lx size %lu\n ",
+      size,
+      edge_id,
+      (size_t)this,
+      m_size);
+  dumpQueue(this, edge_id);
+#endif
 
   size_t front_to_buffer_end = m_buffer + m_capacity - m_front;
 
@@ -75,26 +170,31 @@ void MutexRingBuffer::pop(i8 *data, size_t size) {
     memcpy(data, m_front, size);
     m_front += size;
     m_size -= size;
-    lk.unlock();
-    return;
+
+  } else {
+
+    // data wraps around
+    size_t right_part = front_to_buffer_end;
+    size_t left_part = size - right_part;
+
+    memcpy(data, m_front, right_part);
+    memcpy(data + right_part, m_buffer, left_part);
+
+    m_size -= size;
+    m_front = m_buffer + left_part;
+    if (m_front == m_buffer + m_capacity)
+      m_front = m_buffer;
+
+    if (m_size == 0) {
+      m_front = m_back = m_buffer;
+    }
   }
 
-  // data wraps around
-  size_t right_part = front_to_buffer_end;
-  size_t left_part = size - right_part;
+#ifdef IARA_DEBUGPRINT
+  dumpQueue(this, edge_id);
+  debug_mutex.unlock();
+#endif
 
-  memcpy(data, m_front, right_part);
-  memcpy(data + right_part, m_buffer, left_part);
-
-  m_size -= size;
-  m_front = m_buffer + left_part;
-  if (m_front == m_buffer + m_capacity)
-    m_front = m_buffer;
-
-  if (m_size == 0) {
-    m_front = m_back = m_buffer;
-  }
-  lk.unlock();
-  // No need to notify (all contended pops should come from the same thread)
-  // m_cv.notify_one();
+  m_mutex.unlock();
+  return true;
 }
