@@ -13,7 +13,10 @@ IGNORE_RESULT=0
 
 cd $IARA_DIR
 
-export SCHEDULER_MODE=virtual-fifo
+if [ -z $SCHEDULER_MODE ]; then
+	echo "Must specify SCHEDULER_MODE"
+	exit 1
+fi
 
 # Parse arguments
 for arg in "$@"; do

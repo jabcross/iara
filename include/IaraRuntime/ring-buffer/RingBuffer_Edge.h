@@ -3,7 +3,7 @@
 
 #include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/Chunk.h"
-#include <concurrentqueue/blockingconcurrentqueue.h>
+#include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
 #include <cstdlib>
 
 struct RingBuffer_Node;
@@ -41,7 +41,7 @@ struct RingBuffer_Edge {
   Span<const char> delay_data;
   RingBuffer_Node *consumer;
   RingBuffer_Node *producer;
-  moodycamel::BlockingConcurrentQueue<char> *queue;
+  MutexRingBuffer *queue;
 
   RingBuffer_Edge() = default;
   RingBuffer_Edge(char *name,
@@ -49,7 +49,7 @@ struct RingBuffer_Edge {
                   Span<const char> delay_data,
                   RingBuffer_Node *consumer,
                   RingBuffer_Node *producer,
-                  moodycamel::BlockingConcurrentQueue<char> *queue)
+                  MutexRingBuffer *queue)
       : name(name), info(info), delay_data(delay_data), consumer(consumer),
         producer(producer), queue(queue) {};
 

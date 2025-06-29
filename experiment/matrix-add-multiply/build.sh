@@ -6,6 +6,11 @@ if [[ $MATRIX_ORDER == "" ]]; then
   exit 1
 fi
 
+if [[ $EXPERIMENT_SUFFIX == "" ]]; then
+  echo "must pass in EXPERIMENT_SUFFIX"
+  exit 1
+fi
+
 MATRIXNUMELEMENTS=$(($MATRIX_ORDER * $MATRIX_ORDER))
 
 echo "Matrix size: $MATRIXNUMELEMENTS"
@@ -13,10 +18,11 @@ echo "Matrix size: $MATRIXNUMELEMENTS"
 cd $SCRIPT_DIR
 
 mkdir -p build
+rm -f build/*
 
 cd build
 
-sed -e "s/MATRIXNUMELEMENTS/$MATRIXNUMELEMENTS/g" ../topology.mlir.template >topology.mlir
+sed -e "s/MATRIXNUMELEMENTS/$MATRIXNUMELEMENTS/g" ../topology.mlir.template >topology.$EXPERIMENT_SUFFIX.mlir
 
 # rebuild compiler
 $IARA_DIR/scripts/build-iara.sh
@@ -56,7 +62,7 @@ fi
 pwd
 pwd >&2
 
-\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_BUILD_DIR/topology.mlir >schedule.mlir 2>/dev/null"
+\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_BUILD_DIR/topology.$EXPERIMENT_SUFFIX.mlir >schedule.$EXPERIMENT_SUFFIX.mlir 2>/dev/null"
 RC=$?
 echo iara-opt return code: $RC
 if [ $RC -ne 0 ]; then
@@ -64,12 +70,12 @@ if [ $RC -ne 0 ]; then
   exit 1
 fi
 
-sh -x mlir-to-llvmir.sh schedule.mlir
+sh -x mlir-to-llvmir.sh schedule.$EXPERIMENT_SUFFIX.mlir
 
 shopt -s nullglob
 
 echo building schedule
-\time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++17 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.$EXPERIMENT_SUFFIX.ll -o schedule.o"
 RC=$?
 echo scheduler return code: $RC
 if [ $RC -ne 0 ]; then
@@ -120,7 +126,7 @@ if [ $RC -ne 0 ]; then
 fi
 
 echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o"
+\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ -v --std=c++17 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o -o $EXPERIMENT_SUFFIX.bin"
 RC=$?
 echo linker return code: $RC
 if [ $RC -ne 0 ]; then

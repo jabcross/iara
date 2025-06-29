@@ -68,27 +68,27 @@ void RingBuffer_Node::run_iteration() {
   // inputs
   for (i64 firing = 0; firing < info.total_iter_firings; firing++) {
     auto working_memory = allocWorkingMemory(this);
-    fprintf(stderr,
-            "Start firing %ld/%ld of %ld\n",
-            firing + 1,
-            info.total_iter_firings,
-            info.id);
-    fflush(stderr);
+    // fprintf(stderr,
+    //         "Start firing %ld/%ld of %ld\n",
+    //         firing + 1,
+    //         info.total_iter_firings,
+    //         info.id);
+    // fflush(stderr);
     popInputs(this, working_memory);
-    fprintf(stderr,
-            "Running firing %ld/%ld of %ld\n",
-            firing + 1,
-            info.total_iter_firings,
-            info.id);
-    fflush(stderr);
+    // fprintf(stderr,
+    //         "Running firing %ld/%ld of %ld\n",
+    //         firing + 1,
+    //         info.total_iter_firings,
+    //         info.id);
+    // fflush(stderr);
     wrapper(working_memory.ptr);
     pushOutputs(this, working_memory);
-    fprintf(stderr,
-            "End firing %ld/%ld of %ld\n",
-            firing + 1,
-            info.total_iter_firings,
-            info.id);
-    fflush(stderr);
+    // fprintf(stderr,
+    //         "End firing %ld/%ld of %ld\n",
+    //         firing + 1,
+    //         info.total_iter_firings,
+    //         info.id);
+    // fflush(stderr);
     freeWorkingMemory(working_memory);
   }
 }
