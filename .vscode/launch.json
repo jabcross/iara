@@ -15,6 +15,7 @@
           "05-cholesky",
           "06-broadcast",
           "07-ownership",
+          "08-SIFT",
           "09-hierarchy",
           "10-multi-rate",
           "11-forward-delay",
@@ -36,6 +37,15 @@
         "description": "Which scheduler to use",
         "key": "pickedScheduler"
       }
+    },
+    {
+      "id": "experiment_args",
+      "type": "pickString",
+      "options": [
+        "",
+        "--no-scheduler"
+      ],
+      "description": "Which args to pass to experiment",
     }
   ],
   "configurations": [
@@ -185,6 +195,17 @@
       "request": "launch",
       "program": "${fileDirname}/a.out",
       "args": [],
+      "cwd": "${fileDirname}",
+    },
+    {
+      "name": "(lldb) Experiment",
+      "type": "lldb-dap",
+      "request": "launch",
+      "program": "${fileDirname}/a.out",
+      "args": [
+        "--write-result",
+        "${input:experiment_args}"
+      ],
       "cwd": "${fileDirname}",
     },
     {

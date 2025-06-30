@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Range.h"
@@ -43,9 +44,14 @@ namespace {
 class FlattenPass : public impl::FlattenPassBase<FlattenPass> {
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<IaraDialect, memref::MemRefDialect, mlir::func::FuncDialect,
-                    arith::ArithDialect, func::FuncDialect, LLVM::LLVMDialect,
-                    mlir::math::MathDialect, mlir::linalg::LinalgDialect,
+    registry.insert<IaraDialect,
+                    memref::MemRefDialect,
+                    mlir::func::FuncDialect,
+                    arith::ArithDialect,
+                    func::FuncDialect,
+                    LLVM::LLVMDialect,
+                    mlir::math::MathDialect,
+                    mlir::linalg::LinalgDialect,
                     mlir::tensor::TensorDialect>();
   }
   using impl::FlattenPassBase<FlattenPass>::FlattenPassBase;
@@ -125,6 +131,10 @@ public:
     }
     if (!node.signatureMatches(actor_op)) {
       node->emitError("Signature of node does not match actor");
+      llvm::errs() << "Node: ";
+      node.dump();
+      llvm::errs() << "Actor: ";
+      actor_op.dump();
       signalPassFailure();
       return;
     }
@@ -200,6 +210,7 @@ public:
     SmallVector<ActorOp> decls;
 
     for (auto actor : module.getOps<ActorOp>()) {
+      auto _ = canon::canonicalizeTypes(actor);
       if (actor.isKernelDeclaration()) {
         decls.push_back(actor);
       } else {

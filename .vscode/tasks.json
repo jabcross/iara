@@ -12,6 +12,7 @@
           "05-cholesky",
           "06-broadcast",
           "07-ownership",
+          "08-SIFT",
           "09-hierarchy",
           "10-multi-rate",
           "11-forward-delay"

@@ -132,8 +132,14 @@ if [ $RC -ne 0 ]; then
   exit 4
 fi
 
+EXTRAOBJS=""
+
+for DIR in $EXTRA_OBJ_DIRS; do
+  EXTRAOBJS="$EXTRAOBJS $PATH_TO_TEST_SOURCES/$DIR/*.o"
+done
+
 echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o"
+\time -f 'linking took %E and returned code %x' bash -xc "ccache clang++ --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o $EXTRAOBJS"
 RC=$?
 echo linker return code: $?
 if [ $RC -ne 0 ]; then

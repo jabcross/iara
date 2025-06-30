@@ -9,6 +9,12 @@
 #include <gtl/phmap.hpp>
 #include <thread>
 
+// #define IARA_DEBUGPRINT
+
+#ifdef IARA_DEBUGPRINT
+extern std::mutex debug_mutex;
+#endif
+
 void RingBuffer_Node::init() {};
 
 void freeWorkingMemory(Span<Chunk> working_memory) {
@@ -85,27 +91,44 @@ void RingBuffer_Node::run_iteration() {
   // inputs
   for (i64 firing = 0; firing < info.total_iter_firings; firing++) {
     auto working_memory = allocWorkingMemory(this);
-    // fprintf(stderr,
-    //         "Start firing %ld/%ld of %ld\n",
-    //         firing + 1,
-    //         info.total_iter_firings,
-    //         info.id);
-    // fflush(stderr);
+#ifdef IARA_DEBUGPRINT
+    debug_mutex.lock();
+    fprintf(stderr,
+            "Start firing %ld/%ld of %ld\n",
+            firing + 1,
+            info.total_iter_firings,
+            info.id);
+    fflush(stderr);
+    debug_mutex.unlock();
+#endif
+
     popInputs(this, working_memory);
+
+#ifdef IARA_DEBUGPRINT
+    debug_mutex.lock();
     // fprintf(stderr,
     //         "Running firing %ld/%ld of %ld\n",
     //         firing + 1,
     //         info.total_iter_firings,
     //         info.id);
     // fflush(stderr);
+    debug_mutex.unlock();
+#endif
+
     wrapper(working_memory.ptr);
     pushOutputs(this, working_memory);
+
+#ifdef IARA_DEBUGPRINT
+    debug_mutex.lock();
     // fprintf(stderr,
     //         "End firing %ld/%ld of %ld\n",
     //         firing + 1,
     //         info.total_iter_firings,
     //         info.id);
     // fflush(stderr);
+    debug_mutex.unlock();
+#endif
+
     freeWorkingMemory(working_memory);
   }
 }

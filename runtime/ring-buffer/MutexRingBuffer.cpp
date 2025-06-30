@@ -3,10 +3,13 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <llvm/Support/MathExtras.h>
 #include <mutex>
+
+// #define IARA_DEBUGPRINT
 
 #ifdef IARA_DEBUGPRINT
   #define DEBUG(x) x
@@ -29,33 +32,64 @@ void printChunkOfFloats(i8 *data, size_t data_size) {
   auto first = (float *)data;
 
   for (int i = 0; i < size; i++) {
-    debugPrintThreadColor("%.0f \e[0m", first[i]);
+    debugPrintThreadColor("%0.03f ", first[i]);
   }
   fprintf(stderr, "\n");
   fflush(stderr);
 }
 
 void dumpQueue(MutexRingBuffer *queue, i64 edge_id) {
-  debugPrintThreadColor("%ld size %lu\n", edge_id, queue->m_size);
-  debugPrintThreadColor("[ ");
+
   i8 *data = queue->m_buffer;
   size_t data_size = queue->m_capacity;
-  printChunkOfFloats(data, data_size);
-  auto f = queue->m_front - queue->m_buffer;
-  auto b = queue->m_back - queue->m_buffer;
+
+  auto size = data_size / sizeof(float);
+  auto first = (float *)data;
+
+  size_t f = queue->m_front - queue->m_buffer;
+  size_t b = queue->m_back - queue->m_buffer;
   f /= 4;
   b /= 4;
+
+  debugPrintThreadColor("%ld size %lu capacity %lu F = %lu B = %lu\n",
+                        edge_id,
+                        queue->m_size / 4,
+                        queue->m_capacity / 4,
+                        f,
+                        b);
+  debugPrintThreadColor("[ ");
+
+  if (b < f) {
+    fprintf(stderr, "\e[4m");
+  }
+
+  for (int i = 0; i < size; i++) {
+    if (i == f) {
+      fprintf(stderr, "\e[4m");
+    }
+    if (i == b) {
+      fprintf(stderr, "\e[24m");
+    }
+    debugPrintThreadColor("%0.03f ", first[i]);
+  }
+
+  fprintf(stderr, "\e[24m");
+
+  fprintf(stderr, "\n");
+
   fprintf(stderr, "  ");
   for (int i = 0; i < queue->m_capacity / 4 + 1; i++) {
     if (i == f) {
-      debugPrintThreadColor("F ");
+      debugPrintThreadColor("F = %lu", f);
+      break;
     } else
       fprintf(stderr, "  ");
   }
   fprintf(stderr, "\n  ");
   for (int i = 0; i < queue->m_capacity / 4 + 1; i++) {
     if (i == b) {
-      debugPrintThreadColor("B ");
+      debugPrintThreadColor("B = %lu");
+      break;
     } else
       fprintf(stderr, "  ");
   }
@@ -78,11 +112,22 @@ MutexRingBuffer::MutexRingBuffer(size_t p_capacity) {
 }
 
 // Not thread safe
-void MutexRingBuffer::growToFit(size_t capacity) {
+void MutexRingBuffer::growToFit(size_t capacity, i64 edge_id) {
   size_t newcapacity = m_capacity;
   while (newcapacity < capacity) {
-    newcapacity *= newcapacity;
+    newcapacity += newcapacity;
   }
+
+#ifdef IARA_DEBUGPRINT
+  debug_mutex.lock();
+
+  debugPrintThreadColor("   Growing edge %ld from %lu to %lu\n",
+                        edge_id,
+                        m_capacity / 4,
+                        newcapacity / 4);
+  debug_mutex.unlock();
+#endif
+
   // no realloc since this also unwraps the buffer
 
   size_t front_to_buffer_end = m_buffer + m_capacity - m_front;
@@ -97,7 +142,7 @@ void MutexRingBuffer::growToFit(size_t capacity) {
   }
   free(m_buffer);
   m_buffer = m_front = new_ptr;
-  m_back = m_front + capacity;
+  m_back = m_front + m_size;
   m_capacity = newcapacity;
   return;
 }
@@ -111,18 +156,20 @@ void MutexRingBuffer::push(i8 *data, size_t size, i64 edge_id) {
 #ifdef IARA_DEBUGPRINT
   debug_mutex.lock();
 
-  debugPrintThreadColor(
-      "   Pushing %ld bytes from edge %ld queue %#016lx size %lu\n ",
-      size,
-      edge_id,
-      (size_t)this,
-      m_size);
+  debugPrintThreadColor("   Pushing %ld floats from edge %ld queue %#016lx "
+                        "size %lu capacity %lu\n ",
+                        size / 4,
+                        edge_id,
+                        (size_t)this,
+                        m_size / 4,
+                        m_capacity / 4);
   printChunkOfFloats(data, size);
   dumpQueue(this, edge_id);
+  debug_mutex.unlock();
 #endif
 
   if (m_size + size > m_capacity) {
-    growToFit(size + m_size);
+    growToFit(size + m_size, edge_id);
   }
   if (m_back + size <= m_buffer + m_capacity) {
     memcpy(m_back, data, size);
@@ -137,6 +184,8 @@ void MutexRingBuffer::push(i8 *data, size_t size, i64 edge_id) {
   }
 
 #ifdef IARA_DEBUGPRINT
+
+  debug_mutex.lock();
 
   dumpQueue(this, edge_id);
 
@@ -156,13 +205,16 @@ bool MutexRingBuffer::tryPop(i8 *data, size_t size, i64 edge_id) {
 
 #ifdef IARA_DEBUGPRINT
   debug_mutex.lock();
-  debugPrintThreadColor(
-      "   Popping %ld bytes from edge %ld queue %#016lx size %lu\n ",
-      size,
-      edge_id,
-      (size_t)this,
-      m_size);
+  debugPrintThreadColor("   Popping %ld floats from edge %ld queue %#016lx "
+                        "size %lu capacity %lu\n ",
+                        size / 4,
+                        edge_id,
+                        (size_t)this,
+                        m_size / 4,
+                        m_capacity / 4);
   dumpQueue(this, edge_id);
+  debug_mutex.unlock();
+
 #endif
 
   size_t front_to_buffer_end = m_buffer + m_capacity - m_front;
@@ -192,6 +244,8 @@ bool MutexRingBuffer::tryPop(i8 *data, size_t size, i64 edge_id) {
   }
 
 #ifdef IARA_DEBUGPRINT
+  debug_mutex.lock();
+
   dumpQueue(this, edge_id);
   debug_mutex.unlock();
 #endif

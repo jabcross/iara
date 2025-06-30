@@ -1,3 +1,200 @@
-// RUN: mkdir -p $(dirname %s)/build
-// python $(dirname %s)/../../../scripts/dif-to-iara.py $(dirname %s)/topology.dif > $(dirname %s)/build/topology.mlir
-// RUN: iara-opt --flatten --sdf-to-tasks $(dirname %s)/build/topology.mlir > $(dirname %s)/build/schedule.mlir
+// RUN: export SCHEDULER_MODE=$SCHEDULER_MODE
+// RUN: pwd >&2
+// RUN: export EXTRA_OBJ_DIRS=build/CMakeFiles/extract.dir/src
+// RUN: build-single-test.sh .
+// RUN: pwd >&2
+// RUN: ls build >&2
+// RUN: ./build/a.out > ./build/output.txt
+// RUN: FileCheck %s < ./build/output.txt
+
+iara.actor @blur2x { // subgraph
+    %gauss_coefs1_i_i = iara.in : tensor<126xf32>
+    %imgOri_i_i = iara.in : tensor<512000xf32>
+    %col_sizes1_i_i = iara.in : tensor<6xi32>
+    %iterPrev_i_i = iara.in : tensor<512000xf32>
+    %iter_nb1_i_i = iara.in : tensor<1xi32>
+    %col_sizes2_i_i = iara.in : tensor<6xi32>
+    %gauss_coefs2_i_i = iara.in : tensor<126xf32>
+    %iter_nb2_i_i = iara.in : tensor<1xi32>
+   %e1_s = iara.node @row_filter_transpose2x_1 in %gauss_coefs1_d, %imgOri_d, %col_sizes1_d, %iterPrev_d, %iter_nb1_d  : f32, f32, i32, f32, i32  out: f32 
+   %e3_s = iara.node @row_filter_transpose2x_2 in %col_sizes2_d, %e2_d, %gauss_coefs2_d, %iter_nb2_d  : i32, f32, f32, i32  out: f32 
+   %e2_s = iara.node @BarrierTranspose2x_1 in %e1_d  : f32  out: f32 
+   %imgBlurred_s = iara.node @BarrierTranspose2x_2 in %e3_d  : f32  out: f32 
+   %gauss_coefs1_d = iara.edge %gauss_coefs1_i_i : tensor<126xf32> -> f32
+   %imgOri_d = iara.edge %imgOri_i_i : tensor<512000xf32> -> f32
+   %col_sizes1_d = iara.edge %col_sizes1_i_i : tensor<6xi32> -> i32
+   %iterPrev_d = iara.edge %iterPrev_i_i : tensor<512000xf32> -> f32
+   %iter_nb1_d = iara.edge %iter_nb1_i_i : tensor<1xi32> -> i32
+   %e1_d = iara.edge %e1_s : f32 -> f32
+   %col_sizes2_d = iara.edge %col_sizes2_i_i : tensor<6xi32> -> i32
+   %e2_d = iara.edge %e2_s : f32 -> f32
+   %gauss_coefs2_d = iara.edge %gauss_coefs2_i_i : tensor<126xf32> -> f32
+   %iter_nb2_d = iara.edge %iter_nb2_i_i : tensor<1xi32> -> i32
+   %e3_d = iara.edge %e3_s : f32 -> f32
+   %imgBlurred_o_i = iara.edge %imgBlurred_s : f32 -> tensor<2048000xf32>
+    iara.out ( %imgBlurred_o_i : tensor<2048000xf32> ) : tensor<2048000xf32>
+} // end subgraph blur2x
+iara.actor @blur { // subgraph
+    %gauss_coefs1_i_i = iara.in : tensor<126xf32>
+    %imgOri_i_i = iara.in : tensor<128000xf32>
+    %col_sizes1_i_i = iara.in : tensor<6xi32>
+    %iterPrev_i_i = iara.in : tensor<128000xf32>
+    %iter_nb1_i_i = iara.in : tensor<1xi32>
+    %iter_nb2_i_i = iara.in : tensor<1xi32>
+    %gauss_coefs2_i_i = iara.in : tensor<126xf32>
+    %col_sizes2_i_i = iara.in : tensor<6xi32>
+   %e1_s = iara.node @row_filter_transpose_1 in %gauss_coefs1_d, %imgOri_d, %col_sizes1_d, %iterPrev_d, %iter_nb1_d  : f32, f32, i32, f32, i32  out: f32 
+   %e3_s = iara.node @row_filter_transpose_2 in %gauss_coefs2_d, %e2_d, %col_sizes2_d, %iter_nb2_d  : f32, f32, i32, i32  out: f32 
+   %e2_s = iara.node @BarrierTranspose_1 in %e1_d  : f32  out: f32 
+   %imgBlurred_s = iara.node @BarrierTranspose_2 in %e3_d  : f32  out: f32 
+   %gauss_coefs1_d = iara.edge %gauss_coefs1_i_i : tensor<126xf32> -> f32
+   %imgOri_d = iara.edge %imgOri_i_i : tensor<128000xf32> -> f32
+   %col_sizes1_d = iara.edge %col_sizes1_i_i : tensor<6xi32> -> i32
+   %iterPrev_d = iara.edge %iterPrev_i_i : tensor<128000xf32> -> f32
+   %iter_nb1_d = iara.edge %iter_nb1_i_i : tensor<1xi32> -> i32
+   %e1_d = iara.edge %e1_s : f32 -> f32
+   %gauss_coefs2_d = iara.edge %gauss_coefs2_i_i : tensor<126xf32> -> f32
+   %e2_d = iara.edge %e2_s : f32 -> f32
+   %col_sizes2_d = iara.edge %col_sizes2_i_i : tensor<6xi32> -> i32
+   %iter_nb2_d = iara.edge %iter_nb2_i_i : tensor<1xi32> -> i32
+   %e3_d = iara.edge %e3_s : f32 -> f32
+   %imgBlurred_o_i = iara.edge %imgBlurred_s : f32 -> tensor<512000xf32>
+    iara.out ( %imgBlurred_o_i : tensor<512000xf32> ) : tensor<512000xf32>
+} // end subgraph blur
+iara.actor @Htop_sift { // subgraph
+    %image_i_i = iara.in : tensor<128000xi8>
+   %e35_s, %e36_s = iara.node @compute_gaussian_coefs out: i32, f32 
+   %e58_s = iara.node @extract_descriptor in %e6_d, %e14_d, %e16_d  : tensor<556xi8>, f32, f32  out: tensor<556xi8> 
+   %e6_s = iara.node @detect_keypoints in %e13_d, %e15_d, %e65_d, %e7_d, %e8_d, %e9_d, %e10_d, %e11_d, %e12_d, %e72_d, %e73_d  : f32, f32, f32, i32, i32, i32, i32, i32, i32, i32, i32  out: tensor<556xi8> 
+   %e7_s, %e8_s, %e9_s, %e10_s, %e11_s, %e12_s, %e72_s, %e73_s = iara.node @ITERATOR_detect_keypoints out: i32, i32, i32, i32, i32, i32, i32, i32 
+   %e15_s, %e16_s = iara.node @BdRot_BROADCAST in %e30_d  : f32  out: f32, f32 
+   %e13_s, %e14_s = iara.node @BdGrd_BROADCAST in %e29_d  : f32  out: f32, f32 
+   %e64_s = iara.node @build_dog_pyr in %e32_d, %e17_d, %e18_d, %e19_d, %e20_d, %e21_d, %e22_d, %e68_d, %e69_d  : f32, i32, i32, i32, i32, i32, i32, i32, i32  out: f32 
+   %e17_s, %e18_s, %e19_s, %e20_s, %e21_s, %e22_s, %e68_s, %e69_s = iara.node @ITERATOR_build_dog_pyr out: i32, i32, i32, i32, i32, i32, i32, i32 
+   %e29_s, %e30_s = iara.node @build_grd_rot_pyr in %e31_d, %e23_d, %e24_d, %e25_d, %e26_d, %e27_d, %e28_d, %e70_d, %e71_d  : f32, i32, i32, i32, i32, i32, i32, i32, i32  out: f32, f32 
+   %e23_s, %e24_s, %e25_s, %e26_s, %e27_s, %e28_s, %e70_s, %e71_s = iara.node @ITERATOR_build_grd_rot_pyr out: i32, i32, i32, i32, i32, i32, i32, i32 
+   %e34_s = iara.node @to_float in %image_d  : i8  out: f32 
+   %e32_s, %e31_s = iara.node @BdGpyr_BROADCAST in %e33_d  : f32  out: f32, f32 
+   %e33_s = iara.node @MERGE_gpyr in %e49_d, %e48_d, %e52_d, %e54_d  : f32, f32, f32, f32  out: f32 
+   %e74_s, %e92_s, %e39_s = iara.node @BdFloatImg_BROADCAST in %e34_d  : f32  out: f32, f32, f32 
+   %e37_s = iara.node @upsample2x in %e75_d, %e76_d  : f32, i32  out: f32 
+   %e50_s = iara.node @downsample2xN in %e38_d, %e1_d, %e56_d  : f32, f32, i32  out: f32 
+   %e83_s, %e84_s, %e85_s, %e86_s, %e44_s, %e63_s = iara.node @BdCoefs_BROADCAST in %e36_d  : f32  out: f32, f32, f32, f32, f32, f32 
+   %e81_s, %e82_s, %e79_s, %e80_s, %e43_s, %e62_s = iara.node @BdSizes_BROADCAST in %e35_d  : i32  out: i32, i32, i32, i32, i32, i32 
+   %e91_s = iara.node @BdBlurUp2x_BROADCAST in %e37_d  : f32  out: f32 
+   %e38_s, %e41_s = iara.node @BdBlurDown2x1_BROADCAST in %e40_d  : f32  out: f32, f32 
+   %e51_s = iara.node @seq_blur1 in %e41_d, %e2_d, %e44_d, %e43_d, %e46_d  : f32, f32, f32, i32, i32  out: f32 
+   %e40_s = iara.node @downsample2x1 in %e39_d  : f32  out: f32 
+   %e53_s = iara.node @seq_blurN in %e42_d, %e3_d, %e63_d, %e62_d, %e61_d, %e57_d  : f32, f32, f32, i32, i32, i32  out: f32 
+   %e42_s, %e1_s = iara.node @BdBlurDown2xN_BROADCAST in %e50_d  : f32  out: f32, f32 
+   %e45_s = iara.node @counterGpyrLayer out: i32 
+   %e87_s, %e89_s, %e46_s, %e88_s, %e90_s, %e66_s = iara.node @BdCounterGpyr_BROADCAST in %e45_d  : i32  out: i32, i32, i32, i32, i32, i32 
+   %e55_s = iara.node @counterOctaveDownN out: i32 
+   %e4_s, %e49_s = iara.node @BdGT_BROADCAST in %e77_d  : f32  out: f32, f32 
+   %e5_s, %e48_s = iara.node @BdGT_2x_BROADCAST in %e78_d  : f32  out: f32, f32 
+   %e2_s, %e52_s = iara.node @BdBlurred1_BROADCAST in %e51_d  : f32  out: f32, f32 
+   %e3_s, %e54_s = iara.node @BdBlurredN_BROADCAST in %e53_d  : f32  out: f32, f32 
+   %e56_s, %e57_s = iara.node @BdOctaveDown_BROADCAST in %e55_d  : i32  out: i32, i32 
+   %keypoints_s, %nbKeypoints_s = iara.node @MERGE_keypoints in %e58_d  : tensor<556xi8>  out: tensor<556xi8>, i32 
+   %e61_s = iara.node @BdCounterGpyrXOctave_BROADCAST in %e67_d  : i32  out: i32 
+   %e65_s = iara.node @BdDoG_BROADCAST in %e64_d  : f32  out: f32 
+   %e67_s = iara.node @BarrierCounterGpyr in %e66_d  : i32  out: i32 
+   %e75_s = iara.node @SPLIT_upsample2x in %e74_d  : f32  out: f32 
+   %e76_s = iara.node @counterPLevels out: i32 
+   %e78_s = iara.node @blur2x in %e83_d, %e91_d, %e81_d, %e5_d, %e87_d, %e82_d, %e84_d, %e88_d  : f32, f32, i32, f32, i32, i32, f32, i32  out: f32 
+   %e77_s = iara.node @blur in %e85_d, %e92_d, %e79_d, %e4_d, %e89_d, %e90_d, %e86_d, %e80_d  : f32, f32, i32, f32, i32, i32, f32, i32  out: f32 
+   %e35_d = iara.edge %e35_s : i32 -> i32
+   %e36_d = iara.edge %e36_s : f32 -> f32
+   %e6_d = iara.edge %e6_s : tensor<556xi8> -> tensor<556xi8>
+   %e14_d = iara.edge %e14_s : f32 -> f32
+   %e16_d = iara.edge %e16_s : f32 -> f32
+   %e58_d = iara.edge %e58_s : tensor<556xi8> -> tensor<556xi8>
+   %e13_d = iara.edge %e13_s : f32 -> f32
+   %e15_d = iara.edge %e15_s : f32 -> f32
+   %e65_d = iara.edge %e65_s : f32 -> f32
+   %e7_d = iara.edge %e7_s : i32 -> i32
+   %e8_d = iara.edge %e8_s : i32 -> i32
+   %e9_d = iara.edge %e9_s : i32 -> i32
+   %e10_d = iara.edge %e10_s : i32 -> i32
+   %e11_d = iara.edge %e11_s : i32 -> i32
+   %e12_d = iara.edge %e12_s : i32 -> i32
+   %e72_d = iara.edge %e72_s : i32 -> i32
+   %e73_d = iara.edge %e73_s : i32 -> i32
+   %e30_d = iara.edge %e30_s : f32 -> f32
+   %e29_d = iara.edge %e29_s : f32 -> f32
+   %e32_d = iara.edge %e32_s : f32 -> f32
+   %e17_d = iara.edge %e17_s : i32 -> i32
+   %e18_d = iara.edge %e18_s : i32 -> i32
+   %e19_d = iara.edge %e19_s : i32 -> i32
+   %e20_d = iara.edge %e20_s : i32 -> i32
+   %e21_d = iara.edge %e21_s : i32 -> i32
+   %e22_d = iara.edge %e22_s : i32 -> i32
+   %e68_d = iara.edge %e68_s : i32 -> i32
+   %e69_d = iara.edge %e69_s : i32 -> i32
+   %e64_d = iara.edge %e64_s : f32 -> f32
+   %e31_d = iara.edge %e31_s : f32 -> f32
+   %e23_d = iara.edge %e23_s : i32 -> i32
+   %e24_d = iara.edge %e24_s : i32 -> i32
+   %e25_d = iara.edge %e25_s : i32 -> i32
+   %e26_d = iara.edge %e26_s : i32 -> i32
+   %e27_d = iara.edge %e27_s : i32 -> i32
+   %e28_d = iara.edge %e28_s : i32 -> i32
+   %e70_d = iara.edge %e70_s : i32 -> i32
+   %e71_d = iara.edge %e71_s : i32 -> i32
+   %image_d = iara.edge %image_i_i : tensor<128000xi8> -> i8
+   %e34_d = iara.edge %e34_s : f32 -> f32
+   %e33_d = iara.edge %e33_s : f32 -> f32
+   %e49_d = iara.edge %e49_s : f32 -> f32
+   %e48_d = iara.edge %e48_s : f32 -> f32
+   %e52_d = iara.edge %e52_s : f32 -> f32
+   %e54_d = iara.edge %e54_s : f32 -> f32
+   %e74_d = iara.edge %e74_s : f32 -> f32
+   %e92_d = iara.edge %e92_s : f32 -> f32
+   %e39_d = iara.edge %e39_s : f32 -> f32
+   %e75_d = iara.edge %e75_s : f32 -> f32
+   %e76_d = iara.edge %e76_s : i32 -> i32
+   %e37_d = iara.edge %e37_s : f32 -> f32
+   %e38_d = iara.edge %e38_s : f32 -> f32
+   %e1_d = iara.edge %e1_s : f32 -> f32 { delay = 32000 }
+   %e56_d = iara.edge %e56_s : i32 -> i32
+   %e50_d = iara.edge %e50_s : f32 -> f32
+   %e83_d = iara.edge %e83_s : f32 -> f32
+   %e84_d = iara.edge %e84_s : f32 -> f32
+   %e85_d = iara.edge %e85_s : f32 -> f32
+   %e86_d = iara.edge %e86_s : f32 -> f32
+   %e44_d = iara.edge %e44_s : f32 -> f32
+   %e63_d = iara.edge %e63_s : f32 -> f32
+   %e81_d = iara.edge %e81_s : i32 -> i32
+   %e82_d = iara.edge %e82_s : i32 -> i32
+   %e79_d = iara.edge %e79_s : i32 -> i32
+   %e80_d = iara.edge %e80_s : i32 -> i32
+   %e43_d = iara.edge %e43_s : i32 -> i32
+   %e62_d = iara.edge %e62_s : i32 -> i32
+   %e91_d = iara.edge %e91_s : f32 -> f32
+   %e40_d = iara.edge %e40_s : f32 -> f32
+   %e41_d = iara.edge %e41_s : f32 -> f32
+   %e2_d = iara.edge %e2_s : f32 -> f32 { delay = 128000 }
+   %e46_d = iara.edge %e46_s : i32 -> i32
+   %e51_d = iara.edge %e51_s : f32 -> f32
+   %e42_d = iara.edge %e42_s : f32 -> f32
+   %e3_d = iara.edge %e3_s : f32 -> f32 { delay = 32000 }
+   %e61_d = iara.edge %e61_s : i32 -> i32
+   %e57_d = iara.edge %e57_s : i32 -> i32
+   %e53_d = iara.edge %e53_s : f32 -> f32
+   %e45_d = iara.edge %e45_s : i32 -> i32
+   %e87_d = iara.edge %e87_s : i32 -> i32
+   %e89_d = iara.edge %e89_s : i32 -> i32
+   %e88_d = iara.edge %e88_s : i32 -> i32
+   %e90_d = iara.edge %e90_s : i32 -> i32
+   %e66_d = iara.edge %e66_s : i32 -> i32
+   %e55_d = iara.edge %e55_s : i32 -> i32
+   %e77_d = iara.edge %e77_s : f32 -> f32
+   %e4_d = iara.edge %e4_s : f32 -> f32 { delay = 512000 }
+   %e78_d = iara.edge %e78_s : f32 -> f32
+   %e5_d = iara.edge %e5_s : f32 -> f32 { delay = 2048000 }
+   %keypoints_o_i = iara.edge %keypoints_s : tensor<556xi8> -> tensor<1400x556xi8>
+   %nbKeypoints_o_i = iara.edge %nbKeypoints_s : i32 -> tensor<1xi32>
+   %e67_d = iara.edge %e67_s : i32 -> i32
+    iara.out ( %keypoints_o_i : tensor<1400x556xi8> ) : tensor<1400x556xi8>
+    iara.out ( %nbKeypoints_o_i : tensor<1xi32> ) : tensor<1xi32>
+} // end subgraph Htop_sift

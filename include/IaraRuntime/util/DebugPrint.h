@@ -12,7 +12,7 @@ inline void debugPrintThreadColor(const char *fmt, ...) {
   auto offset = std::hash<std::thread::id>{}(std::this_thread::get_id()) % 7;
   fprintf(stderr, "\e[%2lum", 31 + offset);
   vfprintf(stderr, fmt, args);
-  fprintf(stderr, "\e[0m");
+  fprintf(stderr, "\e[39m");
   fflush(stderr);
 }
 

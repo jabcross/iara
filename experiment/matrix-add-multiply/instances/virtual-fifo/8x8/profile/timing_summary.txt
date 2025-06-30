@@ -1,0 +1,14 @@
+Wall Time Statistics:
+  Mean: 0.001000 seconds
+  Median: 0.000000 seconds
+  Min: 0.000000 seconds
+  Max: 0.010000 seconds
+  StdDev: 0.003162 seconds
+  Bootstrap 95% CI: [0.000000, 0.003000] seconds
+
+Max Resident Size Statistics:
+  Mean: 6239 KB
+  Median: 6254 KB
+  Min: 5772 KB
+  Max: 6544 KB
+  StdDev: 238.87 KB

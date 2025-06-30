@@ -19,7 +19,7 @@ struct MutexRingBuffer {
 
   MutexRingBuffer(size_t capacity);
 
-  void growToFit(size_t size);
+  void growToFit(size_t size, i64 edge_id);
 
   void push(i8 *data, size_t size, i64 edge_id);
 
