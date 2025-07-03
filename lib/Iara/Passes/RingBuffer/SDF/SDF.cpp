@@ -9,6 +9,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/CodeGen/GlobalISel/GIMatchTableExecutor.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -96,21 +97,31 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
       cons_rate_aligned = cons_rate_aligned - rem + token_align;
     }
 
+    i64 delay_size = 0;
+
+    if (auto attr = edge->getAttr("delay")) {
+      if (auto delay = dyn_cast_if_present<DenseArrayAttr>(attr)) {
+        delay_size = iara::util::mlir::getTypeSize(delay.getElementType(),
+                                                   DataLayout::closest(edge)) *
+                     delay.getSize();
+      } else if (auto delay = dyn_cast_if_present<IntegerAttr>(attr)) {
+        // zero init
+        delay_size = delay.getInt();
+      } else
+        llvm_unreachable("Unsupported type for delay");
+    }
+
     info = RingBuffer_Edge::StaticInfo{
         id,
-        // To fill in after alloc and dealloc generation.
         edge.getProdRate(),
         prod_rate_aligned,
         edge.getConsRate(),
         cons_rate_aligned,
         edge->getUses().begin()->getOperandNumber(),
-        // To fill in in the delay info calculation.
-        -1,
+        delay_size,
     };
     edge["id"] = info.id;
   }
-
-  return annotateDelayInfo(actor, data);
 }
 
 LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
@@ -167,38 +178,6 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   }
   return success();
 }
-
-// An edge is backwards if it creates a cycle with a bfs starting on the
-// sources.
-// TODO: check for appropriate delay size
-template <class T> using IL = std::initializer_list<T>;
-LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
-
-  for (auto edge : actor.getOps<EdgeOp>()) {
-
-    // rate info
-
-    auto &edge_info = data.edge_static_info[edge];
-    edge_info.prod_rate = edge.getProdRate();
-    edge_info.cons_rate = edge.getConsRate();
-    edge_info.cons_arg_idx =
-        edge.getResult().getUses().begin()->getOperandNumber();
-    if (auto attr = edge->getAttr("delay")) {
-      if (auto delay = dyn_cast_if_present<DenseArrayAttr>(attr)) {
-        edge_info.delay_size =
-            getTypeSize(delay.getElementType(), DataLayout::closest(edge)) *
-            delay.getSize();
-        continue;
-      }
-      llvm_unreachable("Unsupported type for delay");
-      continue;
-    } else {
-      edge_info.delay_size = 0;
-    }
-  }
-
-  return success();
-} // namespace iara::sdf
 
 SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node) {
   SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> neighbors;

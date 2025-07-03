@@ -87,23 +87,17 @@ class DelayLine:
 
 class Port:
     name: str
-    type: str
-    value: str
+    _type: str
+    rate: int
 
-    def __init__(self, parser: 'DIFParser' | None = None, name: str | None = None, type: str | None = None, value: str | None = None) -> None:
+    def __init__(self, parser: 'DIFParser' | None = None) -> None:
         if parser:
             self.name = parser.consume_identifier()
             parser.consume_token(':')
-            self.type = parser.consume_identifier()
+            self._type = parser.consume_identifier()
             parser.consume_token('=')
-            self.value = parser.consume_integer()
+            self.rate = parser.consume_integer()
             parser.consume_token(';')
-        if name:
-            self.name = name
-        if type:
-            self.type = type
-        if value:
-            self.value = value
 
 
 class Actortype:
@@ -218,6 +212,7 @@ class GraphBlock:
                 case _:
                     raise Exception("Failed to match")
         parser.consume_token('}')
+        print("", flush=True)
 
     def read_datatype_block(self, parser: 'DIFParser'):
         parser.consume_token('datatype')
@@ -264,6 +259,16 @@ class GraphBlock:
                         interface_name} in graph {self.name}')
 
 
+def format_tensor_type(rate: int, _type: str) -> str:
+    if _type.startswith("tensor"):
+        old_rate, old_type = _type.removeprefix(
+            "tensor<").removesuffix(">").split('x')
+        rate *= int(old_rate)
+        return f'tensor<{rate}x{old_type}>'
+    else:
+        return f'tensor<{rate}x{_type}>'
+
+
 class DIFParser:
     path: str
     tokens: list[str]
@@ -303,9 +308,10 @@ class DIFParser:
             return self.consume_token()
         raise Exception(f"expected identifier, got {self.next_token()}")
 
-    def consume_integer(self):
+    def consume_integer(self) -> int:
         if re.match(INTEGER, self.next_token()):
-            return self.consume_token()
+            token = self.consume_token()
+            return int(token)
         raise Exception(f"expected integer, got {self.next_token()}")
 
     def consume_token(self, tok: str | None = None):
@@ -331,8 +337,13 @@ class DIFParser:
                     if interface.kind != 'consumption':
                         continue
                     name = interface.name
-                    port = block.get_interface_port(name, self)
-                    rv.append(Port(name=name, type=port.type, value=port.value))
+                    interface_port = block.get_interface_port(name, self)
+                    port = Port()
+                    port.name = name
+                    port._type = interface_port._type
+                    port.rate = interface_port.rate
+                    assert (port.rate is not None)
+                    rv.append(port)
                     # print(
                     # f'DEBUG {rv[-1].name} {rv[-1].type} {rv[-1].value}DEBUG')
                 break
@@ -356,8 +367,12 @@ class DIFParser:
                     if interface.kind != 'production':
                         continue
                     name = interface.name
-                    port = block.get_interface_port(name, self)
-                    rv.append(Port(name=name, type=port.type, value=port.value))
+                    interface_port = block.get_interface_port(name, self)
+                    port = Port()
+                    port.name = name
+                    port._type = interface_port._type
+                    port.rate = interface_port.rate
+                    rv.append(port)
                 break
             for actortype in block.actortypes:
                 if actortype.name == impl_name:
@@ -366,42 +381,40 @@ class DIFParser:
         self.prod_port_cache[impl_name] = rv
         return rv
 
-    def get_formatted_production_types(self, impl_name: str) -> list[str]:
-        return [f'tensor<{i.value}x{translate_type(i.type)}>' for i in self.get_production_ports(impl_name)]
-
-    def get_formatted_consumption_types(self, impl_name: str) -> list[str]:
-        return [f'tensor<{i.value}x{translate_type(i.type)}>' for i in self.get_consumption_ports(impl_name)]
-
     def to_iara(self) -> None:
+
+        print("module {")
+
         for block in self.graph_blocks:
             for datatype in block.datatypes:
-                datatypes[datatype.name] = Datatype(
-                    'i8', int(datatype.value))
+                datatypes[datatype.name] = Datatype(f"!{datatype.name}", 1)
+                # datatypes[datatype.name] = Datatype(
+                #     'i8', int(datatype.value))
         # for k, v in datatypes.items():
         #     # TODO: deal with alignment
         #     print(f"!{k} = tensor<{v}xi8>")
         for block in self.graph_blocks:
-            if block.name == 'main':
-                continue
+            # if block.name == 'main':
+            #     continue
             # populate known ports to differentiate from edge names
             print(f'iara.actor @{block.name} {{ // subgraph')
             input_interfaces: dict[str, dict[str, str]] = {}
             output_interfaces: dict[str, dict[str, str]] = {}
-            in_ports: set[str] = set()
-            out_ports: set[str] = set()
+            in_ports: list[str] = []
+            out_ports: list[str] = []
             for interface in block.interfaces:
                 if interface.kind == 'consumption':
-                    in_ports.add(interface.name)
+                    in_ports.append(interface.name)
                     input_interfaces[interface.name] = {}
                 elif interface.kind == 'production':
-                    out_ports.add(interface.name)
+                    out_ports.append(interface.name)
                     output_interfaces[interface.name] = {}
 
             for actor in block.actors:
                 for input in self.get_consumption_ports(actor.type):
-                    in_ports.add(input.name)
+                    in_ports.append(input.name)
                 for output in self.get_production_ports(actor.type):
-                    out_ports.add(output.name)
+                    out_ports.append(output.name)
                 for lhs, rhs in actor.bindings:
                     if lhs in input_interfaces:
                         port_ = [
@@ -409,24 +422,24 @@ class DIFParser:
                         assert (len(port_) == 1)
                         port = port_[0]
                         input_interfaces[lhs] = {
-                            'rate': port.value, 'type': port.type}
+                            'rate': port.rate, 'type': port._type}
                     if rhs in output_interfaces:
                         port_ = [
                             i for i in self.get_production_ports(actor.type) if i.name == lhs]
                         assert (len(port_) == 1)
                         port = port_[0]
                         output_interfaces[rhs] = {
-                            'rate': port.value, 'type': port.type}
+                            'rate': port.rate, 'type': port._type}
 
             # IN ops
 
             for port in self.get_consumption_ports(block.name):
-                print(f'    %{port.name}_i_i = iara.in : tensor<{
-                      port.value}x{translate_type(port.type)}>')
+                print(
+                    f'    %{port.name}_i_i = iara.in : {format_tensor_type(port.rate, translate_type(port._type))}')
 
             # NODE ops
 
-            actors_by_name: dict[str, ActorOp] = {}
+            nodes_by_name: dict[str, NodeOp] = {}
             edges_by_name: dict[str, EdgeOp] = {}
             edge_delays: dict[str, str] = {}
 
@@ -434,11 +447,12 @@ class DIFParser:
                 edge_delays[delay_line.name] = delay_line.value
 
             class ActorInputPort:
-                def __init__(self, actor: ActorOp) -> None:
-                    self.actor: ActorOp = actor
+                def __init__(self, actor: NodeOp) -> None:
+                    self.actor: NodeOp = actor
                     self.port_name: str | None = None
                     self.value_name: str | None = None
                     self.type: str | None = None
+                    self.rate: int | None = None
                     self.edge_op: EdgeOp | None = None
                     self.binding: tuple[str, str]
 
@@ -452,11 +466,12 @@ class DIFParser:
                         return self.binding[0]
 
             class ActorOutputPort:
-                def __init__(self, actor: ActorOp) -> None:
-                    self.actor: ActorOp = actor
+                def __init__(self, actor: NodeOp) -> None:
+                    self.actor: NodeOp = actor
                     self.port_name: str | None = None
                     self.value_name: str | None = None
                     self.type: str | None = None
+                    self.rate: int | None = None
                     self.edge_op: EdgeOp | None = None
                     self.binding: tuple | None
 
@@ -469,7 +484,7 @@ class DIFParser:
                         assert isinstance(self.binding, tuple)
                         return self.binding[1]
 
-            class ActorOp:
+            class NodeOp:
                 def __init__(self, name: str = "", type: str = "") -> None:
                     self.dif_actor: DifActor | None = None
                     self.name: str = name
@@ -499,12 +514,13 @@ class DIFParser:
                 def format_input_ports(self) -> str:
                     if len(self.in_ports) == 0:
                         return ''
-                    return f' in {', '.join(("%"+str(in_port.get_ssa_val_name()) for in_port in self.in_ports))}  : {', '.join((translate_type(in_port.type) for in_port in self.in_ports))} '
+                    return f' in {', '.join(("%"+str(in_port.get_ssa_val_name()) for in_port in self.in_ports))}  : {', '.join((format_tensor_type(in_port.rate, translate_type(in_port.type)) for in_port in self.in_ports))} '
 
                 def format_output_types(self) -> str:
+                    assert (type(out_port.rate) is not None)
                     if len(self.out_ports) == 0:
                         return ''
-                    return ' out: ' + ', '.join(f'{translate_type(out_port.type)}' for out_port in self.out_ports) + ' '
+                    return ' out: ' + ', '.join(format_tensor_type(out_port.rate, translate_type(out_port.type)) for out_port in self.out_ports) + ' '
 
                 def format_op(self) -> str:
                     return f'{self.format_result_ssa_values()}iara.node @{self.type}{
@@ -521,8 +537,13 @@ class DIFParser:
                     if self.name in edge_delays:
                         value_str: str = edge_delays[self.name]
                         try:
-                            # if int, delay is `value` default-constructed tokens
-                            value_int: int = int(value_str, 10)
+                            if type(value_str) is int:
+                                value_int = value_str
+                            elif type(value_str) is str:
+                                # if int, delay is `value` default-constructed tokens
+                                value_int: int = int(value_str, 10)
+                            else:
+                                assert (False)
                         except ValueError:
                             return ""
                         return f' {{ delay = {value_int} }}'
@@ -532,36 +553,42 @@ class DIFParser:
                 def format_op(self) -> str:
                     in_name = None
                     in_type = None
+                    in_rate = 1
                     out_name = None
                     out_type = None
+                    out_rate = 1
                     if isinstance(self.source_port, ActorOutputPort):
                         in_name = self.source_port.get_ssa_val_name()
-                        in_type = self.source_port.type
+                        in_type = translate_type(self.source_port.type)
+                        in_rate = self.source_port.rate
                     elif self.name in input_interfaces:
                         in_name = self.name + "_i_i"
-                        in_type = f'tensor<{input_interfaces[self.name]["rate"]}x{
-                            translate_type(input_interfaces[self.name]["type"])}>'
+                        in_rate = input_interfaces[self.name]["rate"]
+                        in_type = translate_type(
+                            input_interfaces[self.name]["type"])
                     else:
                         assert False
 
                     if isinstance(self.drain_port, ActorInputPort):
                         out_name = self.drain_port.get_ssa_val_name()
-                        out_type = self.drain_port.type
+                        out_type = translate_type(self.drain_port.type)
+                        out_rate = self.drain_port.rate
                     elif self.name in output_interfaces:
                         out_name = self.name + '_o_i'
-                        out_type = f'tensor<{output_interfaces[self.name]["rate"]}x{
-                            translate_type(output_interfaces[self.name]["type"])}>'
+                        out_type = translate_type(
+                            output_interfaces[self.name]["type"])
+                        out_rate = output_interfaces[self.name]["rate"]
                     else:
                         assert False
                     assert isinstance(in_type, str)
-                    return f'%{out_name} = iara.edge %{in_name} : {translate_type(in_type)} -> {translate_type(out_type)}{self.format_attrs()}'
+                    return f'%{out_name} = iara.edge %{in_name} : {format_tensor_type(in_rate, in_type)} -> {format_tensor_type(out_rate, out_type)}{self.format_attrs()}'
 
             for actor in block.actors:
-                actor_op: ActorOp = ActorOp()
+                actor_op: NodeOp = NodeOp()
                 actor_op.dif_actor = actor
                 actor_op.name = actor.name
                 actor_op.type = actor.type
-                actors_by_name[actor.name] = actor_op
+                nodes_by_name[actor.name] = actor_op
 
                 cons_ports = self.get_consumption_ports(actor.type)
                 prod_ports = self.get_production_ports(actor.type)
@@ -571,12 +598,14 @@ class DIFParser:
                 for input in self.get_consumption_ports(actor.type):
                     input_port: ActorInputPort = ActorInputPort(actor_op)
                     input_port.port_name = input.name
-                    input_port.type = input.type
+                    input_port.type = input._type
+                    input_port.rate = input.rate
                     actor_op.in_ports.append(input_port)
                 for output in self.get_production_ports(actor.type):
                     output_port: ActorOutputPort = ActorOutputPort(actor_op)
                     output_port.port_name = output.name
-                    output_port.type = output.type
+                    output_port.type = output._type
+                    output_port.rate = output.rate
                     actor_op.out_ports.append(output_port)
 
                 for lhs, rhs in actor.bindings:
@@ -605,7 +634,7 @@ class DIFParser:
 
             # generate node ops
 
-            for actor_op in actors_by_name.values():
+            for actor_op in nodes_by_name.values():
                 print(f'   {actor_op.format_op()}')
 
             for edge_op in edges_by_name.values():
@@ -614,11 +643,14 @@ class DIFParser:
             # OUT ops
 
             for port in self.get_production_ports(block.name):
-                type = translate_type(f'tensor<{port.value}x{
-                                      translate_type(port.type)}>')
-                print(f'    iara.out ( %{port.name}_o_i : {type} ) : {type}',)
+                _type = format_tensor_type(
+                    port.rate, translate_type(port._type))
+                print(
+                    f'    iara.out ( %{port.name}_o_i : {_type} ) : {_type}',)
 
-            print(f'    iara.dep\n}} // end subgraph {block.name}')
+            print(f'}} // end subgraph {block.name}')
+
+        print("}")
 
 
 if __name__ == "__main__":

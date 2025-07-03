@@ -46,6 +46,14 @@ if [ ! -d $IARA_DIR/runtime/$SCHEDULER_MODE ]; then
   exit 1
 fi
 
+if [ -f $PATH_TO_TEST_SOURCES/test-setup.sh ]; then
+  source $PATH_TO_TEST_SOURCES/test-setup.sh
+fi
+
+if [ -z $TOPOLOGY_FILE ]; then
+  TOPOLOGY_FILE="$PATH_TO_TEST_SOURCES/topology.test"
+fi
+
 echo SCHEDULER_MODE = \"$SCHEDULER_MODE\"
 
 SCHEDULER_SOURCES="-c $IARA_DIR/runtime/$SCHEDULER_MODE/*.c* "
@@ -64,7 +72,7 @@ OMP_INCLUDE=/usr/lib/clang/19/include
 INCLUDES="$INCLUDES -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$LLVM_DIR/mlir/include -I$LLVM_DIR/llvm/include -I$OMP_INCLUDE"
 
 if [[ $IARA_FLAGS == "" ]]; then
-  IARA_FLAGS="--flatten --$SCHEDULER_MODE='main-actor=run'"
+  IARA_FLAGS="--iara-canonicalize --flatten --$SCHEDULER_MODE='main-actor=run'"
 fi
 
 COMPILER_FLAGS='-stdlib=libc++ -fopenmp '
@@ -75,7 +83,7 @@ source $PATH_TO_TEST_SOURCES/extra_args.sh
 pwd
 pwd >&2
 
-\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null"
+\time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_SOURCES/$TOPOLOGY_FILE >schedule.mlir 2>/dev/null"
 RC=$?
 echo iara-opt return code: $?
 if [ $RC -ne 0 ]; then

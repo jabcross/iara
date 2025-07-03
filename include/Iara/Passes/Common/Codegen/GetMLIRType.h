@@ -1,6 +1,6 @@
 
-#ifndef IARA_PASSES_VIRTUALFIFO_CODEGEN_GETMLIRTYPE_H
-#define IARA_PASSES_VIRTUALFIFO_CODEGEN_GETMLIRTYPE_H
+#ifndef IARA_PASSES_COMMON_CODEGEN_GETMLIRTYPE_H
+#define IARA_PASSES_COMMON_CODEGEN_GETMLIRTYPE_H
 
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Span.h"
@@ -20,7 +20,7 @@
 #include <tuple>
 #include <type_traits>
 
-namespace iara::passes::ringbuffer::codegen {
+namespace iara::passes::common::codegen {
 using namespace mlir;
 
 extern inline std::map<size_t, Type> &memo() {
@@ -133,12 +133,12 @@ template <> struct GetMLIRType<int> {
 
 template <> struct GetMLIRType<float> {
   static_assert(sizeof(float) == 4);
-  static Type get(MLIRContext *context) { return FloatType::getF32(context); }
+  static Type get(MLIRContext *context) { return Float32Type::get(context); }
 };
 
 template <> struct GetMLIRType<double> {
   static_assert(sizeof(double) == 8);
-  static Type get(MLIRContext *context) { return FloatType::getF64(context); }
+  static Type get(MLIRContext *context) { return Float64Type::get(context); }
 };
 
 template <> struct GetMLIRType<long unsigned int> {
@@ -222,5 +222,5 @@ struct GetMLIRType<T> {
   }
 };
 
-} // namespace iara::passes::ringbuffer::codegen
+} // namespace iara::passes::common::codegen
 #endif

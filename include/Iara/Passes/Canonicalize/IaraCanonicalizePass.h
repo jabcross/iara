@@ -1,5 +1,5 @@
-#ifndef IARA_PASSES_RINGBUFFER_RINGBUFFERSCHEDULERPASS_H
-#define IARA_PASSES_RINGBUFFER_RINGBUFFERSCHEDULERPASS_H
+#ifndef IARA_PASSES_CANONICALIZE_IARACANONICALIZEPASS_H
+#define IARA_PASSES_CANONICALIZE_IARACANONICALIZEPASS_H
 
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/CommonTypes.h"
@@ -21,47 +21,37 @@
 #include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
 
-namespace iara::passes::ringbuffer {
+namespace iara::passes::canonicalize {
 
-using namespace iara::util::range;
-using namespace iara::util::mlir;
-using util::Rational;
-
-struct RingBufferSchedulerPass
-    : public PassWrapper<RingBufferSchedulerPass,
+struct IaraCanonicalizePass
+    : public PassWrapper<IaraCanonicalizePass,
                          OperationPass<::mlir::ModuleOp>> {
 
-  RingBufferSchedulerPass() = default;
-  RingBufferSchedulerPass(const RingBufferSchedulerPass &pass) {};
-
-  Option<std::string> main_actor{
-      *this, "main-actor", llvm::cl::desc("Name of actor to schedule")};
+  IaraCanonicalizePass() = default;
+  IaraCanonicalizePass(const IaraCanonicalizePass &pass) {};
 
   struct Impl;
-  ::llvm::StringRef getArgument() const override { return "ring-buffer"; }
+  ::llvm::StringRef getArgument() const override { return "iara-canonicalize"; }
   ::llvm::StringRef getDescription() const override {
-    return "Converts SDF dataflow to a runtime with ring buffers.";
+    return "Canonicalizes types, inserts implicit edges and broadcasts";
   }
   static constexpr ::llvm::StringLiteral getPassName() {
-    return ::llvm::StringLiteral("RingBufferSchedulerPass");
+    return ::llvm::StringLiteral("IaraCanonicalizeSchedulerPass");
   }
 
   Impl *pimpl;
 
-  ::llvm::StringRef getName() const override {
-    return "ringbufferSchedulerPass";
-  }
+  ::llvm::StringRef getName() const override { return "IaraCanonicalizePass"; }
 
   void runOnOperation() final override;
 };
 
-inline void registerRingBufferSchedulerPass() {
+inline void registerIaraCanonicalizePass() {
   mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
-    return std::make_unique<
-        iara::passes::ringbuffer::RingBufferSchedulerPass>();
+    return std::make_unique<iara::passes::canonicalize::IaraCanonicalizePass>();
   });
 }
 
-} // namespace iara::passes::ringbuffer
+} // namespace iara::passes::canonicalize
 
 #endif

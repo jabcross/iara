@@ -65,6 +65,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
+        "--iara-canonicalize",
         "--flatten",
         // "-mlir-print-stacktrace-on-diagnostic",
         "--mlir-print-ir-after-failure",
@@ -105,6 +106,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/iara-opt",
       "args": [
+        "--iara-canonicalize",
         "--flatten",
         "-mlir-print-stacktrace-on-diagnostic",
         "--mlir-print-ir-after-failure",

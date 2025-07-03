@@ -1,8 +1,7 @@
-#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/BreakLoops.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
-#include "Iara/Passes/VirtualFIFO/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
 #include "Iara/Util/Mlir.h"
@@ -27,7 +26,6 @@
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/Dialect/LLVMIR/Transforms/Passes.h>
-#include <mlir/Dialect/LLVMIR/Transforms/TypeConsistency.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -43,13 +41,13 @@
 #include <mlir/Support/LogicalResult.h>
 
 using namespace iara::util::range;
-using namespace iara::dialect::canon;
 using namespace iara::passes::virtualfifo::sdf;
 using namespace iara::util::mlir;
 
 namespace iara::passes::virtualfifo {
 
 using namespace func;
+using namespace iara::passes::common::codegen;
 using namespace iara::passes::virtualfifo::codegen;
 
 struct VirtualFIFOSchedulerPass::Impl {
@@ -72,10 +70,6 @@ struct VirtualFIFOSchedulerPass::Impl {
 
   LLVM::LLVMStructType chunk_type() {
     return cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx()));
-  }
-
-  LLVM::LLVMPointerType pointer_to(Type type) {
-    return LLVM::LLVMPointerType::get(type, 0);
   }
 
   LLVM::LLVMFunctionType wrapper_type() {
@@ -352,13 +346,13 @@ struct VirtualFIFOSchedulerPass::Impl {
           getOrCodegenNodeWrapper(module, mod_builder, node, info));
     }
 
-    auto codegenBuilder = codegen::CodegenStaticData(module,
-                                                     mod_builder,
-                                                     {node_infos},
-                                                     {edge_infos},
-                                                     {nodes},
-                                                     {edges},
-                                                     {wrappers});
+    auto codegenBuilder = CodegenStaticData(module,
+                                            mod_builder,
+                                            {node_infos},
+                                            {edge_infos},
+                                            {nodes},
+                                            {edges},
+                                            {wrappers});
 
     codegenBuilder.codegenStaticData();
 
@@ -373,10 +367,9 @@ struct VirtualFIFOSchedulerPass::Impl {
 
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
+
     breakLoops(main_actor);
-    if (failed(sdf::canon::canonicalize(main_actor))) {
-      return failure();
-    };
+
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
 
     return success(

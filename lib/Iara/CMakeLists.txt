@@ -2,13 +2,16 @@ add_mlir_dialect_library(MLIRIara
         Dialect/IaraTypes.cpp
         Dialect/IaraDialect.cpp
         Dialect/IaraOps.cpp
-        Dialect/Canon.cpp
+        Dialect/Broadcast.cpp
 
         Passes/FlattenPass.cpp
 
         Passes/RingBuffer/Codegen/Codegen.cpp
         Passes/RingBuffer/SDF/SDF.cpp
         Passes/RingBuffer/RingBufferSchedulerPass.cpp
+
+        Passes/Canonicalize/IaraCanonicalizePass.cpp
+
 
         Passes/VirtualFIFO/Codegen/Codegen.cpp
         Passes/VirtualFIFO/SDF/Analysis.cpp

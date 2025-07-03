@@ -1,39 +1,15 @@
-#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
+#include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include <llvm/Support/Casting.h>
-#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
-#include <mlir/Dialect/Func/IR/FuncOps.h>
-#include <mlir/Dialect/LLVMIR/LLVMTypes.h>
-#include <mlir/IR/BuiltinOps.h>
-#include <mlir/IR/Dominance.h>
-#include <mlir/IR/SymbolTable.h>
-#include <mlir/IR/Value.h>
-#include <mlir/Support/LogicalResult.h>
 
-namespace iara::dialect::canon {
+namespace iara::dialect::broadcast {
 
 using namespace iara::util::mlir;
 using namespace iara::util::range;
-
-LogicalResult canonicalizeTypes(ActorOp actor) {
-  for (Operation &op_ref : actor.getOps()) {
-    auto op = &op_ref;
-    if (!llvm::isa<NodeOp>(op) and !llvm::isa<EdgeOp>(op))
-      continue;
-    for (auto result : op->getResults()) {
-      if (not dyn_cast<RankedTensorType>(result.getType())) {
-        auto new_type = RankedTensorType::get({1}, result.getType());
-        result.setType(new_type);
-      }
-    }
-  }
-  return success();
-}
 
 std::string getBroadcastName(i64 size, Type type, bool reuse_first) {
   if (reuse_first && size == 1) {
@@ -96,7 +72,7 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
   impl.setVisibility(mlir::SymbolTable::Visibility::Public);
   impl->setAttr("llvm.emit_c_interface", module_builder.getUnitAttr());
 
-  auto body = impl.addEntryBlock();
+  auto body = impl.addEntryBlock(module_builder);
   auto impl_builder = OpBuilder(impl);
   impl_builder.setInsertionPointToStart(body);
 
@@ -147,7 +123,7 @@ LogicalResult expandToBroadcast(OpResult &value) {
   auto output_types =
       uses | Map{[](auto &x) { return x->get().getType(); }} | IntoVector();
 
-  auto impl = getOrCodegenBroadcastImpl(value, uses.size());
+  auto impl = getOrCodegenBroadcastImpl(value, uses.size(), true);
 
   assert(impl);
 
@@ -173,47 +149,4 @@ LogicalResult expandToBroadcast(OpResult &value) {
   return success();
 }
 
-LogicalResult expandImplicitEdgesAndBroadcasts(ActorOp actor) {
-  // First, expand all broadcasts.
-  for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
-    for (auto result : op->getResults()) {
-      auto uses = result.getUses() | Pointers() | IntoVector();
-      if (uses.size() > 1) {
-        auto _ = expandToBroadcast(result);
-      }
-    }
-  }
-
-  // Insert edges between adjacent nodes.
-  for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
-    for (auto output : node.getOut()) {
-      auto uses = output.getUses() | Pointers() | IntoVector();
-      auto users = output.getUsers() | IntoVector();
-      if (uses.size() == 0) {
-        node->emitError() << "Found an output port with no users: " << node
-                          << "\n"
-                          << "This is not supported in this version yet.";
-        return failure();
-      }
-      assert((output.getUses() | Pointers() | Count()) == 1);
-      if (auto consumer_node = dyn_cast<NodeOp>(users.front())) {
-        auto builder = OpBuilder(consumer_node);
-        auto new_edge =
-            CREATE(EdgeOp,
-                   builder,
-                   builder.getFusedLoc({node.getLoc(), consumer_node.getLoc()}),
-                   output.getType(),
-                   output);
-        output.replaceAllUsesExcept(new_edge.getOut(), {new_edge});
-      }
-    }
-  }
-  return success();
-}
-
-LogicalResult canonicalize(ActorOp actor) {
-  return success(canonicalizeTypes(actor).succeeded() &&
-                 expandImplicitEdgesAndBroadcasts(actor).succeeded());
-}
-
-} // namespace iara::dialect::canon
+} // namespace iara::dialect::broadcast

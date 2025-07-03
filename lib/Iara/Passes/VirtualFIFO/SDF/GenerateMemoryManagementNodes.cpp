@@ -328,7 +328,7 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
   assert(new_node_inputs.size() == new_result_types.size());
   data.node_static_info[new_node] = data.node_static_info[old_node];
 
-  new_node->setDiscardableAttrs(old_node->getDiscardableAttrs());
+  new_node->setDiscardableAttrs(old_node->getDiscardableAttrDictionary());
 
   auto new_outs = new_node.getOut().take_front(old_node.getIn().size());
   auto existing_outs = new_node.getOut().drop_front(old_node.getIn().size());

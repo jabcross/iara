@@ -204,10 +204,6 @@ LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
     // rate info
 
     auto &edge_info = data.edge_static_info[edge];
-    edge_info.prod_rate = edge.getProdRate();
-    edge_info.cons_rate = edge.getConsRate();
-    edge_info.cons_arg_idx =
-        edge.getResult().getUses().begin()->getOperandNumber();
     if (auto attr = edge->getAttr("delay")) {
       if (auto delay = dyn_cast_if_present<DenseArrayAttr>(attr)) {
         edge_info.delay_size =

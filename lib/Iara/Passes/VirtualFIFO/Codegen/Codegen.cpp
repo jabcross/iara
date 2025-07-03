@@ -1,6 +1,6 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
-#include "Iara/Passes/VirtualFIFO/Codegen/GetMLIRType.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
@@ -14,12 +14,72 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
+
+namespace iara::passes::common::codegen {
+template <> struct GetMLIRType<VirtualFIFO_Node::StaticInfo> {
+  static Type get(MLIRContext *context) {
+    Vec<Type> node_info_struct_field_types{
+        VirtualFIFO_Node::static_info_num_fields,
+        mlir::IntegerType::get(context, 64)};
+    return LLVM::LLVMStructType::getLiteral(context,
+                                            node_info_struct_field_types);
+  }
+};
+
+template <> struct GetMLIRType<VirtualFIFO_Node> {
+  static Type get(MLIRContext *context) {
+    auto opaque_ptr = LLVM::LLVMPointerType::get(context);
+    auto span_type = LLVM::LLVMStructType::getLiteral(
+        context, {opaque_ptr, IntegerType::get(context, 64)});
+    return LLVM::LLVMStructType::getLiteral(
+        context,
+        {
+            opaque_ptr,                                         // name
+            getMLIRType<VirtualFIFO_Node::StaticInfo>(context), // info
+            opaque_ptr,                                         // wrapper
+            span_type,                                          // input_fifos
+            span_type,                                          // output_fifos
+            opaque_ptr,                                         // semaphore
+        });
+  }
+};
+
+template <> struct GetMLIRType<VirtualFIFO_Edge::StaticInfo> {
+  static Type get(MLIRContext *context) {
+    Vec<Type> edge_info_struct_field_types{
+        VirtualFIFO_Edge::static_info_num_fields,
+        mlir::IntegerType::get(context, 64)};
+    return LLVM::LLVMStructType::getLiteral(context,
+                                            edge_info_struct_field_types);
+  }
+};
+
+template <> struct GetMLIRType<VirtualFIFO_Edge> {
+  static Type get(MLIRContext *context) {
+    auto opaque_ptr = LLVM::LLVMPointerType::get(context);
+    return LLVM::LLVMStructType::getLiteral(
+        context,
+        {
+            opaque_ptr,                                         // name
+            getMLIRType<VirtualFIFO_Edge::StaticInfo>(context), // info
+            getSpanType(context),                               // delay_data
+            opaque_ptr,                                         // consumer
+            opaque_ptr,                                         // producer
+            opaque_ptr,                                         // alloc_node
+            opaque_ptr                                          // next_in_chain
+        });
+  }
+};
+
+} // namespace iara::passes::common::codegen
 
 namespace iara::passes::virtualfifo::codegen {
 using namespace iara::util::mlir;
 using namespace mlir::LLVM;
 using namespace iara::dialect;
+using namespace iara::passes::common::codegen;
 
 // helper functions
 
@@ -112,34 +172,6 @@ Value getEmptySpan(OpBuilder builder, Location loc) {
 
 // struct codegen
 
-template <> struct GetMLIRType<VirtualFIFO_Node::StaticInfo> {
-  static Type get(MLIRContext *context) {
-    Vec<Type> node_info_struct_field_types{
-        VirtualFIFO_Node::static_info_num_fields,
-        mlir::IntegerType::get(context, 64)};
-    return LLVM::LLVMStructType::getLiteral(context,
-                                            node_info_struct_field_types);
-  }
-};
-
-template <> struct GetMLIRType<VirtualFIFO_Node> {
-  static Type get(MLIRContext *context) {
-    auto opaque_ptr = LLVM::LLVMPointerType::get(context);
-    auto span_type = LLVM::LLVMStructType::getLiteral(
-        context, {opaque_ptr, IntegerType::get(context, 64)});
-    return LLVM::LLVMStructType::getLiteral(
-        context,
-        {
-            opaque_ptr,                                         // name
-            getMLIRType<VirtualFIFO_Node::StaticInfo>(context), // info
-            opaque_ptr,                                         // wrapper
-            span_type,                                          // input_fifos
-            span_type,                                          // output_fifos
-            opaque_ptr,                                         // semaphore
-        });
-  }
-};
-
 Value asValue(OpBuilder builder,
               Location loc,
               VirtualFIFO_Node::StaticInfo &info) {
@@ -171,33 +203,6 @@ Value asValue(OpBuilder builder,
   }
   return static_info;
 }
-
-template <> struct GetMLIRType<VirtualFIFO_Edge::StaticInfo> {
-  static Type get(MLIRContext *context) {
-    Vec<Type> edge_info_struct_field_types{
-        VirtualFIFO_Edge::static_info_num_fields,
-        mlir::IntegerType::get(context, 64)};
-    return LLVM::LLVMStructType::getLiteral(context,
-                                            edge_info_struct_field_types);
-  }
-};
-
-template <> struct GetMLIRType<VirtualFIFO_Edge> {
-  static Type get(MLIRContext *context) {
-    auto opaque_ptr = LLVM::LLVMPointerType::get(context);
-    return LLVMStructType::getLiteral(
-        context,
-        {
-            opaque_ptr,                                         // name
-            getMLIRType<VirtualFIFO_Edge::StaticInfo>(context), // info
-            getSpanType(context),                               // delay_data
-            opaque_ptr,                                         // consumer
-            opaque_ptr,                                         // producer
-            opaque_ptr,                                         // alloc_node
-            opaque_ptr                                          // next_in_chain
-        });
-  }
-};
 
 struct CodegenStaticData::Impl {
 
@@ -400,8 +405,7 @@ struct CodegenStaticData::Impl {
                                  builder,
                                  node_name,
                                  node_name,
-                                 LLVM::linkage::Linkage::External,
-                                 true);
+                                 LLVM::linkage::Linkage::External);
 
     {
       Vec<Value> values = {name_global,
@@ -478,8 +482,7 @@ struct CodegenStaticData::Impl {
                                  builder,
                                  edge_name,
                                  edge_name,
-                                 LLVM::linkage::Linkage::External,
-                                 true);
+                                 LLVM::linkage::Linkage::External);
 
     {
       Vec<Value> values = {name_global,
@@ -533,8 +536,27 @@ struct CodegenStaticData::Impl {
     // delays
     for (auto [i, edge, info] : llvm::enumerate(edges, edge_infos)) {
       {
-        DenseArrayAttr delay_attr =
-            llvm::dyn_cast_or_null<DenseArrayAttr>(edge["delay"].get());
+        DenseArrayAttr delay_attr = nullptr;
+
+        if (auto int_attr =
+                llvm::dyn_cast_or_null<IntegerAttr>(edge["delay"].get())) {
+          // fill with zeros
+          auto elem_type = getElementTypeOrSelf(edge.getIn().getType());
+          size_t num_elems = int_attr.getUInt();
+          size_t size_elem = getTypeSize(elem_type, DataLayout::closest(edge));
+          char *zeros = (char *)calloc(num_elems, size_elem);
+          delay_attr =
+              DenseArrayAttr::get(elem_type,
+                                  int_attr.getInt(),
+                                  ArrayRef<char>(zeros, num_elems * size_elem));
+          free(zeros);
+        }
+
+        if (auto dense_attr =
+                llvm::dyn_cast_or_null<DenseArrayAttr>(edge["delay"].get())) {
+          delay_attr = dense_attr;
+        }
+
         if (!delay_attr) {
           continue;
         }

@@ -4,7 +4,6 @@
 #include "Iara/Util/CommonTypes.h"
 #include <compare>
 #include <llvm/Support/FormatProviders.h>
-#include <mlir/Support/MathExtras.h>
 #include <numeric>
 
 namespace iara::util {

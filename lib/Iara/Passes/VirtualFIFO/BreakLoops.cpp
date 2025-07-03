@@ -1,4 +1,4 @@
-#include "Iara/Dialect/Canon.h"
+#include "Iara/Dialect/Broadcast.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Util/OpCreateHelper.h"
@@ -10,8 +10,8 @@ namespace iara::passes::virtualfifo {
 // insert a copy.
 void breakEdge(EdgeOp edge) {
   auto builder = OpBuilder(edge);
-  LLVM::LLVMFuncOp impl =
-      iara::dialect::canon::getOrCodegenBroadcastImpl(edge.getIn(), 1, false);
+  LLVM::LLVMFuncOp impl = iara::dialect::broadcast::getOrCodegenBroadcastImpl(
+      edge.getIn(), 1, false);
   DEF_OP(NodeOp,
          copy_op,
          NodeOp,

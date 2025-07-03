@@ -27,7 +27,6 @@ namespace iara::passes::virtualfifo {
 using namespace iara::util::range;
 using namespace iara::util::mlir;
 using mlir::presburger::IntMatrix;
-using mlir::presburger::MPInt;
 using util::Rational;
 
 struct VirtualFIFOSchedulerPass

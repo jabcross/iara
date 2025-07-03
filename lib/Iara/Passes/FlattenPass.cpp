@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Range.h"
@@ -55,6 +54,8 @@ public:
                     mlir::tensor::TensorDialect>();
   }
   using impl::FlattenPassBase<FlattenPass>::FlattenPassBase;
+
+  DenseSet<ActorOp> m_top_level_candidates;
 
   bool hasRecursion() {
 
@@ -126,6 +127,8 @@ public:
     if (!actor_op) {
       return;
     }
+    // If a node is referring to it, it can't be the top level, can it?
+    m_top_level_candidates.erase(actor_op);
     if (actor_op.isKernelDeclaration()) {
       return;
     }
@@ -198,6 +201,43 @@ public:
     node.erase();
   }
 
+  void fixDoubleEdge(EdgeOp edge, DenseSet<EdgeOp> &to_erase) {
+    if (auto next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin())) {
+      // two consecutive edges
+      if (edge.getIn().getType() == edge.getOut().getType()) {
+        // Can remove this edge.
+        edge.getOut().replaceAllUsesWith(edge.getIn());
+        to_erase.insert(edge);
+        return fixDoubleEdge(next_edge, to_erase);
+      }
+      if (next_edge.getIn().getType() == next_edge.getOut().getType()) {
+        // Can remove the next edge.
+        next_edge.getOut().replaceAllUsesWith(edge.getOut());
+        to_erase.insert(next_edge);
+        if (auto next_next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin()))
+          // triple edge?
+          return fixDoubleEdge(edge, to_erase);
+        return;
+      }
+      llvm_unreachable("Something is wrong; trying to stitch two consecutive "
+                       "multi-rate edges");
+    }
+  }
+
+  void fixDoubleEdges(ActorOp actor) {
+    DenseSet<EdgeOp> to_erase;
+    for (auto edge : actor.getOps<EdgeOp>() | IntoVector()) {
+      if (isa<EdgeOp>(edge.getIn().getDefiningOp())) {
+        // always start on the first edge of the chain
+        continue;
+      }
+      fixDoubleEdge(edge, to_erase);
+    }
+    for (auto edge : to_erase) {
+      edge.erase();
+    }
+  }
+
   void runOnOperation() final {
     auto module = getOperation();
     if (hasRecursion()) {
@@ -210,10 +250,10 @@ public:
     SmallVector<ActorOp> decls;
 
     for (auto actor : module.getOps<ActorOp>()) {
-      auto _ = canon::canonicalizeTypes(actor);
       if (actor.isKernelDeclaration()) {
         decls.push_back(actor);
       } else {
+        m_top_level_candidates.insert(actor);
         actor_depths.push_back({getDepth(actor), actor});
       }
     }
@@ -224,8 +264,17 @@ public:
       flatten(actor);
     }
 
-    for (auto actor : decls) {
-      actor->erase();
+    assert(m_top_level_candidates.size() == 1 &&
+           "Only one actor is the top-level.");
+
+    auto top_level_actor = *m_top_level_candidates.begin();
+
+    fixDoubleEdges(top_level_actor);
+
+    for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
+      if (actor != top_level_actor) {
+        actor->erase();
+      }
     }
   }
 };

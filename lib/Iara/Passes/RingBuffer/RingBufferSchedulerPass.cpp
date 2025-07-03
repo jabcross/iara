@@ -1,7 +1,6 @@
-#include "Iara/Dialect/Canon.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/RingBuffer/Codegen/Codegen.h"
-#include "Iara/Passes/RingBuffer/Codegen/GetMLIRType.h"
 #include "Iara/Passes/RingBuffer/RingBufferSchedulerPass.h"
 #include "Iara/Passes/RingBuffer/SDF/SDF.h"
 #include "Iara/Util/Mlir.h"
@@ -11,6 +10,7 @@
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include <cstddef>
+#include <cstdint>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -25,7 +25,6 @@
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/Dialect/LLVMIR/Transforms/Passes.h>
-#include <mlir/Dialect/LLVMIR/Transforms/TypeConsistency.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -41,7 +40,6 @@
 #include <mlir/Support/LogicalResult.h>
 
 using namespace iara::util::range;
-using namespace iara::dialect::canon;
 using namespace iara::passes::ringbuffer::sdf;
 using namespace iara::util::mlir;
 
@@ -49,6 +47,7 @@ namespace iara::passes::ringbuffer {
 
 using namespace func;
 using namespace iara::passes::ringbuffer::codegen;
+using namespace iara::passes::common::codegen;
 
 struct RingBufferSchedulerPass::Impl {
   RingBufferSchedulerPass *pass;
@@ -70,10 +69,6 @@ struct RingBufferSchedulerPass::Impl {
 
   LLVM::LLVMStructType chunk_type() {
     return cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx()));
-  }
-
-  LLVM::LLVMPointerType pointer_to(Type type) {
-    return LLVM::LLVMPointerType::get(type, 0);
   }
 
   LLVM::LLVMFunctionType wrapper_type() {
@@ -192,7 +187,7 @@ struct RingBufferSchedulerPass::Impl {
       auto actor = module.lookupSymbol<ActorOp>(pass->main_actor.getValue());
       if (!actor)
         llvm::errs() << "Provided actor name not found: "
-                     << pass->main_actor.getValue();
+                     << pass->main_actor.getValue() << "\n";
       assert(actor && "Provided actor name not found");
       return actor;
     }
@@ -318,13 +313,13 @@ struct RingBufferSchedulerPass::Impl {
           getOrCodegenNodeWrapper(module, mod_builder, node, info));
     }
 
-    auto codegenBuilder = codegen::CodegenStaticData(module,
-                                                     mod_builder,
-                                                     {node_infos},
-                                                     {edge_infos},
-                                                     {nodes},
-                                                     {edges},
-                                                     {wrappers});
+    auto codegenBuilder = CodegenStaticData(module,
+                                            mod_builder,
+                                            {node_infos},
+                                            {edge_infos},
+                                            {nodes},
+                                            {edges},
+                                            {wrappers});
 
     codegenBuilder.codegenStaticData();
 
@@ -339,9 +334,7 @@ struct RingBufferSchedulerPass::Impl {
 
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
-    if (failed(sdf::canon::canonicalize(main_actor))) {
-      return failure();
-    };
+
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
 
     return success(succeeded(static_analysis) &&
