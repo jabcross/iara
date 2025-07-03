@@ -76,17 +76,29 @@ pwd
 pwd >&2
 
 \time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $PATH_TO_TEST_SOURCES/topology.test >schedule.mlir 2>/dev/null"
+RC=$?
+echo iara-opt return code: $?
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to run iara-opt"
+  exit 1
+fi
 
 sh -x mlir-to-llvmir.sh schedule.mlir
+RC=$?
+echo mlir-to-llvmir return code: $?
+if [ $RC -ne 0 ]; then
+  echo "Error: Failed to convert to llvm ir"
+  exit 1
+fi
 
 shopt -s nullglob
 
 echo building schedule
 \time -f 'compiling schedule took %E and returned code %x' bash -xc "ccache clang++ --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
-RC
+RC=$?
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
-  echo "Error: Failed to build schedule"b
+  echo "Error: Failed to build schedule"
   exit 1
 fi
 

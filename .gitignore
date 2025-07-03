@@ -18,5 +18,4 @@ CMakeFiles/*
 typescript
 .*/edge_data.inc.h
 junk/
-experiment/*/build/
-experiment/*/profile/
+experiment/*/instances/
