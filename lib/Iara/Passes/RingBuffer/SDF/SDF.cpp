@@ -28,7 +28,7 @@ using namespace iara::util::range;
 
 enum class Direction { Forward, Backward };
 
-bool isDeallocEdge(EdgeOp edge) { return edge.getConsumerNode().isDealloc(); }
+bool isDeallocEdge(EdgeOp edge) { return getConsumerNode(edge).isDealloc(); }
 
 Vec<EdgeOp> getInoutChain(EdgeOp edge) {
   Vec<EdgeOp> rv;
@@ -71,8 +71,6 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
                  annotateTotalFirings(actor, data).succeeded());
 } // namespace iara::passes::ringbuffer::sdf
 
-LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data);
-
 // Sets the ids of the nodes and edges, as well as the position of each edge in
 // its inout chain.
 LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
@@ -80,19 +78,19 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
     auto &info = data.edge_static_info[edge];
-    auto prod_info = data.node_static_info[edge.getProducerNode()];
-    auto cons_info = data.node_static_info[edge.getConsumerNode()];
+    auto prod_info = data.node_static_info[getProducerNode(edge)];
+    auto cons_info = data.node_static_info[getConsumerNode(edge)];
     auto id = prod_info.id * id_range * 10 + cons_info.id;
     // if first of chain
 
     auto token_type = getElementTypeOrSelf(edge.getOut().getType());
     auto token_align =
         DataLayout::closest(edge).getTypeABIAlignment(token_type);
-    auto prod_rate_aligned = edge.getProdRate();
+    auto prod_rate_aligned = getProdRateBytes(edge);
     if (auto rem = prod_rate_aligned % token_align; rem != 0) {
       prod_rate_aligned = prod_rate_aligned - rem + token_align;
     }
-    auto cons_rate_aligned = edge.getConsRate();
+    auto cons_rate_aligned = getConsRateBytes(edge);
     if (auto rem = cons_rate_aligned % token_align; rem != 0) {
       cons_rate_aligned = cons_rate_aligned - rem + token_align;
     }
@@ -113,15 +111,16 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
 
     info = RingBuffer_Edge::StaticInfo{
         id,
-        edge.getProdRate(),
+        getProdRateBytes(edge),
         prod_rate_aligned,
-        edge.getConsRate(),
+        getConsRateBytes(edge),
         cons_rate_aligned,
         edge->getUses().begin()->getOperandNumber(),
         delay_size,
     };
     edge["id"] = info.id;
   }
+  return success();
 }
 
 LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
@@ -171,8 +170,8 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   }
 
   for (auto edge : actor.getOps<EdgeOp>()) {
-    if (data.node_static_info[edge.getConsumerNode()].rank <=
-        data.node_static_info[edge.getProducerNode()].rank) {
+    if (data.node_static_info[getConsumerNode(edge)].rank <=
+        data.node_static_info[getProducerNode(edge)].rank) {
       // todo: implement buffer
     }
   }
@@ -186,13 +185,13 @@ SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node) {
   for (auto input : inputs) {
     auto edge = dyn_cast<EdgeOp>(input.getDefiningOp());
     assert(edge);
-    auto other_node = edge.getProducerNode();
+    auto other_node = getProducerNode(edge);
     neighbors.push_back({Direction::Backward, edge, other_node});
   }
   for (auto output : outputs) {
     auto edge = dyn_cast<EdgeOp>(*output.getUsers().begin());
     assert(edge);
-    auto other_node = edge.getConsumerNode();
+    auto other_node = getConsumerNode(edge);
     neighbors.push_back({Direction::Forward, edge, other_node});
   }
   return neighbors;
@@ -224,7 +223,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
       continue;
     }
     for (auto [direction, edge, neighbor] : getNeighbors(node)) {
-      Rational flow_ratio = edge.getFlowRatio().normalized();
+      Rational flow_ratio = getFlowRatio(edge).normalized();
       if (direction == Direction::Backward) {
         flow_ratio = flow_ratio.reciprocal();
       }

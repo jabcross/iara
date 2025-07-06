@@ -30,8 +30,10 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/TypeUtilities.h>
 #include <mlir/IR/Value.h>
 #include <mlir/IR/Visitors.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
 #include <mlir/Support/LLVM.h>
 
 #define GET_OP_CLASSES
@@ -77,7 +79,8 @@ llvm::SmallVector<Type> ActorOp::getPureOutTypes() {
          Into<SmallVector<Type>>();
 };
 llvm::SmallVector<Type> ActorOp::getAllOutputTypes() {
-  return getOps<OutPortOp>() | Map([](auto op) { return op.getType(); }) |
+  return getOps<OutPortOp>() |
+         Map([](OutPortOp op) { return op.getValue().getType(); }) |
          Into<SmallVector<Type>>();
 };
 bool ActorOp::isInoutInput(size_t idx) {
@@ -277,20 +280,20 @@ NodeOp::verifySymbolUses(::mlir::SymbolTableCollection &symbolTable) {
 }
 
 // Input rate in bytes
-i64 EdgeOp::getProdRate() { return getTypeSize(getIn()); }
+i64 getProdRateBytes(EdgeOp edge) { return getTypeSize(edge.getIn()); }
 
 // Output rate in bytes
-i64 EdgeOp::getConsRate() { return getTypeSize(getOut()); }
+i64 getConsRateBytes(EdgeOp edge) { return getTypeSize(edge.getOut()); }
 
-util::Rational EdgeOp::getFlowRatio() {
-  return util::Rational(getTypeSize(getIn()), getTypeSize(getOut()));
+util::Rational getFlowRatio(EdgeOp edge) {
+  return util::Rational(getTypeSize(edge.getIn()), getTypeSize(edge.getOut()));
 }
 
-NodeOp EdgeOp::getProducerNode() {
-  return llvm::dyn_cast_if_present<NodeOp>(getIn().getDefiningOp());
+NodeOp getProducerNode(EdgeOp edge) {
+  return llvm::dyn_cast_if_present<NodeOp>(edge.getIn().getDefiningOp());
 }
-NodeOp EdgeOp::getConsumerNode() {
-  auto users = llvm::to_vector(getOut().getUsers());
+NodeOp getConsumerNode(EdgeOp edge) {
+  auto users = llvm::to_vector(edge.getOut().getUsers());
   if (users.size() != 1)
     llvm_unreachable("Should have a consumer");
   return llvm::dyn_cast<NodeOp>(users[0]);
@@ -298,7 +301,7 @@ NodeOp EdgeOp::getConsumerNode() {
 
 // Follow an inout edge backwards, or return null.
 EdgeOp followInoutChainBackwards(EdgeOp edge) {
-  auto prev_node = edge.getProducerNode();
+  auto prev_node = getProducerNode(edge);
   if (auto in_port = prev_node.getMatchingInoutInput(edge.getIn())) {
     return followChainUntilPrevious<EdgeOp>(in_port);
   }
@@ -308,7 +311,7 @@ EdgeOp followInoutChainBackwards(EdgeOp edge) {
 // Follow an inout edge forwards, or return null.
 EdgeOp followInoutChainForwards(EdgeOp edge) {
 
-  auto next_node = edge.getConsumerNode();
+  auto next_node = getConsumerNode(edge);
   if (auto out_port = next_node.getMatchingInoutOutput(edge.getOut())) {
     return followChainUntilNext<EdgeOp>(out_port);
   }
@@ -339,6 +342,21 @@ Vec<InoutPair> getInoutPairs(NodeOp node) {
     rv.emplace_back(i, o);
   }
   return rv;
+}
+
+i64 getDelaySizeBytes(EdgeOp edge) {
+  if (auto attr = edge->getAttr("delay")) {
+    if (IntegerAttr int_attr = dyn_cast<IntegerAttr>(attr)) {
+      return int_attr.getInt() *
+             getTypeSize(getElementTypeOrSelf(edge.getIn().getType()),
+                         DataLayout::closest(edge));
+    }
+    if (DenseArrayAttr d_a_attr = dyn_cast<DenseArrayAttr>(attr)) {
+      return d_a_attr.getRawData().size();
+    }
+    llvm_unreachable("Unknown delay attribute type");
+  }
+  return 0;
 }
 
 } // namespace iara

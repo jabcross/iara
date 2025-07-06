@@ -20,20 +20,6 @@
 #include <mlir/IR/Dialect.h>
 #include <mlir/IR/Operation.h>
 
-namespace iara::dialect {
-
-template <typename ConcreteType>
-class IaraOp : public mlir::OpTrait::TraitBase<ConcreteType, IaraOp> {
-public:
-  util::mlir::AttrAccessor operator[](StringRef attr_name) {
-    return util::mlir::AttrAccessor{this->getOperation(), attr_name};
-  };
-
-  void traitMethod() {};
-};
-
-} // namespace iara::dialect
-
 #include "Iara/Dialect/IaraOpsDialect.h.inc"
 
 #endif // IARA_IARADIALECT_H

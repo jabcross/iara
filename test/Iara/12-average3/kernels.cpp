@@ -44,7 +44,9 @@ void exec() {
   printf("end of exec\n");
 }
 
-extern "C" int main() {
+int main() {
+
+  omp_set_num_threads(1);
 
   iara_runtime_exec(exec);
 

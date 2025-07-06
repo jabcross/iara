@@ -23,6 +23,8 @@
 
 namespace iara::passes::canonicalize {
 
+void expandImplicitEdge(Value val);
+
 struct IaraCanonicalizePass
     : public PassWrapper<IaraCanonicalizePass,
                          OperationPass<::mlir::ModuleOp>> {

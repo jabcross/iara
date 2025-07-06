@@ -17,7 +17,7 @@ template <class F> inline void callBlockingFunctionFromOpenMP(F &&f) {
     {
       std::async([f = std::forward<F>(f), event]() {
         f();
-#pragma omp task
+#pragma omp task firstprivate(event)
         omp_fulfill_event(event);
       }).detach();
     }

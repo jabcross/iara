@@ -9,6 +9,7 @@
 #ifndef IARA_IARAOPS_H
 #define IARA_IARAOPS_H
 
+#include "Iara/Dialect/AttrAccessor.h"
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/CompilerTypes.h"
@@ -41,6 +42,7 @@ EdgeOp followInoutChainForwards(EdgeOp edge);
 
 EdgeOp findFirstEdgeOfChain(EdgeOp edge);
 EdgeOp findLastEdgeOfChain(EdgeOp edge);
+i64 getDelaySizeBytes(EdgeOp edge);
 
 struct InoutPair {
   Value in;
@@ -48,6 +50,12 @@ struct InoutPair {
 };
 
 Vec<InoutPair> getInoutPairs(NodeOp node);
+
+util::Rational getFlowRatio(EdgeOp edge);
+i64 getProdRateBytes(EdgeOp edge);
+i64 getConsRateBytes(EdgeOp edge);
+NodeOp getProducerNode(EdgeOp edge);
+NodeOp getConsumerNode(EdgeOp edge);
 
 } // namespace iara
 

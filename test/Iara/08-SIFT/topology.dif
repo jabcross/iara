@@ -878,8 +878,7 @@ dif Htop_sift {
   }
 }
 
-
-dif main {
+dif run {
   datatype {
     SiftKpt = 556; // size in bytes;
   }

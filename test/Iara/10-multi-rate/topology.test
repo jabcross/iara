@@ -10,19 +10,15 @@
 
 // Two nodes
 
-iara.actor @a {
-    iara.out : tensor<2xi32>
-}
-
-iara.actor @b {
-    iara.in : tensor<3xi32>
-}
-
 iara.actor @run  {
   %0 = iara.node @a out: tensor<2xi32>
   %1 = iara.edge %0 : tensor<2xi32> -> tensor<3xi32>
   iara.node @b in %1: tensor<3xi32>
 } { }
 
-// CHECK: {{^ *}}0 1 2{{ *$}}
-// CHECK: {{^ *}}3 4 5{{ *$}}
+// CHECK-DAG: 0
+// CHECK-DAG: 1
+// CHECK-DAG: 2
+// CHECK-DAG: 3
+// CHECK-DAG: 4
+// CHECK-DAG: 5

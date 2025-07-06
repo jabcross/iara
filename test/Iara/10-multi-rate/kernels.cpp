@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <mutex>
 
-static std::mutex m;
+std::mutex m;
 
 extern "C" void a(int32_t out[2]) {
   static int counter = 0;
@@ -15,7 +15,9 @@ extern "C" void a(int32_t out[2]) {
 }
 
 extern "C" void b(const int32_t in[3]) {
-  printf("%d %d %d\n", in[0], in[1], in[2]);
+  m.lock();
+  printf("%d\n%d\n%d\n", in[0], in[1], in[2]);
+  m.unlock();
 }
 
 void exec() {

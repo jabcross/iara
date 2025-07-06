@@ -8,7 +8,7 @@
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstddef>
@@ -18,6 +18,7 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <llvm/Support/LogicalResult.h>
 #include <mlir/Conversion/ConvertToLLVM/ToLLVMPass.h>
 #include <mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h>
 #include <mlir/Conversion/LLVMCommon/StructBuilder.h>
@@ -69,7 +70,7 @@ struct VirtualFIFOSchedulerPass::Impl {
   LLVM::LLVMVoidType llvm_void_type() { return LLVM::LLVMVoidType::get(ctx()); }
 
   LLVM::LLVMStructType chunk_type() {
-    return cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx()));
+    return cast<LLVM::LLVMStructType>(getMLIRType<VirtualFIFO_Chunk>(ctx()));
   }
 
   LLVM::LLVMFunctionType wrapper_type() {
@@ -248,6 +249,29 @@ struct VirtualFIFOSchedulerPass::Impl {
   void codegenEdgeInit(OpBuilder builder, EdgeOp edge, VirtualFIFO_Edge &info) {
   }
 
+  void upgradeDelaysToDenseArrays(ActorOp actor) {
+    for (auto edge : actor.getOps<EdgeOp>()) {
+      if (!edge->hasAttr("delay")) {
+        continue;
+      }
+
+      if (auto int_attr =
+              llvm::dyn_cast_or_null<IntegerAttr>(edge["delay"].get())) {
+        // fill with zeros
+        auto elem_type = getElementTypeOrSelf(edge.getIn().getType());
+        size_t num_elems = int_attr.getInt();
+        size_t size_elem = getTypeSize(elem_type, DataLayout::closest(edge));
+        char *zeros = (char *)calloc(num_elems, size_elem);
+        auto delay_attr =
+            DenseArrayAttr::get(elem_type,
+                                int_attr.getInt(),
+                                ArrayRef<char>(zeros, num_elems * size_elem));
+        edge->setAttr("delay", delay_attr);
+        free(zeros);
+      }
+    }
+  }
+
   LogicalResult codegenStaticData(ActorOp actor, StaticAnalysisData &data) {
 
     // fill out infos
@@ -292,9 +316,9 @@ struct VirtualFIFOSchedulerPass::Impl {
       runtime_edge_data_index[edge] = i;
       info.info = data.edge_static_info[edge];
       info.consumer =
-          &node_infos[runtime_node_data_index[edge.getConsumerNode()]];
+          &node_infos[runtime_node_data_index[getConsumerNode(edge)]];
       info.producer =
-          &node_infos[runtime_node_data_index[edge.getProducerNode()]];
+          &node_infos[runtime_node_data_index[getProducerNode(edge)]];
       info.alloc_node =
           &node_infos[runtime_node_data_index[findFirstNodeOfChain(edge)]];
 
@@ -368,14 +392,19 @@ struct VirtualFIFOSchedulerPass::Impl {
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
 
+    upgradeDelaysToDenseArrays(main_actor);
+
     breakLoops(main_actor);
 
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
+    bool ok = llvm::succeeded(static_analysis);
 
-    return success(
-        succeeded(static_analysis) &&
-        succeeded(generateAllocsAndFrees(main_actor, *static_analysis)) &&
-        succeeded(codegenStaticData(main_actor, *static_analysis)));
+    ok = ok && generateAllocsAndFrees(main_actor, *static_analysis).succeeded();
+
+    main_actor->dump();
+
+    ok = ok && codegenStaticData(main_actor, *static_analysis).succeeded();
+    return success(ok);
   }
 };
 

@@ -3,17 +3,7 @@
 
 // Two nodes
 
-iara.actor @a {
-  iara.out : tensor<1xi32>
-} { kernel }
-iara.actor @b {
-  %1 = iara.in : tensor<1xi32>
-} { kernel }
-iara.actor @c {
-  %1 = iara.in inout : tensor<1xi32>
-  iara.out : tensor<1xi32>
-} { kernel }
-iara.actor @main  {
+iara.actor @run  {
   %1 = iara.node @a out : tensor<1xi32>
   %5 = iara.node @c inout %1 : tensor<1xi32> out: tensor<1xi32>
   %6 = iara.node @c inout %1 : tensor<1xi32> out: tensor<1xi32>

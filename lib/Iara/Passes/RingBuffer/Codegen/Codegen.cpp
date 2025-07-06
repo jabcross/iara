@@ -85,8 +85,8 @@ std::string getDebugName(NodeOp node) {
 }
 
 std::string getDebugName(EdgeOp edge) {
-  auto prod = edge.getProducerNode();
-  auto cons = edge.getConsumerNode();
+  auto prod = getProducerNode(edge);
+  auto cons = getConsumerNode(edge);
   auto prod_index = util::mlir::getResultIndex(edge.getIn());
   auto cons_index = edge->getUses().begin()->getOperandNumber();
   return llvm::formatv("edge_{6}_{4}_{0}[{1}]->{5}_{2}[{3}]\0",
@@ -142,7 +142,7 @@ Value asValue(OpBuilder builder,
   using namespace iara::passes::ringbuffer::codegen;
   using namespace iara::passes::common::codegen;
 
-  ArrayRef values = {
+  Vec<i64> values = {
       info.id,
       info.input_bytes,
       info.num_ins,
@@ -364,8 +364,7 @@ struct CodegenStaticData::Impl {
     input_fifos_spans.push_back(input_fifos_placeholder);
     output_fifos_spans.push_back(output_fifos_placeholder);
 
-    // leaked on purpose
-    auto node_name = builder.getStringAttr(getDebugName(node));
+    auto node_name = getDebugName(node);
 
     auto name_global =
         LLVM::createGlobalString(node->getLoc(),
@@ -432,7 +431,7 @@ struct CodegenStaticData::Impl {
     producer_node_ptrs.push_back(producer);
     consumer_node_ptrs.push_back(consumer);
 
-    auto edge_name = builder.getStringAttr(getDebugName(edge));
+    auto edge_name = getDebugName(edge);
 
     auto name_global =
         LLVM::createGlobalString(edge->getLoc(),
@@ -528,7 +527,7 @@ struct CodegenStaticData::Impl {
                       DenseF32ArrayAttr,
                       DenseF64ArrayAttr>([&](auto type, size_t index) {
           using T = decltype(type)::type;
-          auto attr = delay_attr.dyn_cast<T>();
+          auto attr = dyn_cast<T>(delay_attr);
           if (!attr)
             return;
           assert(found == false);

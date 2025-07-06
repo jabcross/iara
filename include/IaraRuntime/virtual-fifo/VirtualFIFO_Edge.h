@@ -2,7 +2,8 @@
 #define IARA_RUNTIME_SDF_OOO_FIFO_H
 
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
+#include <cstdio>
 #include <cstdlib>
 
 struct VirtualFIFO_Node;
@@ -36,6 +37,24 @@ struct VirtualFIFO_Edge {
     // Given a global offset, return which firing of the consumer will consume
     // it, as well as the offset within that consumption, and its size.
     ConsData getConsumerSlice(i64 virtual_offset);
+
+    inline void dump() {
+      fprintf(stderr, "Dumping edgeinfo {\n");
+      fprintf(stderr, "id = %ld\n", id);
+      fprintf(stderr, "local_index = %ld\n", local_index);
+      fprintf(stderr, "prod_rate = %ld\n", prod_rate);
+      fprintf(stderr, "cons_rate = %ld\n", cons_rate);
+      fprintf(stderr, "cons_arg_idx = %ld\n", cons_arg_idx);
+      fprintf(stderr, "delay_offset = %ld\n", delay_offset);
+      fprintf(stderr, "delay_size = %ld\n", delay_size);
+
+      fprintf(stderr, "block_size_with_delays = %ld\n", block_size_with_delays);
+      fprintf(stderr, "block_size_no_delays = %ld\n", block_size_no_delays);
+      fprintf(stderr, "prod_alpha = %ld\n", prod_alpha);
+      fprintf(stderr, "prod_beta = %ld\n", prod_beta);
+      fprintf(stderr, "cons_alpha = %ld\n", cons_alpha);
+      fprintf(stderr, "cons_beta = %ld }\n", cons_beta);
+    }
   };
 
   static constexpr size_t static_info_num_fields = 13;
@@ -51,8 +70,8 @@ struct VirtualFIFO_Edge {
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.
 
-  void push(Chunk chunk);
-  void propagate_delays(Chunk chunk);
+  void push(VirtualFIFO_Chunk chunk);
+  void propagate_delays(VirtualFIFO_Chunk chunk);
 
   inline i64 getRemainingDelay() { return info.delay_offset + info.delay_size; }
 

@@ -1,11 +1,12 @@
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/VirtualFIFO/SDF/Analysis.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
+#include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "Iara/Util/rational.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
+#include <cassert>
 #include <cmath>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -19,15 +20,13 @@
 #include <numeric>
 #include <queue>
 
-namespace iara::passes::virtualfifo::sdf
-
-{
+namespace iara::passes::virtualfifo::sdf {
 using namespace iara::util::mlir;
 using namespace iara::util::range;
 
 enum class Direction { Forward, Backward };
 
-bool isDeallocEdge(EdgeOp edge) { return edge.getConsumerNode().isDealloc(); }
+bool isDeallocEdge(EdgeOp edge) { return getConsumerNode(edge).isDealloc(); }
 
 Vec<EdgeOp> getInoutChain(EdgeOp edge) {
   Vec<EdgeOp> rv;
@@ -37,11 +36,12 @@ Vec<EdgeOp> getInoutChain(EdgeOp edge) {
     rv.push_back(iter);
     iter = followInoutChainForwards(iter);
   }
+  assert(rv.size() > 0);
   return rv;
 }
 
 NodeOp findFirstNodeOfChain(EdgeOp edge) {
-  return findFirstEdgeOfChain(edge).getProducerNode();
+  return getProducerNode(findFirstEdgeOfChain(edge));
 }
 
 Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
@@ -63,16 +63,27 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
   auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, node] : enumerate(nodes)) {
     auto &info = data.node_static_info[node];
-    auto input_bytes = 0;
-    auto inputs = node.getAllInputs();
-    for (auto v : inputs) {
-      input_bytes += getTypeSize(v);
+
+    i64 arg_bytes = 0;
+    i64 num_args = 0;
+
+    for (auto pure_input : node.getIn()) {
+      arg_bytes += getTypeSize(pure_input);
+      num_args += 1;
+    }
+    for (auto inout : node.getInout()) {
+      arg_bytes += getTypeSize(inout);
+      num_args += 1;
+    }
+    for (auto pure_output : node.getPureOuts()) {
+      arg_bytes += getTypeSize(pure_output);
+      num_args += 1;
     }
 
     info = {
         .id = (i64)(i + 1 + id_range),
-        .input_bytes = input_bytes,
-        .num_inputs = (i64)inputs.size(),
+        .arg_bytes = arg_bytes,
+        .num_args = num_args,
         .rank = -1,
         .total_iter_firings = -1,
         .needs_priming = 1,
@@ -83,8 +94,6 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
                  annotateTotalFirings(actor, data).succeeded());
 } // namespace iara::sdf
 
-LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data);
-
 // Sets the ids of the nodes and edges, as well as the position of each edge in
 // its inout chain.
 LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
@@ -92,46 +101,46 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
     auto &info = data.edge_static_info[edge];
-    auto prod_info = data.node_static_info[edge.getProducerNode()];
-    auto cons_info = data.node_static_info[edge.getConsumerNode()];
+    auto prod_info = data.node_static_info[getProducerNode(edge)];
+    auto cons_info = data.node_static_info[getConsumerNode(edge)];
     auto id = prod_info.id * id_range * 10 + cons_info.id;
     // if first of chain
 
-    info = VirtualFIFO_Edge::StaticInfo{
-        .id = id,
-        // To fill in after alloc and dealloc generation.
-        .local_index = -1,
-        .prod_rate = edge.getProdRate(),
-        .cons_rate = edge.getConsRate(),
-        .cons_arg_idx = edge->getUses().begin()->getOperandNumber(),
-        // To fill in in the delay info calculation.
-        .delay_offset = -1,
-        .delay_size = -1,
-        // To fill in in the buffer sizing calculator.
-        .block_size_with_delays = -1,
-        .block_size_no_delays = -1,
-        .prod_alpha = -1,
-        .prod_beta = -1,
-        .cons_alpha = -1,
-        .cons_beta = -1,
-    };
+    info.id = id;
+    // To fill in after alloc and dealloc generation.
+    info.local_index = -1;
+    info.prod_rate = getProdRateBytes(edge);
+    info.cons_rate = getConsRateBytes(edge);
+    info.cons_arg_idx = edge->getUses().begin()->getOperandNumber();
+
+    // These should be already set.
+
+    assert(info.delay_offset != -1);
+    assert(info.delay_size != -1);
+    assert(info.block_size_with_delays != -1);
+    assert(info.block_size_no_delays != -1);
+    assert(info.prod_alpha != -1);
+    assert(info.prod_beta != -1);
+    assert(info.cons_alpha != -1);
+    assert(info.cons_beta != -1);
+
     edge["id"] = info.id;
   }
 
-  return annotateDelayInfo(actor, data);
+  return success();
 }
 
 bool isInout(EdgeOp edge) {
-  return llvm::is_contained(getInoutPairs(edge.getProducerNode()) |
+  return llvm::is_contained(getInoutPairs(getProducerNode(edge)) |
                                 Map([](auto p) { return p.out; }),
                             edge.getIn()) &&
-         llvm::is_contained(edge.getConsumerNode().getInout(), edge.getOut());
+         llvm::is_contained(getConsumerNode(edge).getInout(), edge.getOut());
 }
 
 void breakInout(EdgeOp edge) {
-  edge.getProducerNode().dump();
+  getProducerNode(edge).dump();
   edge.dump();
-  edge.getConsumerNode().dump();
+  getConsumerNode(edge).dump();
   llvm_unreachable("Todo: break inout.");
 }
 
@@ -182,8 +191,8 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   }
 
   for (auto edge : actor.getOps<EdgeOp>()) {
-    if (data.node_static_info[edge.getConsumerNode()].rank <=
-        data.node_static_info[edge.getProducerNode()].rank) {
+    if (data.node_static_info[getConsumerNode(edge)].rank <=
+        data.node_static_info[getProducerNode(edge)].rank) {
       if (isInout(edge)) {
         breakInout(edge);
       }
@@ -193,61 +202,25 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   return success();
 }
 
-// An edge is backwards if it creates a cycle with a bfs starting on the
-// sources.
-// TODO: check for appropriate delay size
-template <class T> using IL = std::initializer_list<T>;
-LogicalResult annotateDelayInfo(ActorOp actor, StaticAnalysisData &data) {
-
-  for (auto edge : actor.getOps<EdgeOp>()) {
-
-    // rate info
-
-    auto &edge_info = data.edge_static_info[edge];
-    if (auto attr = edge->getAttr("delay")) {
-      if (auto delay = dyn_cast_if_present<DenseArrayAttr>(attr)) {
-        edge_info.delay_size =
-            getTypeSize(delay.getElementType(), DataLayout::closest(edge)) *
-            delay.getSize();
-        continue;
-      }
-      llvm_unreachable("Unsupported type for delay");
-      continue;
-    } else {
-      edge_info.delay_size = 0;
-    }
-  }
-
-  if (analyseVirtualBufferSizes(actor, data).failed())
-    return failure();
-
-  // Fill out the delay offsets.
-  for (auto chain : getInoutChains(actor)) {
-    i64 offset = 0;
-    for (auto edge : reverse(chain)) {
-      auto &info = data.edge_static_info[edge];
-      info.delay_offset = offset;
-      offset += info.delay_size;
-    }
-  }
-
-  return success();
-} // namespace iara::sdf
-
 SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node) {
   SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> neighbors;
   auto inputs = node.getAllInputs();
   auto outputs = node.getAllOutputs();
+  auto insize = inputs.size();
+  auto outsize = outputs.size();
   for (auto input : inputs) {
     auto edge = dyn_cast<EdgeOp>(input.getDefiningOp());
     assert(edge);
-    auto other_node = edge.getProducerNode();
+    auto other_node = getProducerNode(edge);
     neighbors.push_back({Direction::Backward, edge, other_node});
   }
   for (auto output : outputs) {
-    auto edge = dyn_cast<EdgeOp>(*output.getUsers().begin());
+    auto users = output.getUsers() | IntoVector();
+    assert(users.size() == 1);
+    Operation *user = users[0];
+    auto edge = dyn_cast<EdgeOp>(user);
     assert(edge);
-    auto other_node = edge.getConsumerNode();
+    auto other_node = getConsumerNode(edge);
     neighbors.push_back({Direction::Forward, edge, other_node});
   }
   return neighbors;
@@ -279,7 +252,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
       continue;
     }
     for (auto [direction, edge, neighbor] : getNeighbors(node)) {
-      Rational flow_ratio = edge.getFlowRatio().normalized();
+      Rational flow_ratio = getFlowRatio(edge).normalized();
       if (direction == Direction::Backward) {
         flow_ratio = flow_ratio.reciprocal();
       }
@@ -322,10 +295,21 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
 FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor) {
   StaticAnalysisData data;
 
+  for (auto chain : getInoutChains(actor)) {
+    if (analyzeVirtualInoutChain(chain, data).failed())
+      return failure();
+  }
+
   if (annotateNodeInfo(actor, data).succeeded() &&
       annotateEdgeInfo(actor, data).succeeded()) {
     return data;
   }
+
+  for (auto edge : actor.getOps<EdgeOp>()) {
+    auto &info = data.edge_static_info[edge];
+    edge.dump();
+  }
+
   return failure();
 }
 

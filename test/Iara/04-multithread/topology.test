@@ -9,17 +9,6 @@
 
 // multithread
 
-iara.actor @a {
-  iara.out : tensor<1xi64>
-}
-iara.actor @b {
-  iara.out : tensor<1xi64>
-}
-iara.actor @c {
-  %1 = iara.in : tensor<1xi64>
-  %2 = iara.in : tensor<1xi64>
-}
-
 iara.actor @run  {
   %1 = iara.node @a out : tensor<1xi64>
   %2 = iara.node @b out : tensor<1xi64>

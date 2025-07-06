@@ -5,7 +5,7 @@
 #include <cassert>
 #include <cstdlib>
 
-struct Chunk {
+struct RingBuffer_Chunk {
 
   i8 *allocated = nullptr;
   i8 *data;

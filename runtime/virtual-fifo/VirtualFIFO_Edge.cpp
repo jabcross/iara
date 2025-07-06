@@ -1,18 +1,20 @@
 #include "Iara/Util/CommonTypes.h"
-#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstring>
 #include <utility>
 
-bool is_first_chunk(VirtualFIFO_Edge &fifo, Chunk &, i64 virtual_offset) {
+bool is_first_chunk(VirtualFIFO_Edge &fifo,
+                    VirtualFIFO_Chunk &,
+                    i64 virtual_offset) {
   return virtual_offset < fifo.info.block_size_with_delays;
 }
 
 // Reads some data and partitions it into the pieces that will be consumed in
 // the different firings of the consumer actor.
-void VirtualFIFO_Edge::push(Chunk chunk) {
-  Chunk remaining_data = std::move(chunk);
+void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
+  VirtualFIFO_Chunk remaining_data = std::move(chunk);
   auto cons_rate = info.cons_rate;
   // dealloc
   if (cons_rate < 0) {
@@ -37,7 +39,7 @@ void VirtualFIFO_Edge::push(Chunk chunk) {
 }
 
 // Pushes delay data into FIFOs.
-void VirtualFIFO_Edge::propagate_delays(Chunk chunk) {
+void VirtualFIFO_Edge::propagate_delays(VirtualFIFO_Chunk chunk) {
   if (delay_data.extents > 0) {
     assert((size_t)chunk.data_size >= delay_data.extents);
     auto this_delay = chunk.take_back(delay_data.extents);

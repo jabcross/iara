@@ -1,5 +1,5 @@
 #include "Iara/Util/CommonTypes.h"
-#include "IaraRuntime/ring-buffer/Chunk.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include "IaraRuntime/util/DebugPrint.h"

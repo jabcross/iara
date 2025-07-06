@@ -68,7 +68,7 @@ struct RingBufferSchedulerPass::Impl {
   LLVM::LLVMVoidType llvm_void_type() { return LLVM::LLVMVoidType::get(ctx()); }
 
   LLVM::LLVMStructType chunk_type() {
-    return cast<LLVM::LLVMStructType>(getMLIRType<Chunk>(ctx()));
+    return cast<LLVM::LLVMStructType>(getMLIRType<RingBuffer_Chunk>(ctx()));
   }
 
   LLVM::LLVMFunctionType wrapper_type() {
@@ -260,9 +260,9 @@ struct RingBufferSchedulerPass::Impl {
       runtime_edge_data_index[edge] = i;
       info.info = data.edge_static_info[edge];
       info.consumer =
-          &node_infos[runtime_node_data_index[edge.getConsumerNode()]];
+          &node_infos[runtime_node_data_index[getConsumerNode(edge)]];
       info.producer =
-          &node_infos[runtime_node_data_index[edge.getProducerNode()]];
+          &node_infos[runtime_node_data_index[getProducerNode(edge)]];
       info.queue = nullptr;
 
       if (info.info.delay_size > 0) {

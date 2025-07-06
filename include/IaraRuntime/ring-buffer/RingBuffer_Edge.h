@@ -2,8 +2,8 @@
 #define IARARUNTIME_RINGBUFFER_RINGBUFFEREDGE_H
 
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/ring-buffer/Chunk.h"
 #include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include <cstdlib>
 
 struct RingBuffer_Node;
@@ -56,8 +56,8 @@ struct RingBuffer_Edge {
   // allocates ring buffer and inserts delays
   void init();
 
-  void push(Chunk chunk);
-  bool tryPop(Chunk &chunk);
+  void push(RingBuffer_Chunk chunk);
+  bool tryPop(RingBuffer_Chunk &chunk);
 };
 
 #endif

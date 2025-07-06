@@ -131,14 +131,6 @@ def EdgeOp : IaraOp<"edge", []> {
       $in `:` type($in) `->` type($out)
       attr-dict
   }];
-    let extraClassDeclaration = [{
-      // Returns the producer rate divided by the consumer rate.
-       util::Rational getFlowRatio();
-       i64 getProdRate();
-       i64 getConsRate();
-       NodeOp getProducerNode();
-       NodeOp getConsumerNode();
-    }];
 }
 
 
@@ -157,7 +149,7 @@ def InPortOp: IaraOp<"in", [] > {
     let assemblyFormat = [{ (`inout` $inout^ )? (`<`$dyn_sizes^`>`)? `:` type($result) attr-dict }];
 }
 
-def OutPortOp: IaraOp<"out",  [AttrSizedOperandSegments] > {
+def OutPortOp: IaraOp<"out",  [] > {
     let summary = "An output port for a dataflow node.";
     let description = [{
         The `iara.out` operation declares an output port for a dataflow actor. It takes in a (possibly dynamic) tensor type and a list of dynamic sizes.
@@ -167,8 +159,8 @@ def OutPortOp: IaraOp<"out",  [AttrSizedOperandSegments] > {
         TODO
         ```
     }];
-    let arguments = (ins Variadic<Index>:$dyn_sizes, TypeAttr:$type, Optional<AnyType>: $value);
-    let assemblyFormat = [{  (`(` $value^ `:` type($value) `)`  )? ( `<` $dyn_sizes^ `>`)? `:` $type attr-dict }];
+    let arguments = (ins Variadic<Index>:$dyn_sizes, AnyType: $value);
+    let assemblyFormat = [{  `(` $value `:` type($value) `)` ( `<` $dyn_sizes^ `>`)?  attr-dict }];
 }
 
 

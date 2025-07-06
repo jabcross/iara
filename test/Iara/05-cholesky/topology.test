@@ -6,66 +6,6 @@
 // RUN: ./build/a.out > ./build/output.txt
 // RUN: FileCheck %s < ./build/output.txt
 
-iara.actor @kernel_potrf {
-              
- %1 = iara.in inout : tensor<1xf64>
-  iara.out : tensor<1xf64>
-} { kernel }
-
-
-iara.actor @kernel_trsm {
-              
- %1 = iara.in  : tensor<1xf64>
- %2 = iara.in inout : tensor<1xf64>
-  iara.out : tensor<1xf64>
-} { kernel }
-
-
-iara.actor @kernel_gemm {
-              
- %1 = iara.in  : tensor<1xf64>
- %2 = iara.in  : tensor<1xf64>
- %3 = iara.in inout : tensor<1xf64>
-  iara.out : tensor<1xf64>
-} { kernel }
-
-
-iara.actor @kernel_syrk {
-              
- %1 = iara.in  : tensor<1xf64>
- %2 = iara.in inout : tensor<1xf64>
-  iara.out : tensor<1xf64>
-} { kernel }
-
-
-iara.actor @kernel_split {
-
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-  iara.out : tensor<1xf64>
-
-} { kernel }
-
-
-iara.actor @kernel_join {
-
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-    iara.in : tensor<1xf64>
-} { kernel }
-
 iara.actor @run {
   %e_0_0_0, %e_0_1_0, %e_0_2_0, %e_1_0_0, %e_1_1_0, %e_1_2_0, %e_2_0_0, %e_2_1_0, %e_2_2_0 = iara.node @kernel_split out : tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>, tensor<1xf64>
   %e_0_0_1 = iara.node @kernel_potrf inout %e_0_0_0 : tensor<1xf64> out : tensor<1xf64>

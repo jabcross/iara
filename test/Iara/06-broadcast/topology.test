@@ -8,15 +8,6 @@
 
 // Broadcast test
 
-iara.actor @a {
-  iara.out : tensor<1xi32>
-}
-iara.actor @b {
-  %1 = iara.in : tensor<1xi32>
-} { kernel }
-iara.actor @c {
-  %1 = iara.in : tensor<1xi32>
-} { kernel }
 iara.actor @run  {
   %1 = iara.node @a out : tensor<1xi32>
   iara.node @b in %1 : tensor<1xi32>

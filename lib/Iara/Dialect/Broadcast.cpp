@@ -96,7 +96,7 @@ LogicalResult expandToBroadcast(OpResult &value) {
   builder.setInsertionPointAfter(value.getOwner());
 
   ValueRange in = {};
-  ValueRange inout = {value};
+  Vec<Value> inout = {value};
 
   // SmallVector<Type> outputs;
 

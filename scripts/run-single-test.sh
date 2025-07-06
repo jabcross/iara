@@ -30,16 +30,7 @@ fi
 mkdir -p build
 cd build
 
-rm -rf *
-
-rm *.o
-
-echo "Building test: $FOLDER_NAME"
-echo ""
-
-SCHEDULER_MODE=$2
-
-build-single-test.sh $PATH_TO_TEST_SOURCES $SCHEDULER_MODE
+build-single-test.sh $PATH_TO_TEST_SOURCES
 
 color() (
   set -o pipefail

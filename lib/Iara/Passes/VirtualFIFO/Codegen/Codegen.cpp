@@ -8,6 +8,7 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
+#include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/LLVMIR/LLVMAttrs.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
@@ -86,7 +87,7 @@ using namespace iara::passes::common::codegen;
 std::string getDebugName(NodeOp node) {
   if (node.isAlloc()) {
     auto alloc_edge = cast<EdgeOp>(*node->getResult(0).getUsers().begin());
-    auto first_node = alloc_edge.getConsumerNode();
+    auto first_node = getConsumerNode(alloc_edge);
     auto index = alloc_edge->getUses().begin()->getOperandNumber();
     return llvm::formatv("allocNode_{3}_{2}_{0}[{1}]\0",
                          first_node.getImpl(),
@@ -96,7 +97,7 @@ std::string getDebugName(NodeOp node) {
   }
   if (node.isDealloc()) {
     auto dealloc_edge = cast<EdgeOp>(node->getOperand(0).getDefiningOp());
-    auto last_node = dealloc_edge.getProducerNode();
+    auto last_node = getProducerNode(dealloc_edge);
     auto index = util::mlir::getResultIndex(dealloc_edge.getIn());
     return llvm::formatv("deallocNode_{3}_{2}_{0}[{1}]\0",
                          last_node.getImpl(),
@@ -108,8 +109,8 @@ std::string getDebugName(NodeOp node) {
 }
 
 std::string getDebugName(EdgeOp edge) {
-  auto prod = edge.getProducerNode();
-  auto cons = edge.getConsumerNode();
+  auto prod = getProducerNode(edge);
+  auto cons = getConsumerNode(edge);
   auto prod_index = util::mlir::getResultIndex(edge.getIn());
   auto cons_index = edge->getUses().begin()->getOperandNumber();
   if (prod.isAlloc()) {
@@ -178,9 +179,9 @@ Value asValue(OpBuilder builder,
 
   using namespace iara::passes::virtualfifo::codegen;
 
-  ArrayRef values = {info.id,
-                     info.input_bytes,
-                     info.num_inputs,
+  Vec<i64> values = {info.id,
+                     info.arg_bytes,
+                     info.num_args,
                      info.rank,
                      info.total_iter_firings,
                      info.needs_priming};
@@ -398,7 +399,7 @@ struct CodegenStaticData::Impl {
     output_fifos_spans.push_back(output_fifos_placeholder);
 
     // leaked on purpose
-    auto node_name = builder.getStringAttr(getDebugName(node));
+    auto node_name = getDebugName(node);
 
     auto name_global =
         LLVM::createGlobalString(node->getLoc(),
@@ -475,7 +476,7 @@ struct CodegenStaticData::Impl {
     alloc_node_ptrs.push_back(alloc_node);
     next_edge_ptrs.push_back(next_in_chain);
 
-    auto edge_name = builder.getStringAttr(getDebugName(edge));
+    auto edge_name = getDebugName(edge);
 
     auto name_global =
         LLVM::createGlobalString(edge->getLoc(),
@@ -540,16 +541,7 @@ struct CodegenStaticData::Impl {
 
         if (auto int_attr =
                 llvm::dyn_cast_or_null<IntegerAttr>(edge["delay"].get())) {
-          // fill with zeros
-          auto elem_type = getElementTypeOrSelf(edge.getIn().getType());
-          size_t num_elems = int_attr.getUInt();
-          size_t size_elem = getTypeSize(elem_type, DataLayout::closest(edge));
-          char *zeros = (char *)calloc(num_elems, size_elem);
-          delay_attr =
-              DenseArrayAttr::get(elem_type,
-                                  int_attr.getInt(),
-                                  ArrayRef<char>(zeros, num_elems * size_elem));
-          free(zeros);
+          llvm_unreachable("Should be already raised to delay attr");
         }
 
         if (auto dense_attr =
@@ -571,7 +563,7 @@ struct CodegenStaticData::Impl {
                       DenseF32ArrayAttr,
                       DenseF64ArrayAttr>([&](auto type, size_t index) {
           using T = decltype(type)::type;
-          auto attr = delay_attr.dyn_cast<T>();
+          auto attr = dyn_cast<T>(delay_attr);
           if (!attr)
             return;
           assert(found == false);

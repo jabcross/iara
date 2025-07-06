@@ -184,5 +184,8 @@ std::string tostring(Operation *op) {
 }
 
 Operation *parent(Operation *op) { return op->getParentOp(); }
+Operation *parent(NodeOp node) { return node->getParentOp(); }
+
+void dump(Operation *op) { return op->dump(); }
 
 } // namespace iara::util::mlir

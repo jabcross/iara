@@ -10,29 +10,31 @@ struct VirtualFIFO_Node::NormalSemaphore {
     VirtualFIFO_Node *_this;
   };
   struct EveryTimeArgs {
-    Chunk data;
+    VirtualFIFO_Chunk data;
     i64 arg_idx;
     bool first_of_firing;
   };
 
   struct LastArgs {
     bool *may_fire;
-    Span<Chunk> *args;
+    Span<VirtualFIFO_Chunk> *args;
   };
 
-  static void first_time_func(FirstArgs &f_args, Span<Chunk> &kernel_args) {
+  static void first_time_func(FirstArgs &f_args,
+                              Span<VirtualFIFO_Chunk> &kernel_args) {
     // Init args vector with appropriate size.
-    kernel_args.extents = f_args._this->info.num_inputs;
-    kernel_args.ptr = (Chunk *)calloc(kernel_args.extents, sizeof(Chunk));
+    kernel_args.extents = f_args._this->info.num_args;
+    kernel_args.ptr = (VirtualFIFO_Chunk *)calloc(kernel_args.extents,
+                                                  sizeof(VirtualFIFO_Chunk));
     // fprintf(stderr,
     //         "alloc args %#016lx of size %ld\n",
     //         (size_t)kernel_args.ptr,
-    //         kernel_args.extents * sizeof(Chunk));
+    //         kernel_args.extents * sizeof(VirtualFIFO_Chunk));
     // fflush(stderr);
   };
 
   static void every_time_func(EveryTimeArgs &et_args,
-                              Span<Chunk> &kernel_args) {
+                              Span<VirtualFIFO_Chunk> &kernel_args) {
     auto &[new_chunk, idx, first] = et_args;
 
     if (new_chunk.is_empty()) {
@@ -47,14 +49,15 @@ struct VirtualFIFO_Node::NormalSemaphore {
     }
   };
 
-  static void last_time_func(LastArgs &l_args, Span<Chunk> &kernel_args) {
+  static void last_time_func(LastArgs &l_args,
+                             Span<VirtualFIFO_Chunk> &kernel_args) {
     *l_args.may_fire = true;
     *l_args.args = kernel_args;
   };
 
   using Semaphore =
       keyed_semaphore::KeyedSemaphore<keyed_semaphore::ParallelHashMap,
-                                      Span<Chunk>,
+                                      Span<VirtualFIFO_Chunk>,
                                       FirstArgs,
                                       EveryTimeArgs,
                                       LastArgs,

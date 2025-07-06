@@ -36,11 +36,11 @@ def IaraDialect : Dialect {
 //===----------------------------------------------------------------------===//
 
 
-def IaraOpTrait: NativeOpTrait<"IaraOp"> {
+def AttrAccessorTrait: NativeOpTrait<"AttrAccessorTrait"> {
     string cppNamespace = "::iara::dialect";
 }
 
 class IaraOp<string mnemonic, list<Trait> traits = []> :
-        Op<IaraDialect, mnemonic, !listconcat([IaraOpTrait], traits)>;
+        Op<IaraDialect, mnemonic, !listconcat([AttrAccessorTrait], traits)>;
 
 #endif // IARA_DIALECT

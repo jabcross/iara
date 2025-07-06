@@ -3,7 +3,7 @@
 
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include <cstddef>
 
@@ -20,13 +20,13 @@ struct VirtualFIFO_Node {
     AllocSemaphore *alloc;
   };
 
-  using WrapperType = void(i64 seq, Chunk *args);
+  using WrapperType = void(i64 seq, VirtualFIFO_Chunk *args);
 
   // WARNING: Be careful! These two have the same layout.
   struct StaticInfo {
     i64 id = -1;
-    i64 input_bytes = -1;
-    i64 num_inputs = -1;
+    i64 arg_bytes = -1;
+    i64 num_args = -1;
     i64 rank = -1;
     i64 total_iter_firings = -1; // For normal nodes, it is the number of times
                                  // it fires in an iteration.
@@ -35,8 +35,18 @@ struct VirtualFIFO_Node {
     i64 needs_priming = 1; // for normal nodes: 0 if can run whenever the inputs
                            // are ready, 1 if needs to be scheduled by run_iter
 
-    bool isAlloc() { return input_bytes == -2; }
-    bool isDealloc() { return input_bytes == -3; }
+    bool isAlloc() { return arg_bytes == -2; }
+    bool isDealloc() { return arg_bytes == -3; }
+
+    inline void dump() {
+      fprintf(stderr, "Dumping nodeinfo {\n");
+      fprintf(stderr, "id = %ld\n", id);
+      fprintf(stderr, "input_bytes = %ld\n", arg_bytes);
+      fprintf(stderr, "num_args = %ld\n", num_args);
+      fprintf(stderr, "rank = %ld\n", rank);
+      fprintf(stderr, "total_iter_firings = %ld\n", total_iter_firings);
+      fprintf(stderr, "needs_priming = %ld\n", needs_priming);
+    }
   };
 
   static constexpr size_t static_info_num_fields = 6;
@@ -55,17 +65,18 @@ struct VirtualFIFO_Node {
 
   inline bool needs_priming() { return !info.isAlloc() && info.needs_priming; }
 
-  void consume(i64 seq, Chunk chunk, i64 arg_idx, i64 offset_partial);
+  void
+  consume(i64 seq, VirtualFIFO_Chunk chunk, i64 arg_idx, i64 offset_partial);
   void dealloc(i64 current_buffer_size,
                i64 first_buffer_size,
                i64 next_buffer_sizes,
-               Chunk chunk);
+               VirtualFIFO_Chunk chunk);
   void init();
 
   // Cause this firing to execute.
   void prime(i64 seq);
 
-  void fire(i64 seq, Span<Chunk>);
+  void fire(i64 seq, Span<VirtualFIFO_Chunk>);
 
   void fireAlloc(i64 seq);
 

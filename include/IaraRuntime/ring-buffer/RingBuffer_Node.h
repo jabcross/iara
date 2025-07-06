@@ -3,7 +3,7 @@
 
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Span.h"
-#include "IaraRuntime/ring-buffer/Chunk.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include <cstddef>
 
@@ -25,7 +25,7 @@ struct RingBuffer_Node {
                                  // that depend on a (delay-less) block
   };
 
-  using WrapperType = void(Chunk *args);
+  using WrapperType = void(RingBuffer_Chunk *args);
 
   static constexpr size_t static_info_num_fields = 8;
 

@@ -1,8 +1,8 @@
-#include "IaraRuntime/virtual-fifo/Chunk.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 
-Chunk Chunk::take_front(i64 amount) {
+VirtualFIFO_Chunk VirtualFIFO_Chunk::take_front(i64 amount) {
   assert(data_size >= amount);
-  Chunk rv = *this;
+  VirtualFIFO_Chunk rv = *this;
   rv.data_size = amount;
   data += amount;
   data_size -= amount;
@@ -13,7 +13,7 @@ Chunk Chunk::take_front(i64 amount) {
   return rv;
 }
 
-Chunk Chunk::take_back(i64 amount) {
+VirtualFIFO_Chunk VirtualFIFO_Chunk::take_back(i64 amount) {
   assert(data_size >= amount);
   auto back = *this;
   auto front = back.take_front(back.data_size - amount);
@@ -21,7 +21,7 @@ Chunk Chunk::take_back(i64 amount) {
   return back;
 }
 
-Chunk Chunk::allocate(i64 size, i64 virtual_offset) {
+VirtualFIFO_Chunk VirtualFIFO_Chunk::allocate(i64 size, i64 virtual_offset) {
   // static int x = 1;
   auto allocated = (i8 *)malloc(size);
   // #ifndef IARA_COMPILER
@@ -29,7 +29,7 @@ Chunk Chunk::allocate(i64 size, i64 virtual_offset) {
   //     fprintf(stderr, "allocating ptr %d\n", x - 1);
   //     fflush(stderr);
   // #endif
-  return Chunk{
+  return VirtualFIFO_Chunk{
       .allocated = allocated,
       .virtual_offset = virtual_offset,
       .data = allocated,

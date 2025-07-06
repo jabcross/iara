@@ -1,5 +1,7 @@
 #include "Iara/Passes/VirtualFIFO/SDF/BufferSizeCalculator.h"
 #include "Iara/Util/Range.h"
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/Support/ErrorHandling.h>
 
 namespace iara::passes::virtualfifo::sdf {
 
@@ -10,6 +12,12 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
   // TODO: reimplement using presburger hermite normal form.
 
   assert(rates.size() == delays.size() + 1);
+
+  for (auto delay : delays) {
+    if (delay < 0) {
+      llvm_unreachable("invalid delay size");
+    }
+  }
 
   Vec<i64> alpha{}, beta{};
   std::string command;
@@ -69,13 +77,13 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
 
   {
     i64 val;
-    while (!lines[0].consumeInteger(10, val)) {
+    while (!lines[2].consumeInteger(10, val)) {
       alpha.push_back(val);
-      lines[0] = lines[0].drop_while([](char c) { return c == ' '; });
+      lines[2] = lines[2].drop_while([](char c) { return c == ' '; });
     }
-    while (!lines[1].consumeInteger(10, val)) {
+    while (!lines[3].consumeInteger(10, val)) {
       beta.push_back(val);
-      lines[1] = lines[1].drop_while([](char c) { return c == ' '; });
+      lines[3] = lines[3].drop_while([](char c) { return c == ' '; });
     }
   }
   return {{alpha, beta}};

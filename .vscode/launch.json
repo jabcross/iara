@@ -142,6 +142,22 @@
       ]
     },
     {
+      "name": "(lldb) Compiler (file)",
+      "type": "lldb-dap",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--iara-canonicalize",
+        "--flatten",
+        "-mlir-print-stacktrace-on-diagnostic",
+        "--mlir-print-ir-after-failure",
+        "--${input:scheduler}",
+        "${file}"
+      ],
+      "preLaunchTask": "build-iara.sh",
+      "cwd": "${workspaceFolder}",
+    },
+    {
       "name": "(gdb) Runtime test",
       "type": "cppdbg",
       "request": "launch",

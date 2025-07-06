@@ -14,7 +14,7 @@
 // #endif
 
 // Type that represents a chunk of memory.
-struct Chunk {
+struct VirtualFIFO_Chunk {
 
   i8 *allocated = nullptr;
   i64 virtual_offset = 0;
@@ -26,16 +26,16 @@ public:
 
   // Returns a portion of the beginning of the chunk, and shrinks this one
   // accordingly
-  Chunk take_front(i64 amount);
+  VirtualFIFO_Chunk take_front(i64 amount);
 
   // Returns a portion of the end of the chunk, and shrinks this one
   // accordingly
-  Chunk take_back(i64 amount);
+  VirtualFIFO_Chunk take_back(i64 amount);
 
-  void release() { *this = Chunk(); }
+  void release() { *this = VirtualFIFO_Chunk(); }
 
-  static Chunk make_empty() { return Chunk(); }
-  static Chunk allocate(i64 size, i64 virtual_offset);
+  static VirtualFIFO_Chunk make_empty() { return VirtualFIFO_Chunk(); }
+  static VirtualFIFO_Chunk allocate(i64 size, i64 virtual_offset);
 
   inline bool is_empty() { return data_size == 0; }
 };

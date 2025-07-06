@@ -1,6 +1,6 @@
 #include "Iara/Util/CommonTypes.h"
-#include "IaraRuntime/ring-buffer/Chunk.h"
 #include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
+#include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include "IaraRuntime/util/DebugPrint.h"
@@ -18,12 +18,12 @@ void RingBuffer_Edge::init() {
 }
 
 // Push data into fifo. Blocks.
-void RingBuffer_Edge::push(Chunk chunk) {
+void RingBuffer_Edge::push(RingBuffer_Chunk chunk) {
   queue->push(chunk.data, chunk.data_size, info.id);
 }
 
 // Read data from fifo.
-bool RingBuffer_Edge::tryPop(Chunk &chunk) {
+bool RingBuffer_Edge::tryPop(RingBuffer_Chunk &chunk) {
   auto ptr = chunk.data;
   return queue->tryPop(ptr, chunk.data_size, info.id);
 }

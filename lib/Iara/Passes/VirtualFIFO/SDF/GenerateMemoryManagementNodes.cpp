@@ -62,7 +62,7 @@ SmallVector<Value> createAllocations(ValueRange values) {
     auto node = val.getDefiningOp<NodeOp>();
     auto builder = OpBuilder(node);
     // Create alloc node
-    tostring(parent(node));
+    // tostring(parent(node));
 
     auto alloc_node =
         CREATE(NodeOp,
@@ -124,7 +124,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
   for (auto dealloc_node : dealloc_nodes) {
     auto dealloc_edge =
         cast<EdgeOp>(dealloc_node.getIn().front().getDefiningOp());
-    auto last_node = dealloc_edge.getProducerNode();
+    auto last_node = getProducerNode(dealloc_edge);
     auto &last_node_info = data.node_static_info[last_node];
     auto last_edge = followInoutChainBackwards(dealloc_edge);
     auto &last_edge_info = data.edge_static_info[last_edge];
@@ -143,8 +143,8 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
 
     dealloc_node_info = VirtualFIFO_Node::StaticInfo{
         .id = dealloc_node_id,
-        .input_bytes = -3,
-        .num_inputs = 1,
+        .arg_bytes = -3,
+        .num_args = 1,
         .rank = last_node_info.rank + 2,
         .total_iter_firings = -3,
         .needs_priming = 0,
@@ -229,7 +229,6 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
                    ->getParentOfType<ActorOp>()
                    .getOps<NodeOp>() |
                IntoVector();
-  i64 id_range = getNextPowerOf10(nodes.size() + 1);
 
   for (auto val : vals) {
     auto alloc_edge = cast<EdgeOp>(val.getDefiningOp());
@@ -240,9 +239,6 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     auto &alloc_node_info = data.node_static_info[alloc_node];
     auto &first_edge_info = data.edge_static_info[first_edge];
     auto &first_node_info = data.node_static_info[first_node];
-
-    first_node_info.input_bytes += first_edge_info.prod_rate;
-    first_node_info.num_inputs += 1;
 
     auto operand_index =
         alloc_edge.getOut().getUses().begin()->getOperandNumber();
@@ -258,8 +254,8 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
 
     alloc_node_info = VirtualFIFO_Node::StaticInfo{
         .id = alloc_node_id,
-        .input_bytes = -2,
-        .num_inputs = 0,
+        .arg_bytes = -2,
+        .num_args = 0,
         .rank = first_node_info.rank - 2,
         .total_iter_firings = calculateFiringsPerBlock(alloc_node, data),
         .needs_priming = 0};

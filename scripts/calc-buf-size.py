@@ -38,6 +38,9 @@ def generate_k(R, D):
 
     if pulp.LpStatus[prob.status] == "Optimal":
         return True
+
+    print(f"LP problem returned with status {pulp.LpStatus[prob.status]}")
+
     return False
 
 
@@ -70,6 +73,12 @@ if __name__ == "__main__":
             sys.exit(1)
 
     rates.append(int(sys.argv[-1]))
+
+    print("Solving chain:")
+    print("[ ]", end="")
+    for i in range(len(delays)):
+        print(f"{rates[i]}---({delays[i]})--->{rates[i+1]}[ ]", end="")
+    print("")
 
     if generate_k(rates, delays):
         exit(0)

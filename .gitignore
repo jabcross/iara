@@ -17,5 +17,5 @@ iara.out.mlir
 CMakeFiles/*
 typescript
 .*/edge_data.inc.h
-junk/
+_junk/
 experiment/*/instances/

@@ -1,9 +1,9 @@
 #include <IaraRuntime/common/Scheduler.h>
-#include <pthread.h>
+#include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
 
-pthread_mutex_t mutex;
+std::mutex mutex;
 
 extern "C" {
 
@@ -14,17 +14,17 @@ void a(int val[1]) {
 }
 
 void b(int val[1]) {
-  pthread_mutex_lock(&mutex);
+  mutex.lock();
   printf("Broadcast 1! Val = %d\n", val[0]);
   printf("Address = %lu\n", (size_t)&val[0]);
-  pthread_mutex_unlock(&mutex);
+  mutex.unlock();
 }
 
 void c(int val[1]) {
-  pthread_mutex_lock(&mutex);
+  mutex.lock();
   printf("Broadcast 2! Val = %d\n", val[0]);
   printf("Address = %lu\n", (size_t)&val[0]);
-  pthread_mutex_unlock(&mutex);
+  mutex.unlock();
 }
 
 void exec() {
@@ -32,9 +32,9 @@ void exec() {
   iara_runtime_init();
   iara_runtime_run_iteration(0);
 }
+}
 
 int main() {
-  pthread_mutex_init(&mutex, NULL);
   iara_runtime_exec(exec);
   return 0;
 }
