@@ -29,6 +29,7 @@
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/IRMapping.h>
 #include <mlir/IR/Location.h>
+#include <mlir/IR/Value.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
 
@@ -134,6 +135,24 @@ public:
     }
     if (!node.signatureMatches(actor_op)) {
       node->emitError("Signature of node does not match actor");
+      for (auto [i, n, a] :
+           enumerate(node.getAllInputs(), actor_op.getOps<InPortOp>())) {
+        auto n_t = n.getType();
+        auto a_t = a.getResult().getType();
+        if (n_t != a_t) {
+          llvm::errs() << "Node input #" << i << " of type " << n_t
+                       << " != actor input of type " << a_t << "\n";
+        }
+      }
+      for (auto [i, n, a] :
+           enumerate(node.getAllOutputs(), actor_op.getOps<OutPortOp>())) {
+        auto n_t = n.getType();
+        auto a_t = a.getValue().getType();
+        if (n_t != a_t) {
+          llvm::errs() << "Node output #" << i << " of type " << n_t
+                       << " != actor output of type " << a_t << "\n";
+        }
+      }
       llvm::errs() << "Node: ";
       node.dump();
       llvm::errs() << "Actor: ";
@@ -262,14 +281,13 @@ public:
 
     for (auto [depth, actor] : actor_depths) {
       flatten(actor);
+      fixDoubleEdges(actor);
     }
 
-    assert(m_top_level_candidates.size() == 1 &&
-           "Only one actor is the top-level.");
+    // assert(m_top_level_candidates.size() == 1 &&
+    //        "Only one actor is the top-level.");
 
     auto top_level_actor = *m_top_level_candidates.begin();
-
-    fixDoubleEdges(top_level_actor);
 
     for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
       if (actor != top_level_actor) {

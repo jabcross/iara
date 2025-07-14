@@ -2,6 +2,9 @@ add_mlir_dialect_library(MLIRIara
         Dialect/IaraTypes.cpp
         Dialect/IaraDialect.cpp
         Dialect/IaraOps.cpp
+        Dialect/ActorOp.cpp
+        Dialect/NodeOp.cpp
+        Dialect/EdgeOp.cpp
         Dialect/Broadcast.cpp
 
         Passes/FlattenPass.cpp

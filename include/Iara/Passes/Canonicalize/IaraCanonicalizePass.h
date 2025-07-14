@@ -10,6 +10,7 @@
 #include <llvm/IR/Argument.h>
 #include <llvm/Support/CommandLine.h>
 #include <mlir/Analysis/Presburger/Matrix.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/DLTI/DLTI.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/Linalg/IR/Linalg.h>
@@ -39,6 +40,10 @@ struct IaraCanonicalizePass
   }
   static constexpr ::llvm::StringLiteral getPassName() {
     return ::llvm::StringLiteral("IaraCanonicalizeSchedulerPass");
+  }
+
+  virtual void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<arith::ArithDialect>();
   }
 
   Impl *pimpl;

@@ -80,14 +80,16 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
                        Variadic<AnyType>:$in,
                        Variadic<AnyType>:$inout);
     let results = (outs Variadic<AnyType>:$out);
-  let assemblyFormat = [{
-    $impl
-    (`params` $params^ `:` type($params) )?
-    (`in` $in^ `:` type($in))?
-    (`inout` $inout^ `:` type($inout) )?
-    (`out` `:` type($out)^ )?
-    attr-dict
-  }];
+
+    // let assemblyFormat = [{
+    //     $impl
+    //     (`params` $params^ `:` type($params) )?
+    //     (`in` $in^ `:` type($in))?
+    //     (`inout` $inout^ `:` type($inout) )?
+    //     (`out` `:` type($out)^ )?
+    //     attr-dict
+    // }];
+    let hasCustomAssemblyFormat = 1;
 
     let extraClassDeclaration = [{
         bool isFlat();
@@ -107,6 +109,8 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
         bool isAlloc();
         bool isDealloc();
     }];
+
+
 
 }
 
@@ -133,6 +137,20 @@ def EdgeOp : IaraOp<"edge", []> {
   }];
 }
 
+// def ParamOp: IaraOp<"param", [AllTypesMatch<["type", "result"]>] > {
+//     let summary = "A parameter declaration.";
+//     let description = [{
+//         The `iara.param` operation declares a parameter for a dataflow actor. It takes in any type that can be lowered to a LLVM value.
+//         Example:
+
+//         ```mlir
+//         TODO
+//         ```
+//     }];
+//     let arguments = (ins TypeAttr:$type);
+//     let results = (outs AnyType:$result);
+//     let assemblyFormat = [{ $type attr-dict }];
+// }
 
 def InPortOp: IaraOp<"in", [] > {
     let summary = "An input port for a dataflow node.";

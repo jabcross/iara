@@ -21,18 +21,19 @@
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 
 int main(int argc, char **argv) {
-  mlir::registerAllPasses();
-  iara::passes::registerPasses();
-  iara::passes::canonicalize::registerIaraCanonicalizePass();
-  iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
-  iara::passes::ringbuffer::registerRingBufferSchedulerPass();
 
   mlir::DialectRegistry registry;
   registry.insert<iara::dialect::IaraDialect,
                   mlir::arith::ArithDialect,
                   mlir::func::FuncDialect,
                   mlir::LLVM::LLVMDialect>();
-  // Add the following to include *all* MLIR Core dialects, or selectively
+
+  iara::passes::canonicalize::registerIaraCanonicalizePass();
+  iara::passes::registerFlattenPass();
+  iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
+  iara::passes::ringbuffer::registerRingBufferSchedulerPass();
+
+  // // Add the following to include *all* MLIR Core dialects, or selectively
   // include what you need like above. You only need to register dialects that
   // will be *parsed* by the tool, not the one generated
   // registerAllDialects(registry);
