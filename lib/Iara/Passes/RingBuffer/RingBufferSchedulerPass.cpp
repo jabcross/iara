@@ -67,9 +67,7 @@ struct RingBufferSchedulerPass::Impl {
   }
   LLVM::LLVMVoidType llvm_void_type() { return LLVM::LLVMVoidType::get(ctx()); }
 
-  LLVM::LLVMStructType chunk_type() {
-    return cast<LLVM::LLVMStructType>(getMLIRType<RingBuffer_Chunk>(ctx()));
-  }
+  LLVM::LLVMStructType chunk_type() { return getChunkType(ctx()); }
 
   LLVM::LLVMFunctionType wrapper_type() {
     return LLVM::LLVMFunctionType::get(

@@ -1,5 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/Common/Codegen/GetMLIRType.h"
+// #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/BreakLoops.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
@@ -70,7 +70,7 @@ struct VirtualFIFOSchedulerPass::Impl {
   LLVM::LLVMVoidType llvm_void_type() { return LLVM::LLVMVoidType::get(ctx()); }
 
   LLVM::LLVMStructType chunk_type() {
-    return cast<LLVM::LLVMStructType>(getMLIRType<VirtualFIFO_Chunk>(ctx()));
+    return cast<LLVM::LLVMStructType>(VirtualFIFO_Chunk::getMLIRType(ctx()));
   }
 
   LLVM::LLVMFunctionType wrapper_type() {
@@ -86,11 +86,11 @@ struct VirtualFIFOSchedulerPass::Impl {
   // accessed by the kernel.
   LLVM::LLVMFuncOp getOrCodegenNodeWrapper(ModuleOp module,
                                            OpBuilder mod_builder,
-                                           NodeOp node,
-                                           VirtualFIFO_Node &info) {
+                                           NodeCodegenData node_codegen_data) {
 
+    auto node_op = node_codegen_data.node_op;
     auto opaque_ptr_type = LLVM::LLVMPointerType::get(ctx());
-    if (node.isAlloc()) {
+    if (node_op.isAlloc()) {
       if (auto existing =
               module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_alloc")) {
         return existing;
@@ -104,7 +104,7 @@ struct VirtualFIFOSchedulerPass::Impl {
       rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
       return rv;
     }
-    if (node.isDealloc()) {
+    if (node_op.isDealloc()) {
       if (auto existing =
               module.lookupSymbol<LLVM::LLVMFuncOp>("iara_runtime_dealloc")) {
         return existing;
@@ -119,18 +119,22 @@ struct VirtualFIFOSchedulerPass::Impl {
       return rv;
     }
 
-    auto sym_name =
-        llvm::formatv("iara_node_wrapper_{0}_{1}", info.info.id, node.getImpl())
-            .str();
+    auto sym_name = llvm::formatv("iara_node_wrapper_{0}_{1}",
+                                  node_codegen_data.static_info.id,
+                                  node_op.getImpl())
+                        .str();
 
     if (auto existing = module.lookupSymbol<LLVM::LLVMFuncOp>(sym_name)) {
       return existing;
     }
 
-    auto num_buffers = node.getIn().size() + node.getOut().size();
+    auto num_buffers = node_op.getIn().size() + node_op.getOut().size();
 
-    auto wrapper = CREATE(
-        LLVM::LLVMFuncOp, mod_builder, node.getLoc(), sym_name, wrapper_type());
+    auto wrapper = CREATE(LLVM::LLVMFuncOp,
+                          mod_builder,
+                          node_op.getLoc(),
+                          sym_name,
+                          wrapper_type());
 
     wrapper.setVisibility(mlir::SymbolTable::Visibility::Public);
     wrapper->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
@@ -151,7 +155,7 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     SmallVector<Value> kernel_args;
 
-    for (auto p : node.getParams()) {
+    for (auto p : node_op.getParams()) {
       auto constant = dyn_cast<arith::ConstantOp>(p.getDefiningOp());
       assert(constant && "Params should have been uniqued by now.");
       auto new_const = func_builder.clone(*constant);
@@ -165,7 +169,7 @@ struct VirtualFIFOSchedulerPass::Impl {
       // get pointer from array
       auto pointer_to_pointer = CREATE(LLVM::GEPOp,
                                        func_builder,
-                                       node.getLoc(),
+                                       node_op.getLoc(),
                                        opaque_ptr_type,
                                        chunk_type(),
                                        func_builder.getBlock()->getArgument(1),
@@ -173,21 +177,21 @@ struct VirtualFIFOSchedulerPass::Impl {
 
       auto pointer_to_data = CREATE(LLVM::LoadOp,
                                     func_builder,
-                                    node.getLoc(),
+                                    node_op.getLoc(),
                                     opaque_ptr_type,
                                     pointer_to_pointer);
 
       kernel_args.push_back(pointer_to_data);
     }
 
-    auto func = module.lookupSymbol(node.getImpl());
+    auto func = module.lookupSymbol(node_op.getImpl());
 
     if (!func) {
       auto kernel_call = CREATE(LLVM::CallOp,
                                 func_builder,
-                                node.getLoc(),
+                                node_op.getLoc(),
                                 TypeRange{},
-                                node.getImpl(),
+                                node_op.getImpl(),
                                 kernel_args);
       ensureFuncDeclExists(kernel_call);
     } else if (auto llvm_func = dyn_cast<LLVM::LLVMFuncOp>(func)) {
@@ -195,15 +199,15 @@ struct VirtualFIFOSchedulerPass::Impl {
              kernel_call,
              LLVM::CallOp,
              func_builder,
-             node.getLoc(),
+             node_op.getLoc(),
              TypeRange{},
-             node.getImpl(),
+             node_op.getImpl(),
              kernel_args);
     } else if (auto mlir_func = dyn_cast<func::FuncOp>(func)) {
       llvm_unreachable("No MLIR functions at this point,");
     }
 
-    CREATE(LLVM::ReturnOp, func_builder, node.getLoc(), ValueRange{});
+    CREATE(LLVM::ReturnOp, func_builder, node_op.getLoc(), ValueRange{});
 
     return wrapper;
   }
@@ -279,106 +283,45 @@ struct VirtualFIFOSchedulerPass::Impl {
     auto module = actor->getParentOfType<ModuleOp>();
     auto mod_builder = OpBuilder::atBlockBegin(module.getBody());
 
-    auto edges = actor.getOps<EdgeOp>() | IntoVector();
-    auto nodes = actor.getOps<NodeOp>() | IntoVector();
+    auto edge_ops = actor.getOps<EdgeOp>() | IntoVector();
+    auto node_ops = actor.getOps<NodeOp>() | IntoVector();
 
-    DenseMap<NodeOp, size_t> runtime_node_data_index;
-    DenseMap<EdgeOp, size_t> runtime_edge_data_index;
-    DenseMap<EdgeOp, VirtualFIFO_Edge *> runtime_edge_data;
+    std::vector<NodeCodegenData> node_codegen_datas;
+    std::vector<EdgeCodegenData> edge_codegen_datas;
 
     DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> input_fifos;
     DenseMap<NodeOp, Vec<VirtualFIFO_Edge *>> output_fifos;
     DenseMap<EdgeOp, ArrayRef<char>> delay_data;
 
-    std::vector<char> dummy_ptrs(nodes.size(), ' ');
+    std::vector<char> dummy_ptrs(node_ops.size(), ' ');
 
     [[maybe_unused]] auto &x = llvm::errs();
 
-    std::vector<VirtualFIFO_Node> _node_infos;
-    node_infos.reserve(nodes.size());
-
-    for (auto [i, node] : llvm::enumerate(nodes)) {
-      auto &info = _node_infos.emplace_back();
-      runtime_node_data_index[node] = _node_infos.size() - 1;
-      info.info = data.node_static_info[node];
-      info.wrapper = (VirtualFIFO_Node::WrapperType *)&dummy_ptrs[i];
-      info.sema_variant.null = nullptr;
+    for (auto [i, node] : llvm::enumerate(node_ops)) {
+      auto &codegen_data = node_codegen_datas.emplace_back();
+      codegen_data.index = i;
+      codegen_data.node_op = node;
+      codegen_data.static_info = data.node_static_info[node];
     }
 
-    std::span<VirtualFIFO_Node> node_infos(_node_infos);
-
-    std::vector<VirtualFIFO_Edge> _edge_infos;
-    _edge_infos.reserve(edges.size());
-
-    for (auto [i, edge] : llvm::enumerate(edges)) {
-      auto &info = _edge_infos.emplace_back();
-      runtime_edge_data[edge] = &info;
-      runtime_edge_data_index[edge] = i;
-      info.info = data.edge_static_info[edge];
-      info.consumer =
-          &node_infos[runtime_node_data_index[getConsumerNode(edge)]];
-      info.producer =
-          &node_infos[runtime_node_data_index[getProducerNode(edge)]];
-      info.alloc_node =
-          &node_infos[runtime_node_data_index[findFirstNodeOfChain(edge)]];
-
-      if (info.info.delay_size > 0) {
-        auto delay = edge->getAttrOfType<DenseArrayAttr>("delay");
-        delay_data[edge] = delay.getRawData();
-        info.delay_data = Span<const char>{delay.getRawData().begin(),
-                                           delay.getRawData().size()};
-      } else {
-        info.delay_data = {};
-      }
+    for (auto [i, edge] : llvm::enumerate(edge_ops)) {
+      auto &codegen_data = edge_codegen_datas.emplace_back();
+      codegen_data.index = i;
+      codegen_data.edge_op = edge;
+      codegen_data.static_info = data.edge_static_info[edge];
     }
 
-    std::span<VirtualFIFO_Edge> edge_infos{_edge_infos};
+    // validate the ptrs
 
-    for (auto [i, node, info] : llvm::enumerate(nodes, node_infos)) {
-
-      input_fifos[node].reserve(
-          node.getAllInputs()
-              .size()); // prevent it from moving around in memory?
-      for (auto input : node.getAllInputs()) {
-        auto edge = cast<EdgeOp>(input.getDefiningOp());
-        input_fifos[node].push_back(runtime_edge_data[edge]);
-      }
-      for (auto edge_info : input_fifos[node]) {
-        assert(edge_info != nullptr);
-      }
-      info.input_fifos = Span<VirtualFIFO_Edge *>{input_fifos[node].begin(),
-                                                  input_fifos[node].size()};
-
-      output_fifos[node].reserve(
-          node.getAllOutputs()
-              .size()); // prevent it from moving around in memory?
-      for (auto output : node.getAllOutputs()) {
-        auto edge = cast<EdgeOp>(*output.getUsers().begin());
-        output_fifos[node].push_back(runtime_edge_data[edge]);
-      }
-      for (auto edge_info : output_fifos[node]) {
-        assert(edge_info != nullptr);
-      }
-      info.output_fifos = Span<VirtualFIFO_Edge *>{output_fifos[node].begin(),
-                                                   output_fifos[node].size()};
+    for (auto [i, node_pair] : llvm::enumerate(node_codegen_datas)) {
+      node_pair.wrapper =
+          getOrCodegenNodeWrapper(module, mod_builder, node_pair);
     }
 
-    std::vector<LLVM::LLVMFuncOp> wrappers;
+    auto codegen_builder = CodegenStaticData(
+        module, mod_builder, {node_codegen_datas}, {edge_codegen_datas});
 
-    for (auto [i, node, info] : enumerate(nodes, node_infos)) {
-      wrappers.push_back(
-          getOrCodegenNodeWrapper(module, mod_builder, node, info));
-    }
-
-    auto codegenBuilder = CodegenStaticData(module,
-                                            mod_builder,
-                                            {node_infos},
-                                            {edge_infos},
-                                            {nodes},
-                                            {edges},
-                                            {wrappers});
-
-    codegenBuilder.codegenStaticData();
+    codegen_builder.codegenStaticData();
 
     auto actors = module.getOps<ActorOp>() | IntoVector();
 

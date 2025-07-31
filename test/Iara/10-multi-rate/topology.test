@@ -11,7 +11,7 @@
 // Two nodes
 
 iara.actor @run  {
-  %0 = iara.node @a out: tensor<2xi32>
+  %0 = iara.node @a out tensor<2xi32>
   %1 = iara.edge %0 : tensor<2xi32> -> tensor<3xi32>
   iara.node @b in %1: tensor<3xi32>
 } { }

@@ -5,7 +5,13 @@
 #include "Iara/Util/Span.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include <boost/describe.hpp>
 #include <cstddef>
+
+#ifdef IARA_COMPILER
+  #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
+  #include "boost/describe.hpp"
+#endif
 
 struct VirtualFIFO_Edge;
 
@@ -24,6 +30,7 @@ struct VirtualFIFO_Node {
 
   // WARNING: Be careful! These two have the same layout.
   struct StaticInfo {
+    using TupleType = std::tuple<i64, i64, i64, i64, i64, i64>;
     i64 id = -1;
     i64 arg_bytes = -1;
     i64 num_args = -1;
@@ -47,23 +54,48 @@ struct VirtualFIFO_Node {
       fprintf(stderr, "total_iter_firings = %ld\n", total_iter_firings);
       fprintf(stderr, "needs_priming = %ld\n", needs_priming);
     }
+
+#ifdef IARA_COMPILER
+    BOOST_DESCRIBE_CLASS(
+        StaticInfo,
+        (),
+        (id, arg_bytes, num_args, rank, total_iter_firings, needs_priming),
+        (),
+        ())
+#endif
   };
 
-  static constexpr size_t static_info_num_fields = 6;
+  // Data that must be initialized by codegen
+  struct CodegenInfo {
+    using TupleType = std::tuple<char *,
+                                 WrapperType *,
+                                 std::span<VirtualFIFO_Edge *>,
+                                 std::span<VirtualFIFO_Edge *>>;
+    const char *name;
+    WrapperType *wrapper;
+    std::span<VirtualFIFO_Edge *> input_fifos;
+    std::span<VirtualFIFO_Edge *> output_fifos;
+  };
+
+  // Data initialized by the runtime
+  struct RuntimeInfo {
+    using TupleType = std::tuple<Semaphore>;
+    Semaphore sema_variant{nullptr};
+  };
+
+  using TupleType = std::tuple<StaticInfo, CodegenInfo, RuntimeInfo>;
+
+  StaticInfo static_info;
+  CodegenInfo codegen_info;
+  RuntimeInfo runtime_info;
 
   // END WARNING
 
-  // data
-  char *name;
-  StaticInfo info;
-  WrapperType *wrapper;
-  Span<VirtualFIFO_Edge *> input_fifos;
-  Span<VirtualFIFO_Edge *> output_fifos;
-  Semaphore sema_variant{nullptr};
-
   // methods
 
-  inline bool needs_priming() { return !info.isAlloc() && info.needs_priming; }
+  inline bool needs_priming() {
+    return !static_info.isAlloc() && static_info.needs_priming;
+  }
 
   void
   consume(i64 seq, VirtualFIFO_Chunk chunk, i64 arg_idx, i64 offset_partial);
@@ -88,5 +120,19 @@ struct VirtualFIFO_Node {
 };
 
 extern "C" void iara_runtime_node_init(VirtualFIFO_Node *node);
+
+#ifdef IARA_COMPILER
+
+namespace iara::passes::common::codegen {
+
+template <> struct GetMLIRType<VirtualFIFO_Node::Semaphore> {
+  static mlir::Type get(MLIRContext *context) {
+    return LLVM::LLVMPointerType::get(context);
+  }
+};
+
+} // namespace iara::passes::common::codegen
+
+#endif
 
 #endif // IARA_RUNTIME_SDF_NODE_H

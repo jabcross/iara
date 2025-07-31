@@ -23,7 +23,7 @@ struct VirtualFIFO_Node::NormalSemaphore {
   static void first_time_func(FirstArgs &f_args,
                               Span<VirtualFIFO_Chunk> &kernel_args) {
     // Init args vector with appropriate size.
-    kernel_args.extents = f_args._this->info.num_args;
+    kernel_args.extents = f_args._this->static_info.num_args;
     kernel_args.ptr = (VirtualFIFO_Chunk *)calloc(kernel_args.extents,
                                                   sizeof(VirtualFIFO_Chunk));
     // fprintf(stderr,

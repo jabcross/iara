@@ -1,5 +1,5 @@
 {
-  "workbench.colorTheme": "Default Dark+",
+  "workbench.colorTheme": "Visual Studio Dark - C++",
   "cmake.configureOnOpen": false,
   "cmake.buildTask": true,
   "cmake.environment": {
@@ -17,5 +17,15 @@
   "lldb.displayFormat": "auto",
   "lldb.showDisassembly": "auto",
   "lldb.dereferencePointers": true,
-  "lldb.consoleMode": "commands"
+  "lldb.consoleMode": "commands",
+  "clangd.path": "/home/jabcross/repos/clangir/build/bin/clangd",
+  "clangd.arguments": [
+    "--inlay-hints",
+    "-log=verbose",
+    "-pretty",
+    "--background-index",
+    "--compile-commands-dir=/home/jabcross/repos/iara/build",
+    "-j",
+    "5"
+  ]
 }

@@ -39,8 +39,8 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
 
   for (auto &node : iara_runtime_nodes) {
     if (node.needs_priming()) {
-      for (i64 i = graph_iteration * node.info.total_iter_firings,
-               e = i + node.info.total_iter_firings;
+      for (i64 i = graph_iteration * node.static_info.total_iter_firings,
+               e = i + node.static_info.total_iter_firings;
            i < e;
            i++) {
         auto node_ptr = &node;
@@ -70,10 +70,10 @@ extern "C" void iara_runtime_init(i64 num_threads) {
 
 #ifdef IARA_DEBUGPRINT
   for (auto &node : iara_runtime_nodes) {
-    node.info.dump();
+    node.static_info.dump();
   }
   for (auto &edge : iara_runtime_edges) {
-    edge.info.dump();
+    edge.static_info.dump();
   }
 #endif
 
@@ -81,7 +81,7 @@ extern "C" void iara_runtime_init(i64 num_threads) {
     node.init();
   }
   for (auto &node : iara_runtime_nodes) {
-    if (node.info.isAlloc())
+    if (node.static_info.isAlloc())
       node.fireAlloc(0);
   }
 }

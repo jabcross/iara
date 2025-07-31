@@ -5,6 +5,12 @@
 #include <cassert>
 #include <cstdlib>
 
+#ifdef IARA_COMPILER
+  #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
+  #include <mlir/IR/MLIRContext.h>
+  #include <mlir/IR/Types.h>
+#endif
+
 // todo: alignment
 
 // #ifndef IARA_COMPILER
@@ -38,6 +44,21 @@ public:
   static VirtualFIFO_Chunk allocate(i64 size, i64 virtual_offset);
 
   inline bool is_empty() { return data_size == 0; }
+
+#ifdef IARA_COMPILER
+
+  inline static mlir::Type getMLIRType(mlir::MLIRContext *context) {
+    return mlir::LLVM::LLVMStructType::getLiteral(
+        context,
+        {
+            mlir::LLVM::LLVMPointerType::get(context),
+            mlir::IntegerType::get(context, 64),
+            mlir::LLVM::LLVMPointerType::get(context),
+            mlir::IntegerType::get(context, 64),
+        });
+  }
+
+#endif
 };
 
 #endif

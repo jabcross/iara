@@ -8,12 +8,12 @@
 
 iara.actor @nested {
   %0 = iara.in : i32
-  %1 = iara.node @b in %0: i32 out : i32
+  %1 = iara.node @b in %0: i32 out i32
   iara.out (%1: i32)
 }
 iara.actor @run  {
-  %0 = iara.node @a out: i32
-  %1 = iara.node @nested in %0: i32 out : i32
+  %0 = iara.node @a out i32
+  %1 = iara.node @nested in %0: i32 out i32
   iara.node @c in %1 : i32
 }
 

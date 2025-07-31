@@ -5,8 +5,6 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include "mlir/IR/Builders.h"
-#include <boost/pfr/core.hpp>
-#include <boost/pfr/traits.hpp>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/CodeGen/GlobalISel/GIMatchTableExecutor.h>
@@ -36,6 +34,35 @@ using namespace iara::dialect;
 std::string getDebugName(NodeOp edge);
 std::string getDebugName(EdgeOp edge);
 
+struct NodeCodegenData;
+struct EdgeCodegenData;
+
+struct NodeCodegenData {
+  i64 index = -1;
+  NodeOp node_op = nullptr;
+  VirtualFIFO_Node::StaticInfo static_info;
+  LLVMFuncOp wrapper = nullptr;
+  std::string name;
+  std::vector<EdgeCodegenData *> inputs = {};
+  std::vector<EdgeCodegenData *> outputs = {};
+  Value input_fifos_span_ptr = {};
+  Value output_fifos_span_ptr = {};
+};
+
+struct EdgeCodegenData {
+  i64 index = -1;
+  EdgeOp edge_op = nullptr;
+  VirtualFIFO_Edge::StaticInfo static_info;
+  NodeCodegenData *consumer = nullptr;
+  NodeCodegenData *producer = nullptr;
+  NodeCodegenData *alloc_node = nullptr;
+  EdgeCodegenData *next_edge = nullptr;
+  Value producer_node_ptr = {};
+  Value consumer_node_ptr = {};
+  Value alloc_node_ptr = {};
+  Value next_edge_ptr = {};
+};
+
 struct CodegenStaticData {
 
   struct Impl;
@@ -44,11 +71,8 @@ struct CodegenStaticData {
 
   CodegenStaticData(ModuleOp module,
                     OpBuilder module_builder,
-                    std::span<VirtualFIFO_Node> node_infos,
-                    std::span<VirtualFIFO_Edge> edge_infos,
-                    std::span<NodeOp> nodes,
-                    std::span<EdgeOp> edges,
-                    std::span<LLVMFuncOp> wrappers);
+                    std::span<NodeCodegenData> node_pairs,
+                    std::span<EdgeCodegenData> edge_pairs);
 
   // std::function<std::vector<Value>(OpBuilder builder, Location loc)>
   void codegenStaticData();

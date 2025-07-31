@@ -6,6 +6,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+#ifdef IARA_COMPILER
+  #include "boost/describe.hpp"
+#endif
+
 struct VirtualFIFO_Node;
 
 // SDF Out of Order Fifo.
@@ -18,6 +22,9 @@ struct VirtualFIFO_Edge {
   };
 
   struct StaticInfo {
+    using TupleType = std::
+        tuple<i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64>;
+
     i64 id = -1;
     i64 local_index = -1;  // Position in the chain of inout
     i64 prod_rate = -1;    //
@@ -55,17 +62,47 @@ struct VirtualFIFO_Edge {
       fprintf(stderr, "cons_alpha = %ld\n", cons_alpha);
       fprintf(stderr, "cons_beta = %ld }\n", cons_beta);
     }
+
+#ifdef IARA_COMPILER
+    BOOST_DESCRIBE_CLASS(StaticInfo,
+                         (),
+                         (id,
+                          local_index,
+                          prod_rate,
+                          cons_rate,
+                          cons_arg_idx,
+                          delay_offset,
+                          delay_size,
+                          block_size_with_delays,
+                          block_size_no_delays,
+                          prod_alpha,
+                          prod_beta,
+                          cons_alpha,
+                          cons_beta),
+                         (),
+                         ())
+#endif
   };
 
-  static constexpr size_t static_info_num_fields = 13;
+  struct CodegenInfo {
+    using TupleType = std::tuple<char *,
+                                 std::span<const char>,
+                                 VirtualFIFO_Node *,
+                                 VirtualFIFO_Node *,
+                                 VirtualFIFO_Node *,
+                                 VirtualFIFO_Edge *>;
+    char *name;
+    Span<const char> delay_data;
+    VirtualFIFO_Node *consumer;
+    VirtualFIFO_Node *producer;
+    VirtualFIFO_Node *alloc_node;
+    VirtualFIFO_Edge *next_in_chain;
+  };
 
-  char *name;
-  StaticInfo info;
-  Span<const char> delay_data;
-  VirtualFIFO_Node *consumer;
-  VirtualFIFO_Node *producer;
-  VirtualFIFO_Node *alloc_node;
-  VirtualFIFO_Edge *next_in_chain;
+  using TupleType = std::tuple<StaticInfo, CodegenInfo>;
+
+  StaticInfo static_info;
+  CodegenInfo codegen_info;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.
@@ -73,7 +110,9 @@ struct VirtualFIFO_Edge {
   void push(VirtualFIFO_Chunk chunk);
   void propagate_delays(VirtualFIFO_Chunk chunk);
 
-  inline i64 getRemainingDelay() { return info.delay_offset + info.delay_size; }
+  inline i64 getRemainingDelay() {
+    return static_info.delay_offset + static_info.delay_size;
+  }
 
   // Given an edge and its consumer's sequence number, return the range it
   // affects in the virtual buffer
@@ -85,9 +124,10 @@ struct VirtualFIFO_Edge {
     // fprintf(stderr, "cons rate is %ld\n", info.cons_rate);
     // fprintf(stderr, "cons alpha is %ld\n", info.cons_alpha);
     // fflush(stderr);
-    i64 zero = info.block_size_with_delays - info.cons_rate * info.cons_alpha;
-    i64 begin = zero + cons_seq * info.cons_rate;
-    i64 end = begin + info.cons_rate;
+    i64 zero = static_info.block_size_with_delays -
+               static_info.cons_rate * static_info.cons_alpha;
+    i64 begin = zero + cons_seq * static_info.cons_rate;
+    i64 end = begin + static_info.cons_rate;
     return {begin, end};
   }
 
@@ -105,10 +145,10 @@ struct VirtualFIFO_Edge {
 
     // fflush(stderr);
 
-    if (virtual_offset < info.block_size_with_delays)
+    if (virtual_offset < static_info.block_size_with_delays)
       return 0;
-    return 1 + (virtual_offset - info.block_size_with_delays) /
-                   info.block_size_no_delays;
+    return 1 + (virtual_offset - static_info.block_size_with_delays) /
+                   static_info.block_size_no_delays;
   }
 
   // Given a virtual offset range, return which firings overlap with it
