@@ -20,6 +20,10 @@ FOLDER_NAME=$(basename $(realpath $1))
 PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
 PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 
+if [[ ! -d $PATH_TO_TEST_BUILD_DIR ]]; then
+  $IARA_DIR/scripts/build-single-test.sh $PATH_TO_TEST_SOURCES
+fi
+
 cd $PATH_TO_TEST_BUILD_DIR
 
 if [[ $(basename $(realpath ..)) != "Iara" ]]; then

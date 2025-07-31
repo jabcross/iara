@@ -812,11 +812,11 @@ struct CodegenStaticData::Impl {
     for (auto &edge_codegen_data : edge_codegen_datas) {
 
       auto replace_with_element_of_global_array =
-          [&](i64 index, StringRef array_name, Value *old) {
+          [&](i64 index, StringRef array_name, Type elem_type, Value *old) {
             auto builder = OpBuilder(old->getDefiningOp());
             auto loc = old->getLoc();
-            auto _new = makeOffsetPointer(
-                builder, loc, node_struct_type, array_name, index);
+            auto _new =
+                makeOffsetPointer(builder, loc, elem_type, array_name, index);
             old->replaceAllUsesWith(_new);
             old->getDefiningOp()->erase();
             *old = _new;
@@ -825,17 +825,23 @@ struct CodegenStaticData::Impl {
       replace_with_element_of_global_array(
           edge_codegen_data.producer->index,
           "iara_runtime_data__node_infos",
+          node_struct_type,
           &edge_codegen_data.producer_node_ptr);
       replace_with_element_of_global_array(
           edge_codegen_data.consumer->index,
           "iara_runtime_data__node_infos",
+          node_struct_type,
+
           &edge_codegen_data.consumer_node_ptr);
       replace_with_element_of_global_array(edge_codegen_data.alloc_node->index,
                                            "iara_runtime_data__node_infos",
+                                           node_struct_type,
+
                                            &edge_codegen_data.alloc_node_ptr);
       if (edge_codegen_data.next_edge != nullptr)
         replace_with_element_of_global_array(edge_codegen_data.next_edge->index,
                                              "iara_runtime_data__edge_infos",
+                                             edge_struct_type,
                                              &edge_codegen_data.next_edge_ptr);
     }
 

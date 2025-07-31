@@ -9,9 +9,9 @@
 // backward delay
 
 iara.actor @run  {
-  %n0 = iara.node @a out: tensor<9xf32>
+  %n0 = iara.node @a out tensor<9xf32>
   %e1 = iara.edge %n0 : tensor<9xf32> -> f32
-  %n1_0,%n1_1 = iara.node @b in %e1, %e2 : f32, tensor<2xf32> out: f32, tensor<2xf32>
+  %n1_0,%n1_1 = iara.node @b in %e1: f32, %e2 : tensor<2xf32> out f32, tensor<2xf32>
   %e2 = iara.edge %n1_1 : tensor<2xf32> -> tensor<2xf32> {delay = array<f32: 0.0, 0.0>}
   %e3 = iara.edge %n1_0 : f32 -> tensor<9xf32>
   iara.node @c in %e3: tensor<9xf32>

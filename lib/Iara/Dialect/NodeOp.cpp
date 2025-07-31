@@ -1,7 +1,9 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Range.h"
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/LogicalResult.h>
+#include <llvm/Support/raw_ostream.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/OpImplementation.h>
@@ -279,44 +281,40 @@ NodeOp getConsumerNode(EdgeOp edge) {
   return ::mlir::success();
 }
 
+namespace detail {
+template <class T> void myprint(::mlir::OpAsmPrinter &_odsPrinter, T t) {
+  _odsPrinter << t;
+}
+template <class A, class B>
+void myprint(::mlir::OpAsmPrinter &_odsPrinter, std::tuple<A, B> p) {
+  auto &[a, b] = p;
+  _odsPrinter << a << " : " << b;
+}
+} // namespace detail
+
 void NodeOp::print(::mlir::OpAsmPrinter &_odsPrinter) {
+
+  auto printList = [&](StringRef name, auto items) {
+    if (std::begin(items) != std::end(items)) {
+      _odsPrinter.increaseIndent();
+      _odsPrinter.printNewline();
+      _odsPrinter << name;
+      _odsPrinter.increaseIndent();
+      for (auto i : items) {
+        _odsPrinter.printNewline();
+        iara::detail::myprint(_odsPrinter, i);
+      }
+      _odsPrinter.decreaseIndent();
+      _odsPrinter.decreaseIndent();
+    }
+  };
+
   _odsPrinter << ' ';
   _odsPrinter.printAttributeWithoutType(getImplAttr());
-  if (!getParams().empty()) {
-    _odsPrinter << ' ' << "params";
-    _odsPrinter << ' ';
-    for (auto [v, t] : zip(getParams(), getParams().getTypes())) {
-      _odsPrinter << v;
-      _odsPrinter << ' ' << ":";
-      _odsPrinter << ' ';
-      _odsPrinter << t;
-    }
-  }
-  if (!getIn().empty()) {
-    _odsPrinter << ' ' << "in";
-    _odsPrinter << ' ';
-    for (auto [v, t] : zip(getIn(), getIn().getTypes())) {
-      _odsPrinter << v;
-      _odsPrinter << ' ' << ":";
-      _odsPrinter << ' ';
-      _odsPrinter << t;
-    }
-  }
-  if (!getInout().empty()) {
-    _odsPrinter << ' ' << "inout";
-    _odsPrinter << ' ';
-    for (auto [v, t] : zip(getInout(), getInout().getTypes())) {
-      _odsPrinter << v;
-      _odsPrinter << ' ' << ":";
-      _odsPrinter << ' ';
-      _odsPrinter << t;
-    }
-  }
-  if (!getOut().empty()) {
-    _odsPrinter << ' ' << "out";
-    _odsPrinter << ' ';
-    _odsPrinter << getOut().getTypes();
-  }
+  printList("params", zip(getParams(), getParams().getTypes()));
+  printList("in", zip(getIn(), getIn().getTypes()));
+  printList("inout", zip(getInout(), getInout().getTypes()));
+  printList("out", getOut().getTypes());
   ::llvm::SmallVector<::llvm::StringRef, 2> elidedAttrs;
   elidedAttrs.push_back("operandSegmentSizes");
   elidedAttrs.push_back("impl");
