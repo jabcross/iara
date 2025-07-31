@@ -55,12 +55,12 @@ iara.actor @degridder_actor {
 
 iara.actor @top_parallel_degridder_complete {
 
-  %kernels, %kernel_supports = iara.node @generate_kernels
+  %kernels, %kernel_supports = iara.node @generate_kernel
     out
       tensor<TOTAL_KERNELS_SAMPLESx!float2>,
       tensor<NUM_KERNELSx!int2>
 
-  %config = iara.node @config_struct_setup
+  %config = iara.node @config_struct_set_up
     out !Config
 
   %input_grid = iara.node @load_image_from_file
@@ -159,12 +159,12 @@ iara.actor @top_parallel_degridder_complete {
 
 iara.actor @top_parallel_degridder {
 
-  %kernels, %kernel_supports = iara.node @generate_kernels
+  %kernels, %kernel_supports = iara.node @generate_kernel
     out
       tensor<TOTAL_KERNELS_SAMPLESx!float2>,
       tensor<NUM_KERNELSx!int2>
 
-  %config = iara.node @config_struct_setup
+  %config = iara.node @config_struct_set_up
     out !Config
 
   %input_grid = iara.node @load_image_from_file

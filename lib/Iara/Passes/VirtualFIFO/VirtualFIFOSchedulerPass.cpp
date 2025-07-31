@@ -222,7 +222,7 @@ struct VirtualFIFOSchedulerPass::Impl {
       auto actor = module.lookupSymbol<ActorOp>(pass->main_actor.getValue());
       if (!actor)
         llvm::errs() << "Provided actor name not found: "
-                     << pass->main_actor.getValue();
+                     << pass->main_actor.getValue() << "\n";
       assert(actor && "Provided actor name not found");
       return actor;
     }
