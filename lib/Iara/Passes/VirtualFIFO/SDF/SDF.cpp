@@ -206,8 +206,8 @@ SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> getNeighbors(NodeOp node) {
   SmallVector<std::tuple<Direction, EdgeOp, NodeOp>> neighbors;
   auto inputs = node.getAllInputs();
   auto outputs = node.getAllOutputs();
-  auto insize = inputs.size();
-  auto outsize = outputs.size();
+  //  auto insize = inputs.size();
+  // auto outsize = outputs.size();
   for (auto input : inputs) {
     auto edge = dyn_cast<EdgeOp>(input.getDefiningOp());
     assert(edge);
@@ -305,10 +305,10 @@ FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor) {
     return data;
   }
 
-  for (auto edge : actor.getOps<EdgeOp>()) {
-    auto &info = data.edge_static_info[edge];
-    edge.dump();
-  }
+  // for (auto edge : actor.getOps<EdgeOp>()) {
+  //   auto &info = data.edge_static_info[edge];
+  //   edge.dump();
+  // }
 
   return failure();
 }

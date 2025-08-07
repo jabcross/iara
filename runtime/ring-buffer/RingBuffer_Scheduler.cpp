@@ -16,8 +16,8 @@
 #include <utility>
 #include <vector>
 
-extern Span<RingBuffer_Node> iara_runtime_nodes;
-extern Span<RingBuffer_Edge> iara_runtime_edges;
+extern std::span<RingBuffer_Node> iara_runtime_nodes;
+extern std::span<RingBuffer_Edge> iara_runtime_edges;
 
 #ifdef IARA_DEBUGPRINT
 extern std::mutex debug_mutex;
@@ -41,12 +41,17 @@ size_t getIndex(RingBuffer_Node &node) {
 struct node_thread {};
 
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskgroup
+#endif
 
-#pragma omp taskgroup
   {
     for (auto &node : iara_runtime_nodes.asSpan()) {
       auto node_ptr = &node;
-#pragma omp task firstprivate(node_ptr)
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task firstprivate(node_ptr)
+#endif
+
       {
 
 #ifdef IARA_DEBUGPRINT
@@ -62,9 +67,15 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
 }
 
 extern "C" void iara_runtime_exec(void (*exec)()) {
-#pragma omp parallel
+#ifndef IARA_DISABLE_OMP
+  #pragma omp parallel
+#endif
+
   {
-#pragma omp single
+#ifndef IARA_DISABLE_OMP
+  #pragma omp single
+#endif
+
     {
       exec();
     }
@@ -85,4 +96,8 @@ extern "C" void iara_runtime_init() {
       edge->init();
     }
   };
+}
+
+extern "C" void iara_runtime_wait() {
+  // taskgroup of run_iteration already handles waiting
 }

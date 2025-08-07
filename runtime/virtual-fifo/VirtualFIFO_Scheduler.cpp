@@ -5,6 +5,8 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
+#include <span>
 
 #ifdef IARA_DEBUGPRINT
   #include "IaraRuntime/util/DebugPrint.h"
@@ -44,7 +46,9 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
            i < e;
            i++) {
         auto node_ptr = &node;
-#pragma omp task firstprivate(node_ptr, i)
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task firstprivate(node_ptr, i)
+#endif
         node_ptr->prime(i);
       }
     }
@@ -52,21 +56,30 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
 }
 
 extern "C" void iara_runtime_wait() {
-#pragma omp taskwait
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskwait
+#endif
 }
 
 extern "C" void iara_runtime_exec(void (*exec)()) {
-#pragma omp parallel
+
+  auto &nodes = iara_runtime_nodes;
+  auto &edges = iara_runtime_edges;
+
+#ifndef IARA_DISABLE_OMP
+  #pragma omp parallel if (false)
   {
-#pragma omp single
+  #pragma omp single
     {
       exec();
     }
   }
+#else
+  exec();
+#endif
 }
 
-extern "C" void iara_runtime_init(i64 num_threads) {
-  iara_runtime_num_threads = num_threads;
+extern "C" void iara_runtime_init() {
 
 #ifdef IARA_DEBUGPRINT
   for (auto &node : iara_runtime_nodes) {

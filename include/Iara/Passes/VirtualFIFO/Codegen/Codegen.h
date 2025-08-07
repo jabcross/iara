@@ -40,7 +40,7 @@ struct EdgeCodegenData;
 struct NodeCodegenData {
   i64 index = -1;
   NodeOp node_op = nullptr;
-  VirtualFIFO_Node::StaticInfo static_info;
+  VirtualFIFO_Node_StaticInfo static_info;
   LLVMFuncOp wrapper = nullptr;
   std::string name;
   std::vector<EdgeCodegenData *> inputs = {};
@@ -52,7 +52,7 @@ struct NodeCodegenData {
 struct EdgeCodegenData {
   i64 index = -1;
   EdgeOp edge_op = nullptr;
-  VirtualFIFO_Edge::StaticInfo static_info;
+  VirtualFIFO_Edge_StaticInfo static_info;
   NodeCodegenData *consumer = nullptr;
   NodeCodegenData *producer = nullptr;
   NodeCodegenData *alloc_node = nullptr;

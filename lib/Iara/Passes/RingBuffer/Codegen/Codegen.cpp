@@ -1,10 +1,10 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/Common/Codegen/Codegen.h"
 #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/RingBuffer/Codegen/Codegen.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include <cassert>
@@ -14,10 +14,13 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/TypeUtilities.h>
 #include <mlir/Support/LLVM.h>
 
+// Specializations require the common namespace
 namespace iara::passes::common::codegen {
+
 template <> struct GetMLIRType<RingBuffer_Node::StaticInfo> {
   static Type get(MLIRContext *context) {
     Vec<Type> node_info_struct_field_types{
@@ -591,15 +594,15 @@ struct CodegenStaticData::Impl {
 
       // mydump(old_span.getDefiningOp());
 
-      for (auto edge_info : node_info.input_fifos.asSpan()) {
+      for (auto edge_info : node_info.input_fifos) {
         assert(edge_info != nullptr);
       }
 
-      for (auto edge_info : node_info.output_fifos.asSpan()) {
+      for (auto edge_info : node_info.output_fifos) {
         assert(edge_info != nullptr);
       }
 
-      auto stitch_span = [&](Span<RingBuffer_Edge *> &list,
+      auto stitch_span = [&](std::span<RingBuffer_Edge *> &list,
                              const char *suffix,
                              Value old) {
         auto [inserter, builder] = makeGlobalArray(
@@ -610,7 +613,7 @@ struct CodegenStaticData::Impl {
             module.getLoc(),
             list.size());
 
-        for (auto [i_e, edge_info] : llvm::enumerate(list.asSpan())) {
+        for (auto [i_e, edge_info] : llvm::enumerate(list)) {
           auto edge = info_to_edge[edge_info];
           auto index = edge_info - &*edge_infos.begin();
           auto node_loc = node.getLoc();
@@ -631,7 +634,7 @@ struct CodegenStaticData::Impl {
             opaque_ptr,
             (std::string)llvm::formatv(
                 "iara_runtime_data_node_{0}_{1}", node_info.info.id, suffix),
-            list.asSpan().size());
+            list.size());
         old.replaceAllUsesWith(new_span);
         old.getDefiningOp()->erase();
         assert(module.verify().succeeded());

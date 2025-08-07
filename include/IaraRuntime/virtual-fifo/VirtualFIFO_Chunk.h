@@ -48,14 +48,20 @@ public:
 #ifdef IARA_COMPILER
 
   inline static mlir::Type getMLIRType(mlir::MLIRContext *context) {
-    return mlir::LLVM::LLVMStructType::getLiteral(
-        context,
-        {
-            mlir::LLVM::LLVMPointerType::get(context),
-            mlir::IntegerType::get(context, 64),
-            mlir::LLVM::LLVMPointerType::get(context),
-            mlir::IntegerType::get(context, 64),
-        });
+    auto type =
+        mlir::LLVM::LLVMStructType::getIdentified(context, "VirtualFIFO_Chunk");
+    if (!type.isInitialized()) {
+      auto res = type.setBody(
+          {
+              mlir::LLVM::LLVMPointerType::get(context),
+              mlir::IntegerType::get(context, 64),
+              mlir::LLVM::LLVMPointerType::get(context),
+              mlir::IntegerType::get(context, 64),
+          },
+          false);
+      assert(res.succeeded());
+    }
+    return type;
   }
 
 #endif

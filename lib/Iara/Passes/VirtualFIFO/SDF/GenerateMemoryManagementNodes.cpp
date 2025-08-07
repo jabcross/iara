@@ -141,7 +141,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
       return rv;
     }();
 
-    dealloc_node_info = VirtualFIFO_Node::StaticInfo{
+    dealloc_node_info = VirtualFIFO_Node_StaticInfo{
         .id = dealloc_node_id,
         .arg_bytes = -3,
         .num_args = 1,
@@ -166,7 +166,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    dealloc_edge_info = VirtualFIFO_Edge::StaticInfo{
+    dealloc_edge_info = VirtualFIFO_Edge_StaticInfo{
         .id = dealloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = last_edge_info.cons_rate,
@@ -252,7 +252,7 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
       return rv;
     }();
 
-    alloc_node_info = VirtualFIFO_Node::StaticInfo{
+    alloc_node_info = VirtualFIFO_Node_StaticInfo{
         .id = alloc_node_id,
         .arg_bytes = -2,
         .num_args = 0,
@@ -276,7 +276,7 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    alloc_edge_info = VirtualFIFO_Edge::StaticInfo{
+    alloc_edge_info = VirtualFIFO_Edge_StaticInfo{
         .id = alloc_edge_id,
         .local_index = -1, // fill out later
         .prod_rate = -2,

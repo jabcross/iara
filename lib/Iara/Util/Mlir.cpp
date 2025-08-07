@@ -1,10 +1,12 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Mlir.h"
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
@@ -44,27 +46,61 @@ size_t getTypeSize(Type type, DataLayout dl) {
   return dl.getTypeSize(type);
 }
 
+std::string stringifyType(Type type);
 std::string stringifyType(Type type) {
+  if (auto tensor_type = dyn_cast<RankedTensorType>(type)) {
+    std::string dims;
+    auto str = llvm::raw_string_ostream(dims);
+    llvm::interleave(tensor_type.getShape(), str, "x");
+
+    return llvm::formatv(
+        "tensor<{0}x{1}>", dims, stringifyType(tensor_type.getElementType()));
+  }
+
+  if (auto struct_type = dyn_cast<LLVM::LLVMStructType>(type)) {
+    if (struct_type.isIdentified()) {
+      if (struct_type.getName().starts_with("struct.")) {
+        return struct_type.getName().drop_front(7).str();
+      }
+      return struct_type.getName().str();
+    } else {
+      std::string rv = "{";
+      llvm::raw_string_ostream str{rv};
+      for (auto i = struct_type.getBody().begin(),
+                e = struct_type.getBody().end();
+           i < e;
+           i++) {
+        str << stringifyType(*i);
+        if (i + 1 != e)
+          str << ",";
+      }
+      str << "}";
+      return rv;
+    }
+  }
+
   std::string vanilla_name;
   auto vanilla_name_s = llvm::raw_string_ostream(vanilla_name);
   type.print(vanilla_name_s);
-  std::string safe_name;
-  char c = vanilla_name[0];
-  if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_') {
-    safe_name += c;
-  } else {
-    safe_name += llvm::toHex(c);
-  }
 
-  for (auto c : StringRef(vanilla_name).drop_front(1)) {
-    if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-        (c >= '0' and c <= '9') or c == '_') {
-      safe_name += c;
-    } else {
-      safe_name += llvm::toHex(c);
-    }
-  }
-  return {safe_name};
+  // std::string safe_name;
+  // char c = vanilla_name[0];
+  // if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_') {
+  //   safe_name += c;
+  // } else {
+  //   safe_name += llvm::toHex(c);
+  // }
+
+  // for (auto c : StringRef(vanilla_name).drop_front(1)) {
+  //   if ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
+  //       (c >= '0' and c <= '9') or c == '_') {
+  //     safe_name += c;
+  //   } else {
+  //     safe_name += llvm::toHex(c);
+  //   }
+  // }
+  // return {safe_name};
+  return {vanilla_name};
 }
 
 std::pair<func::FuncOp, OpBuilder> createEmptyVoidFunctionWithBody(

@@ -9,6 +9,8 @@ add_mlir_dialect_library(MLIRIara
 
         Passes/FlattenPass.cpp
 
+        Passes/Common/Codegen/Codegen.cpp
+
         Passes/RingBuffer/Codegen/Codegen.cpp
         Passes/RingBuffer/SDF/SDF.cpp
         Passes/RingBuffer/RingBufferSchedulerPass.cpp

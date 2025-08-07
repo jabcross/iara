@@ -11,13 +11,21 @@ template <class F> inline void callBlockingFunctionFromOpenMP(F &&f) {
 
   omp_event_handle_t event{};
   int x;
-#pragma omp taskgroup
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskgroup
+#endif
+
   {
-#pragma omp task detach(event) depend(out : x) untied
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task detach(event) depend(out : x) untied
+#endif
+
     {
       std::async([f = std::forward<F>(f), event]() {
         f();
-#pragma omp task firstprivate(event)
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task firstprivate(event)
+#endif
         omp_fulfill_event(event);
       }).detach();
     }

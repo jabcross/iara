@@ -5,153 +5,152 @@
 
 iara.actor @degridder_actor {
 
-
-    %param_in_kernels = iara.in : tensor<TOTAL_KERNELS_SAMPLESx!float2>
-    %param_in_support = iara.in : tensor<NUM_KERNELSx!int2>
-    %param_in_input_grid = iara.in : tensor<GRID_SIZExGRID_SIZEx!float2>
-    %param_in_vis_uvw_coords = iara.in : tensor<NUM_VISIBILITIESx!float3>
+    %param_in_kernels = iara.in : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>
+    %param_in_support = iara.in : tensor<NUM_KERNELS_VALUEx!int2>
+    %param_in_input_grid = iara.in : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    %param_in_vis_uvw_coords = iara.in : tensor<NUM_VISIBILITIES_VALUEx!float3>
     %param_in_config = iara.in : !Config
 
   %kernels = iara.node @broadcast_kernels_parallel
-    in %param_in_kernels: tensor<TOTAL_KERNELS_SAMPLESx!float2>
-    out tensor<NUM_CHUNKxTOTAL_KERNELS_SAMPLESx!float2>
+    in %param_in_kernels: tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>
+    out tensor<NUM_CHUNK_VALUExTOTAL_KERNELS_SAMPLES_VALUEx!float2>
   %support = iara.node @broadcast_support_parallel
-    in %param_in_support: tensor<NUM_KERNELSx!int2>
-    out tensor<NUM_CHUNKxNUM_KERNELSx!int2>
+    in %param_in_support: tensor<NUM_KERNELS_VALUEx!int2>
+    out tensor<NUM_CHUNK_VALUExNUM_KERNELS_VALUEx!int2>
   %input_grid = iara.node @broadcast_input_grid
-    in %param_in_input_grid: tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<NUM_CHUNKxGRID_SIZExGRID_SIZEx!float2>
+    in %param_in_input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<NUM_CHUNK_VALUExGRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
   %vis_uvw_coords = iara.node @broadcast_uvw_coord
-    in %param_in_vis_uvw_coords: tensor<NUM_VISIBILITIESx!float3>
-    out tensor<NUM_CHUNKxNUM_VISIBILITIESx!float3>
+    in %param_in_vis_uvw_coords: tensor<NUM_VISIBILITIES_VALUEx!float3>
+    out tensor<NUM_CHUNK_VALUExNUM_VISIBILITIES_VALUEx!float3>
   %config = iara.node @broadcast_config_parallel
     in %param_in_config: !Config
-    out tensor<NUM_CHUNKx!Config>
+    out tensor<NUM_CHUNK_VALUEx!Config>
 
 
-    %e_kernels = iara.edge %kernels : tensor<NUM_CHUNKxTOTAL_KERNELS_SAMPLESx!float2> ->  tensor<TOTAL_KERNELS_SAMPLESx!float2>
-    %e_support = iara.edge %support : tensor<NUM_CHUNKxNUM_KERNELSx!int2> ->  tensor<NUM_KERNELSx!int2>
-    %e_input_grid = iara.edge %input_grid : tensor<NUM_CHUNKxGRID_SIZExGRID_SIZEx!float2> ->  tensor<GRID_SIZExGRID_SIZEx!float2>
-    %e_vis_uvw_coords = iara.edge %vis_uvw_coords : tensor<NUM_CHUNKxNUM_VISIBILITIESx!float3> ->  tensor<NUM_VISIBILITIESx!float3>
-    %e_config = iara.edge %config : tensor<NUM_CHUNKx!Config> ->  !Config
+    %e_kernels = iara.edge %kernels : tensor<NUM_CHUNK_VALUExTOTAL_KERNELS_SAMPLES_VALUEx!float2> ->  tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>
+    %e_support = iara.edge %support : tensor<NUM_CHUNK_VALUExNUM_KERNELS_VALUEx!int2> ->  tensor<NUM_KERNELS_VALUEx!int2>
+    %e_input_grid = iara.edge %input_grid : tensor<NUM_CHUNK_VALUExGRID_SIZE_VALUExGRID_SIZE_VALUEx!float2> ->  tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    %e_vis_uvw_coords = iara.edge %vis_uvw_coords : tensor<NUM_CHUNK_VALUExNUM_VISIBILITIES_VALUEx!float3> ->  tensor<NUM_VISIBILITIES_VALUEx!float3>
+    %e_config = iara.edge %config : tensor<NUM_CHUNK_VALUEx!Config> ->  !Config
 
 
-  %iterator = iara.node @iterator out tensor<NUM_CHUNKxi32>
-  %e_iterator = iara.edge %iterator : tensor<NUM_CHUNKxi32> ->  i32
+  %iterator = iara.node @iterator out tensor<NUM_CHUNK_VALUExi32>
+  %e_iterator = iara.edge %iterator : tensor<NUM_CHUNK_VALUExi32> ->  i32
 
   %output_visibilities = iara.node @std_degridding_parallel
     in
-      %e_kernels : tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      %e_support: tensor<NUM_KERNELSx!int2>,
-      %e_input_grid : tensor<GRID_SIZExGRID_SIZEx!float2>,
-      %e_vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %e_kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      %e_support: tensor<NUM_KERNELS_VALUEx!int2>,
+      %e_input_grid : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>,
+      %e_vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %e_config: !Config,
       %e_iterator: i32
-    out tensor<NUM_VISIB_D_N_CHUNKx!float2>
+    out tensor<NUM_VISIB_D_N_CHUNK_VALUEx!float2>
 
-  %out = iara.edge %output_visibilities : tensor<NUM_VISIB_D_N_CHUNKx!float2> -> tensor<NUM_VISIBILITIESx!float2>
-  iara.out(%out: tensor<NUM_VISIBILITIESx!float2>)
+  %out = iara.edge %output_visibilities : tensor<NUM_VISIB_D_N_CHUNK_VALUEx!float2> -> tensor<NUM_VISIBILITIES_VALUEx!float2>
+  iara.out(%out: tensor<NUM_VISIBILITIES_VALUEx!float2>)
 }
 
 iara.actor @top_parallel_degridder_complete {
 
   %kernels, %kernel_supports = iara.node @generate_kernel
     out
-      tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      tensor<NUM_KERNELSx!int2>
+      tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      tensor<NUM_KERNELS_VALUEx!int2>
 
   %config = iara.node @config_struct_set_up
     out !Config
 
   %input_grid = iara.node @load_image_from_file
     in %config : !Config
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
-  %vis_uvw_coords = iara.node @visibility_host_set_up
+  %vis_uvw_coords = iara.node @visibility_host_set_up2
     in %config: !Config
-    out tensor<NUM_VISIBILITIESx!float3>
+    out tensor<NUM_VISIBILITIES_VALUEx!float3>
 
   iara.node @export_kernels_to_csv
-    in %kernels: tensor<TOTAL_KERNELS_SAMPLESx!float2>
+    in %kernels: tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>
 
   iara.node @export_supports_to_csv
-    in %kernel_supports: tensor<NUM_KERNELSx!int2>
+    in %kernel_supports: tensor<NUM_KERNELS_VALUEx!int2>
 
   %fourier = iara.node @fft_shift_real_to_complex_actor
     in
       %config : !Config,
-      %input_grid: tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+      %input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
 
   %uv_grid_out = iara.node @CUFFT_EXECUTE_FORWARD_C2C_actor
-    in %fourier : tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %fourier : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
   iara.node @export_image_to_csv_input_grid
-    in %fourier: tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %fourier: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
   %uv_grid_out2 = iara.node @fft_shift_complex_to_complex_actor
-    in %uv_grid_out: tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %uv_grid_out: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
   iara.node @export_image_to_csv_uv_grid
-    in %uv_grid_out: tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %uv_grid_out: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
   %output_visibilities = iara.node @degridder_actor
     in
-      %kernels : tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      %kernel_supports : tensor<NUM_KERNELSx!int2>,
-      %uv_grid_out2 : tensor<GRID_SIZExGRID_SIZEx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      %kernel_supports : tensor<NUM_KERNELS_VALUEx!int2>,
+      %uv_grid_out2 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>,
+      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %config: !Config
-    out tensor<NUM_VISIBILITIESx!float2>
+    out tensor<NUM_VISIBILITIES_VALUEx!float2>
 
   iara.node @export_image_to_csv_uv_grid_shift
-    in %uv_grid_out2 : tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %uv_grid_out2 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
 
   %grid = iara.node @gridding_cpu
     in
-      %output_visibilities : tensor<NUM_VISIBILITIESx!float2>,
-      %kernel_supports : tensor<NUM_KERNELSx!int2>,
-      %kernels : tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %output_visibilities : tensor<NUM_VISIBILITIES_VALUEx!float2>,
+      %kernel_supports : tensor<NUM_KERNELS_VALUEx!int2>,
+      %kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %config : !Config,
-      %uv_grid_out : tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+      %uv_grid_out : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
   iara.node @convert_vis_to_csv
     in
-      %output_visibilities : tensor<NUM_VISIBILITIESx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %output_visibilities : tensor<NUM_VISIBILITIES_VALUEx!float2>,
+      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %config : !Config
 
 
 
   %uv_grid_out3 = iara.node @CUFFT_EXECUTE_INVERSE_C2C_actor
-    in %grid : tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %grid : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
   iara.node @export_image_to_csv_gridding
-    in %grid : tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %grid : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
 
   %dirty_image = iara.node @fft_complex_to_real_actor
-    in %uv_grid_out3 : tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZExf32>
+    in %uv_grid_out3 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUExf32>
 
   iara.node @export_image_to_csv_reconstructed
-    in %uv_grid_out3 : tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %uv_grid_out3 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
   iara.node @export_image_to_csv
     in
-      %dirty_image : tensor<GRID_SIZExGRID_SIZExf32>,
+      %dirty_image : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUExf32>,
       %config : !Config
 
 }
@@ -161,54 +160,54 @@ iara.actor @top_parallel_degridder {
 
   %kernels, %kernel_supports = iara.node @generate_kernel
     out
-      tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      tensor<NUM_KERNELSx!int2>
+      tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      tensor<NUM_KERNELS_VALUEx!int2>
 
   %config = iara.node @config_struct_set_up
     out !Config
 
   %input_grid = iara.node @load_image_from_file
     in %config : !Config
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
-  %vis_uvw_coords = iara.node @visibility_host_set_up
+  %vis_uvw_coords = iara.node @visibility_host_set_up2
     in %config: !Config
-    out tensor<NUM_VISIBILITIESx!float3>
+    out tensor<NUM_VISIBILITIES_VALUEx!float3>
 
 
 
   %fourier = iara.node @fft_shift_real_to_complex_actor
     in
       %config : !Config,
-      %input_grid: tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+      %input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
 
   %uv_grid_out = iara.node @CUFFT_EXECUTE_FORWARD_C2C_actor
-    in %fourier : tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %fourier : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
   %uv_grid_out2 = iara.node @fft_shift_complex_to_complex_actor
-    in %uv_grid_out: tensor<GRID_SIZExGRID_SIZEx!float2>
-    out tensor<GRID_SIZExGRID_SIZEx!float2>
+    in %uv_grid_out: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 
   %output_visibilities = iara.node @degridder_actor
     in
-      %kernels : tensor<TOTAL_KERNELS_SAMPLESx!float2>,
-      %kernel_supports : tensor<NUM_KERNELSx!int2>,
-      %uv_grid_out2 : tensor<GRID_SIZExGRID_SIZEx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
+      %kernel_supports : tensor<NUM_KERNELS_VALUEx!int2>,
+      %uv_grid_out2 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>,
+      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %config: !Config
-    out tensor<NUM_VISIBILITIESx!float2>
+    out tensor<NUM_VISIBILITIES_VALUEx!float2>
 
 
   iara.node @convert_vis_to_csv
     in
-      %output_visibilities : tensor<NUM_VISIBILITIESx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIESx!float3>,
+      %output_visibilities : tensor<NUM_VISIBILITIES_VALUEx!float2>,
+      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
       %config : !Config
 
 }

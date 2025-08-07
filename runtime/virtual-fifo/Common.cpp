@@ -2,8 +2,7 @@
 
 // This implementation is used by both the compiler and runtime.
 
-VirtualFIFO_Edge::ConsData
-VirtualFIFO_Edge::StaticInfo::getConsumerSlice(i64 virtual_offset) {
+ConsData VirtualFIFO_Edge_StaticInfo::getConsumerSlice(i64 virtual_offset) {
   assert(cons_rate != -1);
   if (virtual_offset < block_size_with_delays) {
     auto [seq, cons_offset] = lldiv(virtual_offset - delay_offset, cons_rate);

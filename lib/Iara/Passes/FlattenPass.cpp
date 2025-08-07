@@ -283,17 +283,6 @@ public:
       flatten(actor);
       fixDoubleEdges(actor);
     }
-
-    // assert(m_top_level_candidates.size() == 1 &&
-    //        "Only one actor is the top-level.");
-
-    auto top_level_actor = *m_top_level_candidates.begin();
-
-    for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
-      if (actor != top_level_actor) {
-        actor->erase();
-      }
-    }
   }
 };
 

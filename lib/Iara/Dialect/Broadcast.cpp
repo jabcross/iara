@@ -5,6 +5,8 @@
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
 #include <llvm/Support/FormatVariadic.h>
+#include <mlir/IR/Builders.h>
+#include <numeric>
 
 namespace iara::dialect::broadcast {
 
@@ -15,11 +17,12 @@ std::string getBroadcastName(i64 size, Type type, bool reuse_first) {
   if (reuse_first && size == 1) {
     llvm_unreachable("Pointless node");
   }
+  auto type_string = stringifyType(type);
   if (reuse_first)
-    return llvm::formatv("iara_broadcast_r_{0}x{1}", size, stringifyType(type));
+    return llvm::formatv("iara_broadcast_r_{0}x{1}", size, type_string);
   if (size == 1)
-    return llvm::formatv("iara_copy_{0}", stringifyType(type));
-  return llvm::formatv("iara_broadcast_{0}x{1}", size, stringifyType(type));
+    return llvm::formatv("iara_copy_{0}", type_string);
+  return llvm::formatv("iara_broadcast_{0}x{1}", size, type_string);
 }
 
 LLVM::LLVMFuncOp
@@ -76,8 +79,8 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
   auto impl_builder = OpBuilder(impl);
   impl_builder.setInsertionPointToStart(body);
 
-  auto size_val = getIntConstant(&impl.getFunctionBody().front(),
-                                 (size_t)size * getTypeSize(value));
+  auto size_val =
+      getIntConstant(&impl.getFunctionBody().front(), getTypeSize(value));
 
   auto src = body->getArgument(0);
 

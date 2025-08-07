@@ -115,7 +115,7 @@ fi
 shopt -s nullglob
 
 echo building schedule
-\time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
 RC=$?
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
@@ -131,7 +131,7 @@ echo building c kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
   for c_file in $PATH_TO_TEST_SOURCES/*.c; do
     echo "Compiling $c_file"
-    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $COMPILER_FLAGS $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
+    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $COMPILER_FLAGS -ftime-trace=ckernels.json $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
     RC=$?
     echo c kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -145,7 +145,7 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 -ftime-trace=cppkernels.json $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
     RC=$?
     echo cpp kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -156,7 +156,7 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
 fi
 
 echo building runtime
-\time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace --std=c++20 -g $COMPILER_FLAGS $EXTRA_RUNTIME_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+\time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_RUNTIME_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
 # \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
 echo executable return code: $?

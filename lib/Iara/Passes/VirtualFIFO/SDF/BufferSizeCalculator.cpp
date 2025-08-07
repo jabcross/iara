@@ -13,6 +13,10 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
 
   assert(rates.size() == delays.size() + 1);
 
+  if (rates.size() == 2 && rates[0] == rates[1] && delays[0] == 0) {
+    return BufferSizeValues{{1, 1}, {1, 1}};
+  }
+
   for (auto delay : delays) {
     if (delay < 0) {
       llvm_unreachable("invalid delay size");

@@ -7,7 +7,6 @@
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
@@ -219,10 +218,20 @@ struct VirtualFIFOSchedulerPass::Impl {
     Vec<ActorOp> definitions;
 
     if (pass->main_actor.hasValue()) {
-      auto actor = module.lookupSymbol<ActorOp>(pass->main_actor.getValue());
-      if (!actor)
-        llvm::errs() << "Provided actor name not found: "
-                     << pass->main_actor.getValue() << "\n";
+
+      auto main_actor_name = pass->main_actor.getValue();
+
+      auto actor = module.lookupSymbol<ActorOp>(main_actor_name);
+      if (!actor) {
+        llvm::errs() << "Provided actor name not found: " << main_actor_name
+                     << "\n";
+        llvm::errs() << "Available actors: \n";
+
+        for (auto actor : module.getOps<ActorOp>()) {
+          llvm::errs() << actor.getSymName() << "\n";
+        }
+      }
+
       assert(actor && "Provided actor name not found");
       return actor;
     }

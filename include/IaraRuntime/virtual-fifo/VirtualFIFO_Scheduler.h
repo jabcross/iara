@@ -5,8 +5,8 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 
 struct VirtualFIFO_RuntimeData {
-  Span<VirtualFIFO_Node> node_infos;
-  Span<VirtualFIFO_Edge> fifo_infos;
+  std::span<VirtualFIFO_Node> node_infos;
+  std::span<VirtualFIFO_Edge> fifo_infos;
 };
 
 #endif // IARA_RUNTIME_VIRTUALFIFOSCHEDULER_H

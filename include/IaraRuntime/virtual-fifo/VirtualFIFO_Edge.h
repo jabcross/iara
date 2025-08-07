@@ -1,108 +1,119 @@
 #ifndef IARA_RUNTIME_SDF_OOO_FIFO_H
 #define IARA_RUNTIME_SDF_OOO_FIFO_H
 
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include <cstdio>
 #include <cstdlib>
+#include <span>
+#include <tuple>
+#include <utility>
 
-#ifdef IARA_COMPILER
-  #include "boost/describe.hpp"
-#endif
+// #ifdef IARA_COMPILER
+//   #include "boost/describe.hpp"
+// #endif
 
+extern "C"
+
+{
 struct VirtualFIFO_Node;
+struct VirtualFIFO_Edge;
+
+struct ConsData {
+  i64 seq;
+  i64 offset;
+  i64 size;
+};
+
+struct VirtualFIFO_Edge_StaticInfo {
+  static constexpr char STRUCT_NAME[] = "VirtualFIFO_Edge_StaticInfo";
+  using TupleType = std::
+      tuple<i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64>;
+
+  i64 id = -1;
+  i64 local_index = -1;  // Position in the chain of inout
+  i64 prod_rate = -1;    //
+  i64 cons_rate = -1;    //
+  i64 cons_arg_idx = -1; // index of the connected port in the consumer
+  i64 delay_offset = -1; // start of delay in first chunk
+  i64 delay_size = -1;
+
+  // Result of analyzeVirtualBufferSizes
+  i64 block_size_with_delays = -1;
+  i64 block_size_no_delays = -1;
+  i64 prod_alpha = -1;
+  i64 prod_beta = -1;
+  i64 cons_alpha = -1;
+  i64 cons_beta = -1;
+
+  // Given a global offset, return which firing of the consumer will consume
+  // it, as well as the offset within that consumption, and its size.
+  ConsData getConsumerSlice(i64 virtual_offset);
+
+  inline void dump() {
+    fprintf(stderr, "Dumping edgeinfo {\n");
+    fprintf(stderr, "id = %ld\n", id);
+    fprintf(stderr, "local_index = %ld\n", local_index);
+    fprintf(stderr, "prod_rate = %ld\n", prod_rate);
+    fprintf(stderr, "cons_rate = %ld\n", cons_rate);
+    fprintf(stderr, "cons_arg_idx = %ld\n", cons_arg_idx);
+    fprintf(stderr, "delay_offset = %ld\n", delay_offset);
+    fprintf(stderr, "delay_size = %ld\n", delay_size);
+
+    fprintf(stderr, "block_size_with_delays = %ld\n", block_size_with_delays);
+    fprintf(stderr, "block_size_no_delays = %ld\n", block_size_no_delays);
+    fprintf(stderr, "prod_alpha = %ld\n", prod_alpha);
+    fprintf(stderr, "prod_beta = %ld\n", prod_beta);
+    fprintf(stderr, "cons_alpha = %ld\n", cons_alpha);
+    fprintf(stderr, "cons_beta = %ld }\n", cons_beta);
+  }
+
+  // #ifdef IARA_COMPILER
+  //   BOOST_DESCRIBE_CLASS(StaticInfo,
+  //                        (),
+  //                        (id,
+  //                         local_index,
+  //                         prod_rate,
+  //                         cons_rate,
+  //                         cons_arg_idx,
+  //                         delay_offset,
+  //                         delay_size,
+  //                         block_size_with_delays,
+  //                         block_size_no_delays,
+  //                         prod_alpha,
+  //                         prod_beta,
+  //                         cons_alpha,
+  //                         cons_beta),
+  //                        (),
+  //                        ())
+  // #endif
+};
+
+struct VirtualFIFO_Edge_CodegenInfo {
+  static constexpr char STRUCT_NAME[] = "VirtualFIFO_Edge_CodegenInfo";
+
+  using TupleType = std::tuple<char *,
+                               std::span<const char>,
+                               VirtualFIFO_Node *,
+                               VirtualFIFO_Node *,
+                               VirtualFIFO_Node *,
+                               VirtualFIFO_Edge *>;
+  char *name;
+  std::span<const char> delay_data;
+  VirtualFIFO_Node *consumer;
+  VirtualFIFO_Node *producer;
+  VirtualFIFO_Node *alloc_node;
+  VirtualFIFO_Edge *next_in_chain;
+};
 
 // SDF Out of Order Fifo.
 struct VirtualFIFO_Edge {
+  static constexpr char STRUCT_NAME[] = "VirtualFIFO_Edge";
 
-  struct ConsData {
-    i64 seq;
-    i64 offset;
-    i64 size;
-  };
+  using TupleType =
+      std::tuple<VirtualFIFO_Edge_StaticInfo, VirtualFIFO_Edge_CodegenInfo>;
 
-  struct StaticInfo {
-    using TupleType = std::
-        tuple<i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64>;
-
-    i64 id = -1;
-    i64 local_index = -1;  // Position in the chain of inout
-    i64 prod_rate = -1;    //
-    i64 cons_rate = -1;    //
-    i64 cons_arg_idx = -1; // index of the connected port in the consumer
-    i64 delay_offset = -1; // start of delay in first chunk
-    i64 delay_size = -1;
-
-    // Result of analyzeVirtualBufferSizes
-    i64 block_size_with_delays = -1;
-    i64 block_size_no_delays = -1;
-    i64 prod_alpha = -1;
-    i64 prod_beta = -1;
-    i64 cons_alpha = -1;
-    i64 cons_beta = -1;
-
-    // Given a global offset, return which firing of the consumer will consume
-    // it, as well as the offset within that consumption, and its size.
-    ConsData getConsumerSlice(i64 virtual_offset);
-
-    inline void dump() {
-      fprintf(stderr, "Dumping edgeinfo {\n");
-      fprintf(stderr, "id = %ld\n", id);
-      fprintf(stderr, "local_index = %ld\n", local_index);
-      fprintf(stderr, "prod_rate = %ld\n", prod_rate);
-      fprintf(stderr, "cons_rate = %ld\n", cons_rate);
-      fprintf(stderr, "cons_arg_idx = %ld\n", cons_arg_idx);
-      fprintf(stderr, "delay_offset = %ld\n", delay_offset);
-      fprintf(stderr, "delay_size = %ld\n", delay_size);
-
-      fprintf(stderr, "block_size_with_delays = %ld\n", block_size_with_delays);
-      fprintf(stderr, "block_size_no_delays = %ld\n", block_size_no_delays);
-      fprintf(stderr, "prod_alpha = %ld\n", prod_alpha);
-      fprintf(stderr, "prod_beta = %ld\n", prod_beta);
-      fprintf(stderr, "cons_alpha = %ld\n", cons_alpha);
-      fprintf(stderr, "cons_beta = %ld }\n", cons_beta);
-    }
-
-#ifdef IARA_COMPILER
-    BOOST_DESCRIBE_CLASS(StaticInfo,
-                         (),
-                         (id,
-                          local_index,
-                          prod_rate,
-                          cons_rate,
-                          cons_arg_idx,
-                          delay_offset,
-                          delay_size,
-                          block_size_with_delays,
-                          block_size_no_delays,
-                          prod_alpha,
-                          prod_beta,
-                          cons_alpha,
-                          cons_beta),
-                         (),
-                         ())
-#endif
-  };
-
-  struct CodegenInfo {
-    using TupleType = std::tuple<char *,
-                                 std::span<const char>,
-                                 VirtualFIFO_Node *,
-                                 VirtualFIFO_Node *,
-                                 VirtualFIFO_Node *,
-                                 VirtualFIFO_Edge *>;
-    char *name;
-    Span<const char> delay_data;
-    VirtualFIFO_Node *consumer;
-    VirtualFIFO_Node *producer;
-    VirtualFIFO_Node *alloc_node;
-    VirtualFIFO_Edge *next_in_chain;
-  };
-
-  using TupleType = std::tuple<StaticInfo, CodegenInfo>;
-
-  StaticInfo static_info;
-  CodegenInfo codegen_info;
+  VirtualFIFO_Edge_StaticInfo static_info;
+  VirtualFIFO_Edge_CodegenInfo codegen_info;
 
   // Called by the producer actor. Chooses which firings of the consumer will
   // receive it and schedules their execution.
@@ -152,13 +163,14 @@ struct VirtualFIFO_Edge {
   }
 
   // Given a virtual offset range, return which firings overlap with it
-  inline static std::pair<i64, i64>
-  getConsFiringsFromVirtualOffsetRange(StaticInfo &info, i64 begin, i64 end) {
+  inline static std::pair<i64, i64> getConsFiringsFromVirtualOffsetRange(
+      VirtualFIFO_Edge_StaticInfo &info, i64 begin, i64 end) {
     assert(end - begin >= 1);
     auto firing_begin = info.getConsumerSlice(begin).seq;
     auto firing_end = info.getConsumerSlice(end - 1).seq + 1;
     return {firing_begin, firing_end};
   }
 };
+}
 
 #endif

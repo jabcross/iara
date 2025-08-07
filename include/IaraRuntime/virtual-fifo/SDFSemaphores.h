@@ -3,8 +3,9 @@
 
 #include "IaraRuntime/virtual-fifo/KeyedSemaphore.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
+#include <span>
 
-struct VirtualFIFO_Node::NormalSemaphore {
+struct VirtualFIFO_NormalSemaphore {
 
   struct FirstArgs {
     VirtualFIFO_Node *_this;
@@ -17,15 +18,19 @@ struct VirtualFIFO_Node::NormalSemaphore {
 
   struct LastArgs {
     bool *may_fire;
-    Span<VirtualFIFO_Chunk> *args;
+    std::span<VirtualFIFO_Chunk> *args;
   };
 
   static void first_time_func(FirstArgs &f_args,
-                              Span<VirtualFIFO_Chunk> &kernel_args) {
+                              std::span<VirtualFIFO_Chunk> &kernel_args) {
     // Init args vector with appropriate size.
-    kernel_args.extents = f_args._this->static_info.num_args;
-    kernel_args.ptr = (VirtualFIFO_Chunk *)calloc(kernel_args.extents,
-                                                  sizeof(VirtualFIFO_Chunk));
+
+    auto p_kernel_args = &kernel_args;
+
+    size_t size = f_args._this->static_info.num_args;
+    auto data = (VirtualFIFO_Chunk *)calloc(sizeof(VirtualFIFO_Chunk), size);
+    *p_kernel_args = {data, size};
+
     // fprintf(stderr,
     //         "alloc args %#016lx of size %ld\n",
     //         (size_t)kernel_args.ptr,
@@ -34,30 +39,30 @@ struct VirtualFIFO_Node::NormalSemaphore {
   };
 
   static void every_time_func(EveryTimeArgs &et_args,
-                              Span<VirtualFIFO_Chunk> &kernel_args) {
+                              std::span<VirtualFIFO_Chunk> &kernel_args) {
     auto &[new_chunk, idx, first] = et_args;
 
     if (new_chunk.is_empty()) {
       return;
     }
 
-    auto &old_chunk = kernel_args.ptr[idx];
+    auto &old_chunk = kernel_args[idx];
     assert(kernel_args.size() > (size_t)idx);
     // only the first chunk of a firing contains the right pointer.
     if (first) {
-      old_chunk = new_chunk;
+      old_chunk = {new_chunk};
     }
   };
 
   static void last_time_func(LastArgs &l_args,
-                             Span<VirtualFIFO_Chunk> &kernel_args) {
+                             std::span<VirtualFIFO_Chunk> &kernel_args) {
     *l_args.may_fire = true;
     *l_args.args = kernel_args;
   };
 
   using Semaphore =
       keyed_semaphore::KeyedSemaphore<keyed_semaphore::ParallelHashMap,
-                                      Span<VirtualFIFO_Chunk>,
+                                      std::span<VirtualFIFO_Chunk>,
                                       FirstArgs,
                                       EveryTimeArgs,
                                       LastArgs,
@@ -68,7 +73,7 @@ struct VirtualFIFO_Node::NormalSemaphore {
   Semaphore semaphore;
 };
 
-struct VirtualFIFO_Node::AllocSemaphore {
+struct VirtualFIFO_AllocSemaphore {
 
   struct EntryData {};
 

@@ -6,7 +6,6 @@
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
 #include <cstddef>
@@ -266,8 +265,8 @@ struct RingBufferSchedulerPass::Impl {
       if (info.info.delay_size > 0) {
         auto delay = edge->getAttrOfType<DenseArrayAttr>("delay");
         delay_data[edge] = delay.getRawData();
-        info.delay_data = Span<const char>{delay.getRawData().begin(),
-                                           delay.getRawData().size()};
+        info.delay_data = std::span<const char>{delay.getRawData().begin(),
+                                                delay.getRawData().size()};
       } else {
         info.delay_data = {};
       }
@@ -287,8 +286,8 @@ struct RingBufferSchedulerPass::Impl {
       for (auto edge_info : input_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.input_fifos = Span<RingBuffer_Edge *>{input_fifos[node].begin(),
-                                                 input_fifos[node].size()};
+      info.input_fifos = std::span<RingBuffer_Edge *>{input_fifos[node].begin(),
+                                                      input_fifos[node].size()};
 
       output_fifos[node].reserve(
           node.getAllOutputs()
@@ -300,8 +299,8 @@ struct RingBufferSchedulerPass::Impl {
       for (auto edge_info : output_fifos[node]) {
         assert(edge_info != nullptr);
       }
-      info.output_fifos = Span<RingBuffer_Edge *>{output_fifos[node].begin(),
-                                                  output_fifos[node].size()};
+      info.output_fifos = std::span<RingBuffer_Edge *>{
+          output_fifos[node].begin(), output_fifos[node].size()};
     }
 
     std::vector<LLVM::LLVMFuncOp> wrappers;

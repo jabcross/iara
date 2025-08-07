@@ -46,6 +46,16 @@
         "--no-scheduler"
       ],
       "description": "Which args to pass to experiment",
+    },
+    {
+      "id": "top_level_name",
+      "type": "pickString",
+      "options": [
+        "run",
+        "top_parallel_degridder",
+        "top_parallel_degridder_complete",
+      ],
+      "description": "Name of top level actor",
     }
   ],
   "configurations": [
@@ -142,6 +152,47 @@
       ]
     },
     {
+      "name": "(gdb) Compiler (file, top level name)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--iara-canonicalize",
+        "--flatten",
+        "-mlir-print-stacktrace-on-diagnostic",
+        "--mlir-print-ir-after-failure",
+        "--${input:scheduler}=main-actor=${input:top_level_name}",
+        "${file}"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "POLYGEIST_MLIR_CLANG_BIN",
+          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
+        },
+        {
+          "name": "LLVM_PROJECT",
+          "value": "${workspaceFolder}/../Polygeist/llvm-project"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "build-iara.sh",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
       "name": "(lldb) Compiler (file)",
       "type": "lldb-dap",
       "request": "launch",
@@ -188,6 +239,30 @@
       ]
     },
     {
+      "name": "(gdb) Debug executable",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${file}",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      // "preLaunchTask": "Build test",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        // {
+        //   "description": "Set Disassembly Flavor to Intel",
+        //   "text": "-gdb-set disassembly-flavor intel",
+        //   "ignoreFailures": true
+        // }
+      ]
+    },
+    {
       "name": "(lldb) Runtime test",
       "type": "lldb-dap",
       "request": "launch",
@@ -198,6 +273,16 @@
       ],
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "preLaunchTask": "Build test",
+    },
+    {
+      "name": "(lldb) Debug executable",
+      "type": "lldb-dap",
+      "request": "launch",
+      "program": "${file}",
+      "args": [],
+      "env": [],
+      "cwd": "${fileDirname}",
+      // "preLaunchTask": "Build test",
     },
     {
       "type": "lldb",

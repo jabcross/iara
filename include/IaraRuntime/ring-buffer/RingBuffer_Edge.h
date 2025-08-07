@@ -1,7 +1,6 @@
 #ifndef IARARUNTIME_RINGBUFFER_RINGBUFFEREDGE_H
 #define IARARUNTIME_RINGBUFFER_RINGBUFFEREDGE_H
 
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include <cstdlib>
@@ -38,7 +37,7 @@ struct RingBuffer_Edge {
 
   char *name;
   StaticInfo info;
-  Span<const char> delay_data;
+  std::span<const char> delay_data;
   RingBuffer_Node *consumer;
   RingBuffer_Node *producer;
   MutexRingBuffer *queue;
@@ -46,7 +45,7 @@ struct RingBuffer_Edge {
   RingBuffer_Edge() = default;
   RingBuffer_Edge(char *name,
                   StaticInfo info,
-                  Span<const char> delay_data,
+                  std::span<const char> delay_data,
                   RingBuffer_Node *consumer,
                   RingBuffer_Node *producer,
                   MutexRingBuffer *queue)

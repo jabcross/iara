@@ -1,4 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/Common/Codegen/Codegen.h"
 #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
@@ -7,12 +8,11 @@
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
-#include <boost/describe.hpp>
-#include <boost/mp11.hpp>
-#include <boost/mp11/algorithm.hpp>
+// #include <boost/describe.hpp>
+// #include <boost/mp11.hpp>
+// #include <boost/mp11/algorithm.hpp>
 #include <cassert>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -29,6 +29,7 @@
 #include <mlir/Support/LLVM.h>
 #include <span>
 
+// Specializations require common namespace
 namespace iara::passes::common::codegen {
 
 // template <> struct GetMLIRType<VirtualFIFO_Node::StaticInfo> {
@@ -70,41 +71,66 @@ namespace iara::passes::common::codegen {
 
 template <class T> struct AsValue {};
 
-template <class T>
-concept IsDescribed = requires {
-  boost::describe::describe_members<T, boost::describe::mod_public>{};
-};
+// template <class T>
+// concept IsDescribed = requires {
+//   boost::describe::describe_members<T, boost::describe::mod_public>{};
+// };
+
+// template <class T>
+//   requires IsDescribed<T>
+// struct AsValue<T> {
+//   static Value get(OpBuilder builder, Location loc, T &_struct) {
+//     using namespace iara::util::foreachtype;
+//     static_assert(sizeof(T) == sizeof(typename T::TupleType));
+//     DEF_OP(Value,
+//            struct_value,
+//            LLVM::UndefOp,
+//            builder,
+//            loc,
+//            getMLIRType<T>(builder.getContext()));
+//     Vec<Value> members;
+
+//     size_t counter = 0;
+
+//     boost::mp11::mp_for_each<
+//         boost::describe::describe_members<T, boost::describe::mod_public>>(
+//         [&](auto member_ptr) {
+//           auto val = _struct.*member_ptr.pointer;
+//           auto value = AsValue<decltype(val)>::get(builder, loc, val);
+//           members.push_back(value);
+//           struct_value = CREATE(LLVM::InsertValueOp,
+//                                 builder,
+//                                 loc,
+//                                 struct_value,
+//                                 value,
+//                                 counter++);
+//         });
+
+//     return struct_value;
+//   }
+// };
 
 template <class T>
-  requires IsDescribed<T>
+  requires NamedTupleLikeStruct<T>
 struct AsValue<T> {
   static Value get(OpBuilder builder, Location loc, T &_struct) {
-    using namespace iara::util::foreachtype;
-    static_assert(sizeof(T) == sizeof(typename T::TupleType));
+    auto [... elems] = to_tuple(_struct);
+
+    Vec<Value> members = {
+        (AsValue<decltype(elems)>::get(builder, loc, elems))...};
+
     DEF_OP(Value,
            struct_value,
            LLVM::UndefOp,
            builder,
            loc,
            getMLIRType<T>(builder.getContext()));
-    Vec<Value> members;
 
     size_t counter = 0;
-
-    boost::mp11::mp_for_each<
-        boost::describe::describe_members<T, boost::describe::mod_public>>(
-        [&](auto member_ptr) {
-          auto val = _struct.*member_ptr.pointer;
-          auto value = AsValue<decltype(val)>::get(builder, loc, val);
-          members.push_back(value);
-          struct_value = CREATE(LLVM::InsertValueOp,
-                                builder,
-                                loc,
-                                struct_value,
-                                value,
-                                counter++);
-        });
-
+    for (auto member : members) {
+      struct_value = CREATE(
+          LLVM::InsertValueOp, builder, loc, struct_value, member, counter++);
+    }
     return struct_value;
   }
 };
@@ -137,19 +163,21 @@ template <class T> Value asValue(OpBuilder builder, Location loc, T value) {
   return AsValue<T>::get(builder, loc, value);
 }
 
-LLVM::LLVMStructType getLiteralLLVMStructType(MLIRContext *ctx,
-                                              Vec<Type> types) {
-  return LLVM::LLVMStructType::getLiteral(ctx, types);
-}
+Value createIdentifiedLLVMStructValue(OpBuilder builder,
+                                      Location loc,
+                                      StringRef name,
+                                      Vec<std::pair<Type, Value>> pairs) {
 
-Value createLLVMStruct(OpBuilder builder,
-                       Location loc,
-                       Vec<std::pair<Type, Value>> pairs) {
+  auto struct_type =
+      LLVM::LLVMStructType::getIdentified(builder.getContext(), name);
 
-  auto struct_type = getLiteralLLVMStructType(
-      builder.getContext(), pairs | util::range::Map([](auto pair) {
-                              return pair.first;
-                            }) | util::range::IntoVector());
+  auto types = pairs | util::range::Map([](auto pair) { return pair.first; }) |
+               util::range::IntoVector();
+
+  if (!struct_type.isInitialized()) {
+    auto res = struct_type.setBody(types, false);
+    assert(res.succeeded());
+  }
 
   DEF_OP(Value, struct_value, LLVM::UndefOp, builder, loc, struct_type);
 
@@ -562,9 +590,10 @@ struct CodegenStaticData::Impl {
                                  node_codegen_data.name,
                                  LLVM::linkage::Linkage::External);
 
-    auto codegen_info_val = createLLVMStruct(
+    auto codegen_info_val = createIdentifiedLLVMStructValue(
         builder,
         loc,
+        VirtualFIFO_Node_CodegenInfo::STRUCT_NAME,
         {
             {opaque_ptr, name_global},
             {opaque_ptr, buildWrapper(builder, loc, node_codegen_data)},
@@ -572,15 +601,19 @@ struct CodegenStaticData::Impl {
             {getSpanType(ctx), output_fifos_placeholder},
         });
 
-    auto runtime_info_val = createLLVMStruct(
-        builder, loc, {{opaque_ptr, getNullPtr(builder, loc)}});
+    auto runtime_info_val = createIdentifiedLLVMStructValue(
+        builder,
+        loc,
+        VirtualFIFO_Node_RuntimeInfo::STRUCT_NAME,
+        {{opaque_ptr, getNullPtr(builder, loc)}});
 
-    auto node_info_val =
-        createLLVMStruct(builder,
-                         loc,
-                         {{static_info_val.getType(), static_info_val},
-                          {codegen_info_val.getType(), codegen_info_val},
-                          {runtime_info_val.getType(), runtime_info_val}});
+    auto node_info_val = createIdentifiedLLVMStructValue(
+        builder,
+        loc,
+        VirtualFIFO_Node::STRUCT_NAME,
+        {{static_info_val.getType(), static_info_val},
+         {codegen_info_val.getType(), codegen_info_val},
+         {runtime_info_val.getType(), runtime_info_val}});
 
     return node_info_val;
   }
@@ -646,9 +679,10 @@ struct CodegenStaticData::Impl {
                                  edge_name,
                                  LLVM::linkage::Linkage::External);
 
-    Value codegen_info_val = createLLVMStruct(
+    Value codegen_info_val = createIdentifiedLLVMStructValue(
         builder,
         loc,
+        VirtualFIFO_Edge_CodegenInfo::STRUCT_NAME,
         {{opaque_ptr, name_global},
          {getSpanType(ctx), getDelayData(builder, loc, edge_codegen_data)},
          {opaque_ptr, consumer_ptr},
@@ -656,11 +690,12 @@ struct CodegenStaticData::Impl {
          {opaque_ptr, alloc_node_ptr},
          {opaque_ptr, next_in_chain_ptr}});
 
-    Value edge_info_val = createLLVMStruct(
+    Value edge_info_val = createIdentifiedLLVMStructValue(
         builder,
         loc,
-        {{getMLIRType<VirtualFIFO_Edge::StaticInfo>(ctx), static_info_val},
-         {getMLIRType<VirtualFIFO_Edge::CodegenInfo>(ctx), codegen_info_val}});
+        VirtualFIFO_Edge::STRUCT_NAME,
+        {{getMLIRType<VirtualFIFO_Edge_StaticInfo>(ctx), static_info_val},
+         {getMLIRType<VirtualFIFO_Edge_CodegenInfo>(ctx), codegen_info_val}});
 
     return edge_info_val;
   };
@@ -750,8 +785,8 @@ struct CodegenStaticData::Impl {
                           edge_codegen_datas.size());
 
       for (auto &pair : edge_codegen_datas) {
-        inserter(makeEdgeInfo(*builder, pair, pair.edge_op->getLoc()),
-                 pair.edge_op->getLoc());
+        auto info = makeEdgeInfo(*builder, pair, pair.edge_op->getLoc());
+        inserter(info, pair.edge_op->getLoc());
       }
     }
 

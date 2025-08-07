@@ -1,4 +1,3 @@
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Node.h"
@@ -17,17 +16,18 @@ extern std::mutex debug_mutex;
 
 void RingBuffer_Node::init() {};
 
-void freeWorkingMemory(Span<RingBuffer_Chunk> working_memory) {
-  free(working_memory.ptr[0].allocated);
-  free(working_memory.ptr);
+// working_memory is a vector of contiguous chunks. it's ok to free the first.
+void freeWorkingMemory(std::vector<RingBuffer_Chunk> &&working_memory) {
+  assert(working_memory.size() >= 1);
+  free(working_memory[0].allocated);
 }
 
-Span<RingBuffer_Chunk> allocWorkingMemory(RingBuffer_Node *node) {
+std::vector<RingBuffer_Chunk> allocWorkingMemory(RingBuffer_Node *node) {
 
-  size_t num_args = node->input_fifos.extents + node->output_fifos.extents;
+  size_t num_args = node->input_fifos.size() + node->output_fifos.size();
 
-  RingBuffer_Chunk *args =
-      (RingBuffer_Chunk *)calloc(sizeof(RingBuffer_Chunk), num_args);
+  std::vector<RingBuffer_Chunk> args;
+  args.reserve(num_args);
 
   i8 *working_memory = (i8 *)malloc(node->info.working_memory_size);
 
@@ -35,36 +35,40 @@ Span<RingBuffer_Chunk> allocWorkingMemory(RingBuffer_Node *node) {
   // fflush(stderr);
 
   i8 *ptr = working_memory;
-  i64 arg_idx = 0;
-  for (auto input : node->input_fifos.asSpan()) {
-    args[arg_idx] =
-        RingBuffer_Chunk{working_memory, ptr, input->info.cons_rate};
+  for (auto input : node->input_fifos) {
+    args.emplace_back(working_memory, ptr, input->info.cons_rate);
     ptr += input->info.cons_rate_aligned;
-    arg_idx++;
   }
-  for (i64 i = node->info.num_inouts, e = node->output_fifos.extents; i < e;
+  for (i64 i = node->info.num_inouts, e = node->output_fifos.size(); i < e;
        i++) {
-    auto output = node->output_fifos.asSpan()[i];
-    args[arg_idx] =
-        RingBuffer_Chunk{working_memory, ptr, output->info.prod_rate};
+    auto output = node->output_fifos[i];
+    args.emplace_back(working_memory, ptr, output->info.prod_rate);
     ptr += output->info.prod_rate_aligned;
-    arg_idx++;
   }
   assert(ptr - working_memory == node->info.working_memory_size);
 
-  return Span<RingBuffer_Chunk>{args, num_args};
+  return args;
 }
 
-void popInputs(RingBuffer_Node *node, Span<RingBuffer_Chunk> working_memory) {
-#pragma omp taskgroup
+void popInputs(RingBuffer_Node *node,
+               std::span<RingBuffer_Chunk> working_memory) {
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskgroup
+#endif
+
   {
-    for (size_t i = 0; i < node->input_fifos.extents; i++) {
-      auto edge_ptr = node->input_fifos.ptr[i];
-      RingBuffer_Chunk c = working_memory.ptr[i];
-#pragma omp task firstprivate(edge_ptr, c)
+    for (size_t i = 0; i < node->input_fifos.size(); i++) {
+      auto edge_ptr = node->input_fifos[i];
+      RingBuffer_Chunk c = working_memory[i];
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task firstprivate(edge_ptr, c)
+#endif
       {
         while (!edge_ptr->tryPop(c)) {
-#pragma omp taskyield
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskyield
+#endif
+
           std::this_thread::sleep_for(std::chrono::microseconds(1));
         }
       }
@@ -72,17 +76,23 @@ void popInputs(RingBuffer_Node *node, Span<RingBuffer_Chunk> working_memory) {
   }
 }
 
-void pushOutputs(RingBuffer_Node *node, Span<RingBuffer_Chunk> working_memory) {
-#pragma omp taskgroup
+void pushOutputs(RingBuffer_Node *node,
+                 std::span<RingBuffer_Chunk> working_memory) {
+#ifndef IARA_DISABLE_OMP
+  #pragma omp taskgroup
+#endif
   {
     for (size_t output_fifo_index = 0,
-                num_output_fifos = node->output_fifos.extents,
+                num_output_fifos = node->output_fifos.size(),
                 arg_index = node->info.num_ins;
          output_fifo_index < num_output_fifos;
          output_fifo_index++, arg_index++) {
-      auto edge_ptr = node->output_fifos.ptr[output_fifo_index];
-      RingBuffer_Chunk chunk = working_memory.ptr[arg_index];
-#pragma omp task firstprivate(edge_ptr) firstprivate(chunk)
+      auto edge_ptr = node->output_fifos[output_fifo_index];
+      RingBuffer_Chunk chunk = working_memory[arg_index];
+#ifndef IARA_DISABLE_OMP
+  #pragma omp task firstprivate(edge_ptr) firstprivate(chunk)
+#endif
+
       {
         edge_ptr->push(chunk);
       }
@@ -118,7 +128,7 @@ void RingBuffer_Node::run_iteration() {
     debug_mutex.unlock();
 #endif
 
-    wrapper(working_memory.ptr);
+    wrapper(&working_memory[0]);
     pushOutputs(this, working_memory);
 
 #ifdef IARA_DEBUGPRINT
@@ -132,6 +142,6 @@ void RingBuffer_Node::run_iteration() {
     debug_mutex.unlock();
 #endif
 
-    freeWorkingMemory(working_memory);
+    freeWorkingMemory(std::move(working_memory));
   }
 }

@@ -2,7 +2,6 @@
 #define IARARUNTIME_RINGBUFFER_RINGBUFFERNODE_H
 
 #include "Iara/Util/CommonTypes.h"
-#include "Iara/Util/Span.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Edge.h"
 #include <cstddef>
@@ -33,8 +32,8 @@ struct RingBuffer_Node {
   char *name;
   StaticInfo info;
   WrapperType *wrapper;
-  Span<RingBuffer_Edge *> input_fifos;
-  Span<RingBuffer_Edge *> output_fifos;
+  std::span<RingBuffer_Edge *> input_fifos;
+  std::span<RingBuffer_Edge *> output_fifos;
 
   // methods
 

@@ -42,12 +42,12 @@ void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
 
 // Pushes delay data into FIFOs.
 void VirtualFIFO_Edge::propagate_delays(VirtualFIFO_Chunk chunk) {
-  if (codegen_info.delay_data.extents > 0) {
-    assert((size_t)chunk.data_size >= codegen_info.delay_data.extents);
-    auto this_delay = chunk.take_back(codegen_info.delay_data.extents);
+  if (codegen_info.delay_data.size() > 0) {
+    assert((size_t)chunk.data_size >= codegen_info.delay_data.size_bytes());
+    auto this_delay = chunk.take_back(codegen_info.delay_data.size());
     memcpy(this_delay.data,
-           codegen_info.delay_data.ptr,
-           codegen_info.delay_data.extents);
+           codegen_info.delay_data.data(),
+           codegen_info.delay_data.size_bytes());
     push(this_delay);
   }
   if (chunk.data_size == 0 || codegen_info.next_in_chain == nullptr)
