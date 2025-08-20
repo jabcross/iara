@@ -13,8 +13,13 @@ cd $IARA_DIR/build
 export CC=$LLVM_INSTALL/bin/clang
 export CXX=$LLVM_INSTALL/bin/clang++
 
+# Set default build type to Debug if not specified
+if [ -z "$CMAKE_BUILD_TYPE" ]; then
+	export CMAKE_BUILD_TYPE="Debug"
+fi
+
 # cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Debug -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_DIR/build/bin/llvm-lit -DLLVM_PARALLEL_LINK_JOBS=1 -DLLVM_DIR=$LLVM_DIR/lib/cmake/llvm -DLLVM_USE_LINKER=mold
-cmake -G "Unix Makefiles" .. -DCMAKE_BUILD_TYPE=Debug -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_DIR/build/bin/llvm-lit -DLLVM_PARALLEL_LINK_JOBS=1 -DLLVM_DIR=$LLVM_DIR/lib/cmake/llvm -DLLVM_USE_LINKER=mold
+cmake -G "Unix Makefiles" .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_DIR/build/bin/llvm-lit -DLLVM_PARALLEL_LINK_JOBS=1 -DLLVM_DIR=$LLVM_DIR/lib/cmake/llvm -DLLVM_USE_LINKER=mold
 
 sed -i 's/ -fno-lifetime-dse//' compile_commands.json
 

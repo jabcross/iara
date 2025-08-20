@@ -21,6 +21,7 @@
 #include <mlir/IR/Types.h>
 #include <mlir/IR/ValueRange.h>
 #include <mlir/Support/TypeID.h>
+#include <span>
 #include <tuple>
 #include <type_traits>
 

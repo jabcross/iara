@@ -20,12 +20,8 @@
   "lldb.consoleMode": "commands",
   "clangd.path": "/home/jabcross/repos/clangir/build/bin/clangd",
   "clangd.arguments": [
-    "--inlay-hints",
-    "-log=verbose",
-    "-pretty",
     "--background-index",
     "--compile-commands-dir=/home/jabcross/repos/iara/build",
-    "-j",
-    "5"
+    "-j=10"
   ]
 }

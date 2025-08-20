@@ -2,6 +2,7 @@
 #include "common.h"
 #include "constants.h"
 #include <algorithm>
+#include <cassert>
 #include <omp.h>
 #include <span>
 
@@ -12,19 +13,27 @@ constexpr size_t grid_size = GRID_SIZE;
 constexpr size_t num_kernels = NUM_KERNELS;
 constexpr size_t num_visibilities = NUM_VISIBILITIES;
 
-template <class T, size_t in_size, size_t out_size>
-void _broadcast(std::span<T, in_size> in, std::span<T, out_size> out) {
-  static_assert(out_size % in_size == 0);
-  for (auto i = std::begin(out), e = std::end(out); i < e; i += in_size) {
+template <class T> void _broadcast(std::span<T> in, std::span<T> out) {
+  assert(out.size() % in.size() == 0);
+  for (auto i = std::begin(out), e = std::end(out); i < e; i += in.size()) {
     std::copy(std::begin(in), std::end(in), i);
   }
 }
 
 // Broadcast impls
-extern "C" {
+extern "C" {}
 
-void broadcast_kernels_parallel(float2 in[total_kernels_samples],
+void broadcast_kernels_parallel(float2 const in[total_kernels_samples],
                                 float2 out[num_chunk * total_kernels_samples]) {
+  int x = 1;
+  int *xp = 1;
+  int const y = 2;
+  int const *yp = 2;
+  int &xr = x;
+
+  std::span hello = {};
+  std::span const world = {};
+
   _broadcast(std::span(in, total_kernels_samples),
              std::span(out, num_chunk * total_kernels_samples));
 }
@@ -48,6 +57,10 @@ void broadcast_uvw_coord(float3 in[num_visibilities],
 }
 
 void broadcast_config_parallel(Config in[1], Config out[num_chunk]) {
+  struct X {
+    int a;
+  };
+  X{}.a;
   _broadcast(std::span(in, 1), std::span(out, num_chunk));
 }
 
@@ -59,10 +72,7 @@ void exec() {
 
 int main() {
 
-  omp_set_num_threads(1);
-
   iara_runtime_exec(exec);
 
   return 0;
-}
 }

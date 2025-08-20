@@ -1,0 +1,6 @@
+{
+  "clangd.path": "/home/jabcross/llvm-install/bin/clangd",
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/build"
+  ]
+}

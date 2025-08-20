@@ -10,7 +10,7 @@
     ___OP.getOperation()->setAttr("debug_loc",                                 \
                                   getDebugLoc(___BUILDER, ___debug_loc));
 #else
-  #define IARA_SET_DEBUG_LOC_ATTR
+  #define IARA_SET_DEBUG_LOC_ATTR(___debug_loc)
 #endif
 
 #ifdef IARA_DEBUG
@@ -18,7 +18,7 @@
     ___OP.getOperation()->setAttr(                                             \
         "debug_loc", getDebugLoc(___BUILDER, ___debug_loc, ___valuename));
 #else
-  #define IARA_SET_DEBUG_LOC_ATTR_NAMED
+  #define IARA_SET_DEBUG_LOC_ATTR_NAMED(___debug_loc, ___valuename)
 #endif
 
 #ifdef IARA_DEBUG

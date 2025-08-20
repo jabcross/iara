@@ -38,7 +38,7 @@ iara.actor @degridder_actor {
   %iterator = iara.node @iterator out tensor<NUM_CHUNK_VALUExi32>
   %e_iterator = iara.edge %iterator : tensor<NUM_CHUNK_VALUExi32> ->  i32
 
-  %output_visibilities = iara.node @std_degridding_parallel
+  %output_visibilities = iara.node @std_degridding_parallel2
     in
       %e_kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
       %e_support: tensor<NUM_KERNELS_VALUEx!int2>,
@@ -50,109 +50,6 @@ iara.actor @degridder_actor {
 
   %out = iara.edge %output_visibilities : tensor<NUM_VISIB_D_N_CHUNK_VALUEx!float2> -> tensor<NUM_VISIBILITIES_VALUEx!float2>
   iara.out(%out: tensor<NUM_VISIBILITIES_VALUEx!float2>)
-}
-
-iara.actor @top_parallel_degridder_complete {
-
-  %kernels, %kernel_supports = iara.node @generate_kernel
-    out
-      tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
-      tensor<NUM_KERNELS_VALUEx!int2>
-
-  %config = iara.node @config_struct_set_up
-    out !Config
-
-  %input_grid = iara.node @load_image_from_file
-    in %config : !Config
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  %vis_uvw_coords = iara.node @visibility_host_set_up2
-    in %config: !Config
-    out tensor<NUM_VISIBILITIES_VALUEx!float3>
-
-  iara.node @export_kernels_to_csv
-    in %kernels: tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>
-
-  iara.node @export_supports_to_csv
-    in %kernel_supports: tensor<NUM_KERNELS_VALUEx!int2>
-
-  %fourier = iara.node @fft_shift_real_to_complex_actor
-    in
-      %config : !Config,
-      %input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-
-
-  %uv_grid_out = iara.node @CUFFT_EXECUTE_FORWARD_C2C_actor
-    in %fourier : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  iara.node @export_image_to_csv_input_grid
-    in %fourier: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-
-  %uv_grid_out2 = iara.node @fft_shift_complex_to_complex_actor
-    in %uv_grid_out: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  iara.node @export_image_to_csv_uv_grid
-    in %uv_grid_out: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-
-  %output_visibilities = iara.node @degridder_actor
-    in
-      %kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
-      %kernel_supports : tensor<NUM_KERNELS_VALUEx!int2>,
-      %uv_grid_out2 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
-      %config: !Config
-    out tensor<NUM_VISIBILITIES_VALUEx!float2>
-
-  iara.node @export_image_to_csv_uv_grid_shift
-    in %uv_grid_out2 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-
-
-  %grid = iara.node @gridding_cpu
-    in
-      %output_visibilities : tensor<NUM_VISIBILITIES_VALUEx!float2>,
-      %kernel_supports : tensor<NUM_KERNELS_VALUEx!int2>,
-      %kernels : tensor<TOTAL_KERNELS_SAMPLES_VALUEx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
-      %config : !Config,
-      %uv_grid_out : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  iara.node @convert_vis_to_csv
-    in
-      %output_visibilities : tensor<NUM_VISIBILITIES_VALUEx!float2>,
-      %vis_uvw_coords : tensor<NUM_VISIBILITIES_VALUEx!float3>,
-      %config : !Config
-
-
-
-  %uv_grid_out3 = iara.node @CUFFT_EXECUTE_INVERSE_C2C_actor
-    in %grid : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  iara.node @export_image_to_csv_gridding
-    in %grid : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-
-
-  %dirty_image = iara.node @fft_complex_to_real_actor
-    in %uv_grid_out3 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-    out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUExf32>
-
-  iara.node @export_image_to_csv_reconstructed
-    in %uv_grid_out3 : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
-
-  iara.node @export_image_to_csv
-    in
-      %dirty_image : tensor<GRID_SIZE_VALUExGRID_SIZE_VALUExf32>,
-      %config : !Config
-
 }
 
 
@@ -178,8 +75,8 @@ iara.actor @top_parallel_degridder {
 
   %fourier = iara.node @fft_shift_real_to_complex_actor
     in
-      %config : !Config,
-      %input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
+      %input_grid: tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>,
+      %config : !Config
     out tensor<GRID_SIZE_VALUExGRID_SIZE_VALUEx!float2>
 
 

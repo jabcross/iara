@@ -67,7 +67,7 @@ extern "C" void iara_runtime_exec(void (*exec)()) {
   auto &edges = iara_runtime_edges;
 
 #ifndef IARA_DISABLE_OMP
-  #pragma omp parallel if (false)
+  #pragma omp parallel
   {
   #pragma omp single
     {

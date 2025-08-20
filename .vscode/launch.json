@@ -243,7 +243,10 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${file}",
-      "args": [],
+      "args": [
+        ">",
+        "output.txt"
+      ],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "externalConsole": false,
@@ -253,7 +256,7 @@
         {
           "description": "Enable pretty-printing for gdb",
           "text": "-enable-pretty-printing",
-          "ignoreFailures": true
+          "ignoreFailures": true,
         },
         // {
         //   "description": "Set Disassembly Flavor to Intel",

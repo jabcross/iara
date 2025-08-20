@@ -4,6 +4,7 @@
 #include "IaraRuntime/ring-buffer/MutexRingBuffer.h"
 #include "IaraRuntime/ring-buffer/RingBuffer_Chunk.h"
 #include <cstdlib>
+#include <span>
 
 struct RingBuffer_Node;
 

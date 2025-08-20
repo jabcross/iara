@@ -114,7 +114,6 @@ if [[ $INSTANCE_NAME =~ P[0-9]+_([^_]+)_([^_]+)_([^_]+)_([^_]+).*\.scenario ]]; 
 
   instantiate_template "$EXPERIMENT_DIR/constants.h.template" "constants.h" "$SIZE" "$CORES" "$NUM_KERNEL_SUPPORT" "$NUM_CHUNKS"
 
-  cp $EXPERIMENT_DIR/main.cpp main.cpp
 
 else
   echo "Warning: Could not parse scenario parameters from instance name: $INSTANCE_NAME"
@@ -125,7 +124,11 @@ MAIN_ACTOR_NAME=$(python -c "print('top_parallel_degridder_complete' if 'complet
 
 echo $MAIN_ACTOR_NAME
 
-iara-opt --iara-canonicalize --flatten --$SCHEDULER_MODE=main-actor=$MAIN_ACTOR_NAME "topology.mlir" > "schedule.mlir"
+rm -f schedule.mlir
+rm -f $EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_stderr.txt
+
+/usr/bin/time -v -o "$EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_scheduling_time.txt" timeout 3m iara-opt --iara-canonicalize --flatten --$SCHEDULER_MODE=main-actor=$MAIN_ACTOR_NAME "topology.mlir" >"schedule.mlir" 2>$EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_stderr.txt
+
 
 # Check if iara-opt succeeded
 if [ $? -ne 0 ]; then
@@ -133,11 +136,40 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Check if schedule.mlir exists and isn't empty
+if [ ! -s "schedule.mlir" ]; then
+  echo "Error: schedule.mlir is empty or doesn't exist. Exiting."
+  exit 1
+fi
+
 # export EXPERIMENT_DIR=
 
 sh -x mlir-to-llvmir.sh schedule.mlir
 
-cmake -D CMAKE_CXX_FLAGS='-DIARA_DEBUGPRINT' --log-level=VERBOSE $SOURCE_DIR -B $INSTANCE_BUILD_DIR
+# Check if iara-opt succeeded
+if [ $? -ne 0 ]; then
+    echo "Error: mlir-to-llvmir.sh failed. Exiting."
+    exit 1
+fi
+
+$LLVM_INSTALL/bin/llc -filetype=obj schedule.ll -o schedule.o
+
+# Check if we're running from a build directory
+if [[ $(basename $(pwd)) != "build" ]]; then
+  echo "Error: This script must be run from a build directory."
+  exit 1
+fi
+rm main.cpp
+cp $EXPERIMENT_DIR/main.cpp main.cpp
+
+cd ..
+
+rm CMakeLists.txt
+cp $EXPERIMENT_DIR/Code/CMakeLists.txt CMakeLists.txt
+
+cmake --log-level=VERBOSE -B build 
+
+cd build
 
 make
 

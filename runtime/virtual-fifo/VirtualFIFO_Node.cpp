@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <gtl/phmap.hpp>
+#include <omp.h>
 
 #ifdef IARA_DEBUGPRINT
   #include "IaraRuntime/util/DebugPrint.h"
@@ -146,16 +147,29 @@ void VirtualFIFO_Node::prime(i64 seq) {
 }
 
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
+
 #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor("fire(): Firing %ld of %s\n", seq, codegen_info.name);
+  {
+    auto offset = std::hash<std::thread::id>{};
+    (std::this_thread::get_id());
+    debugPrintThreadColor("fire(): Firing %ld of %s from thread %lu\n",
+                          seq,
+                          codegen_info.name,
+                          offset);
+  }
 #endif
   assert((i64)args.size() == static_info.num_args);
   [[maybe_unused]] auto _this = this;
 
 #ifndef IARA_DISABLE_OMP
+  #ifdef IARA_DEBUGPRINT
+  debugPrintThreadColor("Omp is enabled, num threads =  %lu",
+                        omp_get_num_threads());
+  #endif
   #pragma omp task firstprivate(_this, args, seq)
 #endif
   {
+
     codegen_info.wrapper(seq, args.data());
   }
 
@@ -223,7 +237,6 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
 
   // Placeholder: figure out a way to keep which blocks were already allocated
   // without an infinitely growing map.
-
   // All first allocs run on init.
   if (firing == 0)
     return;
