@@ -21,19 +21,10 @@ template <class T> void _broadcast(std::span<T> in, std::span<T> out) {
 }
 
 // Broadcast impls
-extern "C" {}
+extern "C" {
 
-void broadcast_kernels_parallel(float2 const in[total_kernels_samples],
+void broadcast_kernels_parallel(float2 in[total_kernels_samples],
                                 float2 out[num_chunk * total_kernels_samples]) {
-  int x = 1;
-  int *xp = 1;
-  int const y = 2;
-  int const *yp = 2;
-  int &xr = x;
-
-  std::span hello = {};
-  std::span const world = {};
-
   _broadcast(std::span(in, total_kernels_samples),
              std::span(out, num_chunk * total_kernels_samples));
 }
@@ -57,10 +48,6 @@ void broadcast_uvw_coord(float3 in[num_visibilities],
 }
 
 void broadcast_config_parallel(Config in[1], Config out[num_chunk]) {
-  struct X {
-    int a;
-  };
-  X{}.a;
   _broadcast(std::span(in, 1), std::span(out, num_chunk));
 }
 
@@ -68,6 +55,7 @@ void exec() {
   iara_runtime_init();
 
   iara_runtime_run_iteration(0);
+}
 }
 
 int main() {

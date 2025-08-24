@@ -135,8 +135,8 @@ file(
     $ENV{IARA_DIR}/runtime/$ENV{SCHEDULER_MODE}/*.cpp
 )
 
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -g -Wall")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-multiple-definition")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall")
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-multiple-definition")
 
 #message("source_files_CPU : ${source_files_CPU}")
 

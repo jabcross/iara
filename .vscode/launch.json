@@ -283,7 +283,11 @@
       "request": "launch",
       "program": "${file}",
       "args": [],
-      "env": [],
+      "env": [
+        "OMP_NUM_THREADS=1",
+        "OMP_PROC_BIND=true",
+        "OMP_PLACES=cores"
+      ],
       "cwd": "${fileDirname}",
       // "preLaunchTask": "Build test",
     },

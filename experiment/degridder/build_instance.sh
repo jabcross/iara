@@ -101,12 +101,11 @@ instantiate_template() {
 }
 
 # Parse scenario parameters from instance name
-# Format: P{N}_{size}_{cores}_{num_kernel_support}_{num_chunks}[_complete].scenario
-if [[ $INSTANCE_NAME =~ P[0-9]+_([^_]+)_([^_]+)_([^_]+)_([^_]+).*\.scenario ]]; then
+if [[ $INSTANCE_NAME =~ generated_([^_]+)_([^_]+)cores_([^_]+)chunks_([^_]+)supports\.scenario ]]; then
   SIZE="${BASH_REMATCH[1]}"
   CORES="${BASH_REMATCH[2]}"
-  NUM_KERNEL_SUPPORT="${BASH_REMATCH[3]}"
-  NUM_CHUNKS="${BASH_REMATCH[4]}"
+  NUM_CHUNKS="${BASH_REMATCH[3]}"
+  NUM_KERNEL_SUPPORT="${BASH_REMATCH[4]}"
   
   echo "Instantiating templates for: size=$SIZE, cores=$CORES, kernel_support=$NUM_KERNEL_SUPPORT, chunks=$NUM_CHUNKS"
 
@@ -117,7 +116,7 @@ if [[ $INSTANCE_NAME =~ P[0-9]+_([^_]+)_([^_]+)_([^_]+)_([^_]+).*\.scenario ]]; 
 
 else
   echo "Warning: Could not parse scenario parameters from instance name: $INSTANCE_NAME"
-  echo "Expected format: P{N}_{size}_{cores}_{num_kernel_support}_{num_chunks}[_complete].scenario"
+  echo "Expected format: generated_{size}_{cores}cores_{chunks}chunks_{supports}supports.scenario"
 fi
 
 MAIN_ACTOR_NAME=$(python -c "print('top_parallel_degridder_complete' if 'complete' in '$INSTANCE_NAME' else 'top_parallel_degridder')")
@@ -167,7 +166,7 @@ cd ..
 rm CMakeLists.txt
 cp $EXPERIMENT_DIR/Code/CMakeLists.txt CMakeLists.txt
 
-cmake --log-level=VERBOSE -B build 
+cmake --log-level=VERBOSE -DCMAKE_BUILD_TYPE=Release -B build
 
 cd build
 

@@ -16,6 +16,10 @@
   #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
+#ifndef CLAMP
+  #define CLAMP(v, m, M) ((v > M) ? (M) : ((v < m) ? (m) : (v)))
+#endif
+
 float2 complex_mult(const float2 z1, const float2 z2) {
   float2 result;
   result.x = z1.x * z2.x - z1.y * z2.y;
@@ -70,15 +74,15 @@ void dump_inputs(int grid_size,
   fprintf(text, "oversampling_factor = %d\n", oversampling_factor);
   fprintf(text, "num_chunk = %d\n", num_chunk);
 
-  fprintf(text, "kernels\n");
+  fprintf(text, "kernels @ %lu\n", (size_t)kernels);
   for (int i = 0; i < total_kernels_samples; i++) {
     fprintf(text, "   %f %f\n", kernels[i].x, kernels[i].y);
   }
-  fprintf(text, "supports\n");
+  fprintf(text, "supports @ %lu\n", (size_t)kernel_supports);
   for (int i = 0; i < grid_size * grid_size; i++) {
     fprintf(text, "   %f %f\n", input_grid[i].x, input_grid[i].y);
   }
-  fprintf(text, "visibilities\n");
+  fprintf(text, "visibilities @ %lu \n", (size_t)vis_uvw_coords);
   for (int i = 0; i < num_visibilities; i++) {
     fprintf(text,
             "   %f %f %f\n",
@@ -134,7 +138,7 @@ void ensure_no_overlap(int grid_size,
 void std_degridding_parallel(int grid_size,
                              int num_visibilities,
                              int num_kernels,
-                             int total_kernels_samples,
+                             int total_kernel_samples,
                              int oversampling_factor,
                              int num_chunk,
                              float2 *kernels,
@@ -145,34 +149,6 @@ void std_degridding_parallel(int grid_size,
                              int *iterator,
                              float2 *output_visibilities) {
 
-  // dump_inputs(grid_size,
-  //             num_visibilities,
-  //             num_kernels,
-  //             total_kernels_samples,
-  //             oversampling_factor,
-  //             num_chunk,
-  //             kernels,
-  //             kernel_supports,
-  //             input_grid,
-  //             vis_uvw_coords,
-  //             config,
-  //             iterator,
-  //             output_visibilities);
-
-  // ensure_no_overlap(grid_size,
-  //                   num_visibilities,
-  //                   num_kernels,
-  //                   total_kernels_samples,
-  //                   oversampling_factor,
-  //                   num_chunk,
-  //                   kernels,
-  //                   kernel_supports,
-  //                   input_grid,
-  //                   vis_uvw_coords,
-  //                   config,
-  //                   iterator,
-  //                   output_visibilities);
-
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
 
@@ -181,40 +157,46 @@ void std_degridding_parallel(int grid_size,
          ts.tv_nsec / 1000000);
 
   memset(
-      output_visibilities, 0, sizeof(float2) * (num_visibilities / num_chunk));
-
-  FILE *kernel_indices = fopen("kernel_indices.txt", "w");
+      output_visibilities, 0, sizeof(float2) * (NUM_VISIBILITIES / NUM_CHUNK));
 
   int grid_center = grid_size / 2; // TODO possible to calculate once?
 
-  int total_items_processed = 0;
-
   for (int i = 0; i < (num_visibilities / num_chunk); ++i) {
+
+    int vis_idx = i + (*iterator);
+
+    vis_idx = CLAMP(vis_idx, 0, num_visibilities - 1);
+
+    assert(vis_idx >= 0 && vis_idx < num_visibilities);
+
+    float3 coords = vis_uvw_coords[vis_idx];
 
     // Calculate the w index based on the corrected z coordinate of the
     // visibilities
     int w_idx =
-        (int)(sqrt(fabs(vis_uvw_coords[i + (*iterator)].z * config->w_scale)) +
+        (int)(SQRT(ABS(vis_uvw_coords[i + (*iterator)].z * config->w_scale)) +
               0.5);
+    w_idx = CLAMP(w_idx, 0, num_kernels - 1);
+
+    assert(w_idx >= 0 && w_idx < num_kernels);
 
     // Retrieve the kernel thickness and offset for the w plane
     int half_support = kernel_supports[w_idx].x;
     int w_offset = kernel_supports[w_idx].y;
 
     // Calculate the grid position from the UV coordinates
-    float2 grid_pos = {
-        .x = vis_uvw_coords[i + (*iterator)].x * config->uv_scale,
-        .y = vis_uvw_coords[i + (*iterator)].y * config->uv_scale};
+    float2 grid_pos = {.x = coords.x * config->uv_scale,
+                       .y = coords.y * config->uv_scale};
 
     // Determine if the visibility should be conjugated based on the z
     // coordinate
-    float conjugate = (vis_uvw_coords[i + (*iterator)].z < 0.0) ? -1.0 : 1.0;
+    float conjugate = (coords.z < 0.0) ? -1.0 : 1.0;
     // Initialize the norm of the kernel coefficients for normalization
     float comm_norm = 0.f;
 
     // Iterate over the positions on the y-axis within the kernel window
-    for (int v = ceil(grid_pos.y - half_support);
-         v < ceil(grid_pos.y + half_support);
+    for (int v = CEIL(grid_pos.y - half_support);
+         v < CEIL(grid_pos.y + half_support);
          ++v) {
 
       // Correct the v index if necessary to respect the grid bounds
@@ -231,12 +213,12 @@ void std_degridding_parallel(int grid_size,
       // Determine the kernel index on the y-axis
       int2 kernel_idx;
       kernel_idx.y =
-          abs((int)round((corrected_v - grid_pos.y) * oversampling_factor));
+          abs((int)ROUND((corrected_v - grid_pos.y) * oversampling_factor));
       kernel_idx.y = MIN(kernel_width - 1, kernel_idx.y);
 
       // Iterate over the positions on the x-axis within the kernel window
-      for (int u = ceil(grid_pos.x - half_support);
-           u < ceil(grid_pos.x + half_support);
+      for (int u = CEIL(grid_pos.x - half_support);
+           u < CEIL(grid_pos.x + half_support);
            ++u) {
 
         int corrected_u = u;
@@ -250,7 +232,7 @@ void std_degridding_parallel(int grid_size,
 
         // Determine the kernel index on the x-axis
         kernel_idx.x =
-            abs((int)round((corrected_u - grid_pos.x) * oversampling_factor));
+            abs((int)ROUND((corrected_u - grid_pos.x) * oversampling_factor));
         kernel_idx.x = MIN(kernel_width - 1, kernel_idx.x);
 
         // Calculate the kernel index in the kernel array
@@ -258,24 +240,11 @@ void std_degridding_parallel(int grid_size,
                     kernel_idx.y * (half_support + 1) * oversampling_factor +
                     kernel_idx.x;
 
-        // fprintf(kernel_indices,
-        //         "%d %d %d %d %d %d\n",
-        //         i,
-        //         v,
-        //         corrected_v,
-        //         u,
-        //         corrected_u,
-        //         k_idx);
-
-        // fflush(kernel_indices);
+        k_idx = CLAMP(k_idx, 0, total_kernel_samples - 1);
+        assert(k_idx >= 0 && k_idx < total_kernel_samples);
 
         // Retrieve the kernel sample and apply conjugation if necessary
-
-        float2 kernel_sample = {};
-
-        if (k_idx < total_kernels_samples) {
-          kernel_sample = kernels[k_idx];
-        }
+        float2 kernel_sample = kernels[k_idx];
 
         kernel_sample.y *= conjugate;
 
@@ -284,12 +253,13 @@ void std_degridding_parallel(int grid_size,
         int grid_idx = (corrected_v + grid_center) * grid_size +
                        (corrected_u + grid_center);
 
-        // If the index is out of the grid, consider the input value as zero
-        float2 input_value = {};
+        grid_idx = CLAMP(grid_idx, 0, grid_size * grid_size - 1);
+        assert(grid_idx >= 0 && grid_idx < grid_size * grid_size);
 
-        if (grid_idx < grid_size * grid_size) {
-          input_value = input_grid[grid_idx];
-        }
+        // If the index is out of the grid, consider the input value as zero
+        float2 input_value;
+
+        input_value = input_grid[grid_idx];
 
         // Perform the complex product between the grid value and the kernel
         // sample
@@ -299,11 +269,11 @@ void std_degridding_parallel(int grid_size,
         comm_norm += kernel_sample.x * kernel_sample.x +
                      kernel_sample.y * kernel_sample.y;
 
+        assert(i >= 0 && i < num_visibilities / num_chunk);
+
         // Add the product to the final visibility result
         output_visibilities[i].x += prod.x;
         output_visibilities[i].y += prod.y;
-
-        total_items_processed++;
       }
     }
 
