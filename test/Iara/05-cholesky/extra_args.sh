@@ -1,2 +1,3 @@
-export EXTRA_KERNEL_ARGS='-DDIM=3 -DNB=3'
-EXTRA_LINKER_ARGS='-lblas -llapack'
+export EXTRA_KERNEL_ARGS='-DDIM=3 -DNB=3 -DVERBOSE'
+export EXTRA_LINKER_ARGS='-lblas -llapack'
+# export EXTRA_RUNTIME_ARGS='-DIARA_DEBUGPRINT'

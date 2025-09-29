@@ -8,15 +8,51 @@
 #include <sys/time.h>
 #include <sys/times.h>
 
-void dgemm_(const char *transa, const char *transb, int *l, int *n, int *m,
-            double *alpha, const void *a, int *lda, void *b, int *ldb,
-            double *beta, void *c, int *ldc);
-void dtrsm_(char *side, char *uplo, char *transa, char *diag, int *m, int *n,
-            double *alpha, double *a, int *lda, double *b, int *ldb);
-void dtrmm_(char *side, char *uplo, char *transa, char *diag, int *m, int *n,
-            double *alpha, double *a, int *lda, double *b, int *ldb);
-void dsyrk_(char *uplo, char *trans, int *n, int *k, double *alpha, double *a,
-            int *lda, double *beta, double *c, int *ldc);
+void dgemm_(const char *transa,
+            const char *transb,
+            int *l,
+            int *n,
+            int *m,
+            double *alpha,
+            const void *a,
+            int *lda,
+            void *b,
+            int *ldb,
+            double *beta,
+            void *c,
+            int *ldc);
+void dtrsm_(char *side,
+            char *uplo,
+            char *transa,
+            char *diag,
+            int *m,
+            int *n,
+            double *alpha,
+            double *a,
+            int *lda,
+            double *b,
+            int *ldb);
+void dtrmm_(char *side,
+            char *uplo,
+            char *transa,
+            char *diag,
+            int *m,
+            int *n,
+            double *alpha,
+            double *a,
+            int *lda,
+            double *b,
+            int *ldb);
+void dsyrk_(char *uplo,
+            char *trans,
+            int *n,
+            int *k,
+            double *alpha,
+            double *a,
+            int *lda,
+            double *beta,
+            double *c,
+            int *ldc);
 
 enum blas_order_type { blas_rowmajor = 101, blas_colmajor = 102 };
 
@@ -50,9 +86,13 @@ static void BLAS_error(char *rname, int err, int val, int x) {
   abort();
 }
 
-static void BLAS_ge_norm(enum blas_order_type order, enum blas_norm_type norm,
-                         const int m, const int n, const double *a,
-                         const int lda, double *res) {
+static void BLAS_ge_norm(enum blas_order_type order,
+                         enum blas_norm_type norm,
+                         const int m,
+                         const int n,
+                         const double *a,
+                         const int lda,
+                         double *res) {
   char rname[] = "BLAS_ge_norm";
 
   if (order != blas_colmajor)
@@ -132,7 +172,9 @@ static double BLAS_dfpinfo(enum blas_cmach_type cmach) {
   return 0.0;
 }
 
-void add_to_diag_hierarchical(double **matrix, const int ts, const int nt,
+void add_to_diag_hierarchical(double **matrix,
+                              const int ts,
+                              const int nt,
                               const float alpha) {
   for (int i = 0; i < nt * ts; i++)
     matrix[(i / ts) * nt + (i / ts)][(i % ts) * ts + (i % ts)] += alpha;
@@ -165,8 +207,8 @@ float get_time() {
 }
 
 // Robust Check the factorization of the matrix A2
-static int check_factorization(int N, double *A1, double *A2, int LDA,
-                               char uplo, double eps) {
+static int check_factorization(
+    int N, double *A1, double *A2, int LDA, char uplo, double eps) {
   char NORM = 'I', ALL = 'A', UP = 'U', LO = 'L', TR = 'T', NU = 'N', RI = 'R';
 
 #ifdef VERBOSE
@@ -266,16 +308,22 @@ static void scatter_block(const int N, const int ts, double *A, double *Alin) {
     }
 }
 
-static void convert_to_blocks(const int ts, const int nt, const int N,
-                              double Alin[N][N], double *A[nt][nt]) {
+static void convert_to_blocks(const int ts,
+                              const int nt,
+                              const int N,
+                              double Alin[N][N],
+                              double *A[nt][nt]) {
   for (int i = 0; i < nt; i++)
     for (int j = 0; j < nt; j++) {
       gather_block(N, ts, &Alin[i * ts][j * ts], A[i][j]);
     }
 }
 
-static void convert_to_linear(const int ts, const int nt, const int N,
-                              double *A[nt][nt], double Alin[N][N]) {
+static void convert_to_linear(const int ts,
+                              const int nt,
+                              const int N,
+                              double *A[nt][nt],
+                              double Alin[N][N]) {
   for (int i = 0; i < nt; i++)
     for (int j = 0; j < nt; j++) {
       scatter_block(N, ts, A[i][j], (double *)&Alin[i * ts][j * ts]);

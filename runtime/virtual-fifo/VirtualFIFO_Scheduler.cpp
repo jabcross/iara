@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <locale>
 #include <span>
 
 #ifdef IARA_DEBUGPRINT
@@ -80,6 +81,8 @@ extern "C" void iara_runtime_exec(void (*exec)()) {
 }
 
 extern "C" void iara_runtime_init() {
+
+  setlocale(LC_NUMERIC, "");
 
 #ifdef IARA_DEBUGPRINT
   for (auto &node : iara_runtime_nodes) {

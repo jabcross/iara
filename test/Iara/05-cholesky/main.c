@@ -1,9 +1,11 @@
 // adapted from tdg-benchs
 
 #include "cholesky.h"
+#include <IaraRuntime/common/Scheduler.h>
 #include <assert.h>
 #include <errno.h>
 #include <malloc.h>
+#include <omp.h>
 #include <openblas/lapack.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,11 +14,11 @@
 
 // Define size from compilation (-DDIM=2 -DNB=2)
 #ifndef DIM
-#define DIM (4)
+  #define DIM (4)
 #endif
 
 #ifndef NB
-#define NB (4)
+  #define NB (4)
 #endif
 
 #define BS (DIM / NB)
@@ -32,8 +34,8 @@ void omp_potrf(double *const A, int ts, int ld) {
   dpotrf_(&L, &ts, A, &ld, &INFO, 1);
 }
 
-void kernel_potrf(double *in_A, double *out_A) { //
-  omp_potrf(in_A, BS, BS);
+void kernel_potrf(double *inout_A) { //
+  omp_potrf(inout_A, BS, BS);
   // memcpy(out_A, in_A, BS_BYTES);
 }
 
@@ -43,8 +45,8 @@ void omp_trsm(double *A, double *B, int ts, int ld) {
   dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld);
 }
 
-void kernel_trsm(double *in_A, double *in_B, double *out_B) {
-  omp_trsm(in_A, in_B, BS, BS);
+void kernel_trsm(double *in_A, double *inout_B) {
+  omp_trsm(in_A, inout_B, BS, BS);
   // memcpy(out_B, in_B, BS_BYTES);
 }
 
@@ -54,8 +56,8 @@ void omp_syrk(double *A, double *B, int ts, int ld) {
   dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld);
 }
 
-void kernel_syrk(double *in_A, double *in_B, double *out_B) {
-  omp_syrk(in_A, in_B, BS, BS);
+void kernel_syrk(double *in_A, double *inout_B) {
+  omp_syrk(in_A, inout_B, BS, BS);
   // memcpy(out_B, in_B, BS_BYTES);
 }
 
@@ -65,8 +67,8 @@ void omp_gemm(double *A, double *B, double *C, int ts, int ld) {
   dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
 }
 
-void kernel_gemm(double *in_A, double *in_B, double *in_C, double *out_C) {
-  omp_gemm(in_A, in_B, out_C, BS, BS);
+void kernel_gemm(double *in_A, double *in_B, double *inout_C) {
+  omp_gemm(in_A, in_B, inout_C, BS, BS);
   // memcpy(in_C, out_C, BS_BYTES);
 }
 
@@ -106,9 +108,26 @@ void kernel_join(double *in_0_0 BLOCKS) {
 #undef ITEM
 }
 
-void run();
+int g_argc;
+char **g_argv;
+
+int main_original(int argc, char *argv[]);
+
+void exec() {
+  iara_runtime_init();
+  iara_runtime_wait();
+  main_original(g_argc, g_argv);
+}
 
 int main(int argc, char *argv[]) {
+  g_argc = argc;
+  g_argv = argv;
+  // omp_set_num_threads(2);
+  iara_runtime_exec(exec);
+  return 0;
+}
+
+int main_original(int argc, char *argv[]) {
 
   const double eps = BLAS_dfpinfo(blas_eps);
 
@@ -148,12 +167,13 @@ int main(int argc, char *argv[]) {
     original_matrix[i] = matrix[i];
   }
 
-  convert_to_blocks(ts, NB, n, (double(*)[n])matrix, Ah);
+  convert_to_blocks(ts, NB, n, (double (*)[n])matrix, Ah);
 
-  for (int i = 0; i < 1000; i++)
-    run();
+  iara_runtime_run_iteration(0);
 
-  convert_to_linear(ts, NB, n, Ah, (double(*)[n])matrix);
+  iara_runtime_wait();
+
+  convert_to_linear(ts, NB, n, Ah, (double (*)[n])matrix);
 
   if (check) {
     const char uplo = 'L';
@@ -174,10 +194,9 @@ int main(int argc, char *argv[]) {
   printf("============ CHOLESKY RESULTS ============\n");
   printf("  matrix size:          %dx%d\n", n, n);
   printf("  block size:           %dx%d\n", ts, ts);
-#ifndef SEQ
+  #ifndef SEQ
   printf("  number of threads:    %d\n", omp_get_num_threads());
-#endif
-  printf("  time (s):             %f\n", time);
+  #endif
   // printf( "  performance (gflops): %f\n", gflops);
   printf("==========================================\n");
 #else
