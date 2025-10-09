@@ -2,21 +2,20 @@
 
 set -x
 
+FOLDER_NAME=$(basename $(realpath $1))
+
 echo $PATH
 
 # Check if exactly two arguments were provided
 if [ "$#" -lt 1 ]; then
-  echo "Error: At least one argument is required."
-  echo "Usage: $0 <path/to/test> [scheduler-mode]"
-  exit 1
+  echo "Pick test:"
+  FOLDER_NAME=$(ls $IARA_DIR/test/Iara | fzf --prompt="Choose test")
 fi
 
 # Store arguments in variables
 
-FOLDER_NAME=$(basename $(realpath $1))
-
-PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
-PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
+export PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
+export PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 
 $IARA_DIR/scripts/build-iara.sh
 
@@ -40,10 +39,13 @@ echo "Building test: $FOLDER_NAME"
 echo ""
 
 if [[ $2 != "" ]]; then
-  SCHEDULER_MODE=$2
+  echo "Setting scheduler mode from argument"
+  SCHEDULER_MODE=$2;
 fi
 
-if [ ! -d $IARA_DIR/runtime/$SCHEDULER_MODE ]; then
+echo Scheduler mode: \"$SCHEDULER_MODE\"
+
+if [[ $SCHEDULER_MODE != virtual-fifo && $SCHEDULER_MODE != ring-buffer ]]; then
   echo "Invalid scheduler mode."
   exit 1
 fi
@@ -53,12 +55,21 @@ if [ -z $LLVM_INSTALL ]; then
   exit 1
 fi
 
-if [ -f $PATH_TO_TEST_SOURCES/test-setup.sh ]; then
-  source $PATH_TO_TEST_SOURCES/test-setup.sh
+if [ -f $PATH_TO_TEST_SOURCES/codegen.sh ]; then
+  sh $PATH_TO_TEST_SOURCES/codegen.sh
 fi
 
-if [ -z $TOPOLOGY_FILE ]; then
-  TOPOLOGY_FILE="$PATH_TO_TEST_SOURCES/topology.test"
+echo Topology file = $TOPOLOGY_FILE
+
+if [[ $TOPOLOGY_FILE != "" ]]; then
+  echo "Taking topology file from environment variable."
+elif [[ -f $PATH_TO_TEST_SOURCES/topology.mlir ]]; then
+    TOPOLOGY_FILE="$PATH_TO_TEST_SOURCES/topology.mlir"
+elif [[ -f $PATH_TO_TEST_BUILD_DIR/build/topology.mlir ]]; then
+    TOPOLOGY_FILE="$PATH_TO_TEST_BUILD_DIR/build/topology.mlir"
+else
+    echo "Missing topology file."
+    exit 1
 fi
 
 echo SCHEDULER_MODE = \"$SCHEDULER_MODE\"
@@ -76,18 +87,25 @@ echo SCHEDULER_SOURCES = \"$SCHEDULER_SOURCES\"
 
 CLANG_INCLUDE="$LLVM_INSTALL/lib/clang/21/include"
 
-INCLUDES="-I$CLANG_INCLUDE -I. -I$IARA_DIR/include -I$IARA_DIR/external"
+INCLUDES="-I$CLANG_INCLUDE -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$PATH_TO_TEST_BUILD_DIR/build"
 
 if [[ $IARA_FLAGS == "" ]]; then
   IARA_FLAGS="--iara-canonicalize --flatten --$SCHEDULER_MODE='main-actor=run'"
 fi
 
+MEMORY_SANITIZER_OPTIONS="-fsanitize=memory -fsanitize-memory-track-origins -fPIE -pie"
+
 CPP_COMPILER=$LLVM_INSTALL/bin/clang++
 C_COMPILER=$LLVM_INSTALL/bin/clang
-COMPILER_FLAGS="-stdlib=libc++ -fopenmp"
-LINKER_FLAGS="-L$LLVM_INSTALL/lib -lomp -lpthread -lc++ -lc++abi "
+# COMPILER_FLAGS="-stdlib=libc++ -fopenmp"
+COMPILER_FLAGS="-stdlib=libc++ -fopenmp $MEMORY_SANITIZER_OPTIONS"
+# COMPILER_FLAGS="-stdlib=libc++"
+LINKER_FLAGS="-L$LLVM_INSTALL/lib -lomp -lpthread -lc++ -lc++abi $MEMORY_SANITIZER_OPTIONS"
+# LINKER_FLAGS="-L$LLVM_INSTALL/lib -lc++ -lc++abi "
 
-# EXTRA_RUNTIME_FLAGS=-DIARA_DEBUGPRINT
+RUNTIME_FLAGS="-fopenmp"
+
+# EXTRA_RUNTIME_ARGS=-DIARA_DEBUGPRINT
 
 if [ -f "$PATH_TO_TEST_SOURCES/extra_args.sh" ]; then
   source "$PATH_TO_TEST_SOURCES/extra_args.sh"
@@ -95,6 +113,8 @@ fi
 
 pwd
 pwd >&2
+
+echo Topology file = $TOPOLOGY_FILE
 
 \time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $TOPOLOGY_FILE >schedule.mlir 2>/dev/null"
 RC=$?
@@ -115,7 +135,7 @@ fi
 shopt -s nullglob
 
 echo building schedule
-\time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+\time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_SCHEDULE_ARGS $INCLUDES -xir -c schedule.ll -o schedule.o"
 RC=$?
 echo scheduler return code: $?
 if [ $RC -ne 0 ]; then
@@ -145,7 +165,7 @@ echo building cpp kernels
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
     echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 -ftime-trace=cppkernels.json $COMPILER_FLAGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
+    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 -ftime-trace=cppkernels.json $COMPILER_FLAGS $EXTRA_KERNEL_ARGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
     RC=$?
     echo cpp kernels return code: $?
     if [ $RC -ne 0 ]; then
@@ -156,7 +176,7 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
 fi
 
 echo building runtime
-\time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_RUNTIME_FLAGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+\time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $RUNTIME_FLAGS $EXTRA_RUNTIME_ARGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
 # \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
 RC=$?
 echo executable return code: $?

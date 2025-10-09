@@ -56,7 +56,12 @@
         "top_parallel_degridder_complete",
       ],
       "description": "Name of top level actor",
-    }
+    },
+    {
+      "id": "debugArgs",
+      "type": "promptString",
+      "description": "Args to pass",
+    },
   ],
   "configurations": [
     {
@@ -266,6 +271,35 @@
       ]
     },
     {
+      "name": "(gdb) Debug executable with args",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${file}",
+      "args": [
+        "${input:debugArgs}",
+        ">",
+        "output.txt"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerArgs": "--args",
+      // "preLaunchTask": "Build test",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true,
+        },
+        // {
+        //   "description": "Set Disassembly Flavor to Intel",
+        //   "text": "-gdb-set disassembly-flavor intel",
+        //   "ignoreFailures": true
+        // }
+      ]
+    },
+    {
       "name": "(lldb) Runtime test",
       "type": "lldb-dap",
       "request": "launch",
@@ -327,10 +361,10 @@
       "cwd": "${workspaceFolder}/test/Iara/03-two-nodes/build/"
     },
     {
-      "name": "(gdb) Attach",
+      "name": "(gdb) Attach current file",
       "type": "cppdbg",
       "request": "attach",
-      "program": "${fileDirname}/a.out",
+      "program": "${file}",
       "MIMode": "gdb",
       "setupCommands": [
         {

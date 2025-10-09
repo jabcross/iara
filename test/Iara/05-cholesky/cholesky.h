@@ -8,6 +8,12 @@
 #include <sys/time.h>
 #include <sys/times.h>
 
+#ifdef __cplusplus
+  #define RESTRICT __restrict
+#else
+  #define RESTRICT restrict
+#endif
+
 void dgemm_(const char *transa,
             const char *transb,
             int *l,
@@ -180,11 +186,6 @@ void add_to_diag_hierarchical(double **matrix,
     matrix[(i / ts) * nt + (i / ts)][(i % ts) * ts + (i % ts)] += alpha;
 }
 
-void add_to_diag(double *matrix, const int n, const double alpha) {
-  for (int i = 0; i < n; i++)
-    matrix[i + i * n] += alpha;
-}
-
 float get_time() {
   static double gtod_ref_time_sec = 0.0;
 
@@ -272,28 +273,6 @@ static int check_factorization(
   return info_factorization;
 }
 
-void initialize_matrix(const int n, const int ts, double *matrix) {
-  int ISEED[4] = {0, 0, 0, 1};
-  int intONE = 1;
-
-#ifdef VERBOSE
-  printf("Initializing matrix with random values ...\n");
-#endif
-
-  for (int i = 0; i < n * n; i += n) {
-    dlarnv_(&intONE, &ISEED[0], &n, &matrix[i]);
-  }
-
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      matrix[j * n + i] = matrix[j * n + i] + matrix[i * n + j];
-      matrix[i * n + j] = matrix[j * n + i];
-    }
-  }
-
-  add_to_diag(matrix, n, (double)n);
-}
-
 static void gather_block(const int N, const int ts, double *Alin, double *A) {
   for (int i = 0; i < ts; i++)
     for (int j = 0; j < ts; j++) {
@@ -305,28 +284,6 @@ static void scatter_block(const int N, const int ts, double *A, double *Alin) {
   for (int i = 0; i < ts; i++)
     for (int j = 0; j < ts; j++) {
       Alin[i * N + j] = A[i * ts + j];
-    }
-}
-
-static void convert_to_blocks(const int ts,
-                              const int nt,
-                              const int N,
-                              double Alin[N][N],
-                              double *A[nt][nt]) {
-  for (int i = 0; i < nt; i++)
-    for (int j = 0; j < nt; j++) {
-      gather_block(N, ts, &Alin[i * ts][j * ts], A[i][j]);
-    }
-}
-
-static void convert_to_linear(const int ts,
-                              const int nt,
-                              const int N,
-                              double *A[nt][nt],
-                              double Alin[N][N]) {
-  for (int i = 0; i < nt; i++)
-    for (int j = 0; j < nt; j++) {
-      scatter_block(N, ts, A[i][j], (double *)&Alin[i * ts][j * ts]);
     }
 }
 

@@ -54,57 +54,58 @@ if __name__ == "__main__":
 
     # print("dif main {")
 
-    for kernel, val in kernels.items():
-        print(f"""
-iara.actor @{kernel} {{
-              """)
-        ins = val["in"]
-        outs = val["out"]
+#     for kernel, val in kernels.items():
+#         print(f"""
+# iara.actor @{kernel} {{
+#               """)
+#         ins = val["in"]
+#         outs = val["out"]
 
-        counter = 1
-        for i in val["in"]:
-            inout = "inout" if i in val["out"] else ""
-            print(f" %{counter} = iara.in {
-                  inout} : tensor<{ts * ts}x{datatype}>")
-            counter += 1
-        for i in outs:
-            print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
-        print("""} { kernel }
-""")
+#         counter = 1
+#         for i in val["in"]:
+#             inout = "inout" if i in val["out"] else ""
+#             print(f" %{counter} = iara.in {
+#                   inout} : tensor<{ts * ts}x{datatype}>")
+#             counter += 1
+#         for i in outs:
+#             print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
+#         print("""} { kernel }
+# """)
 
-    print("""
-iara.actor @kernel_split {
-""")
+#     print("""
+# iara.actor @kernel_split {
+# """)
 
-    for x in range(nb):
-        for y in range(nb):
-            print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
+#     for x in range(nb):
+#         for y in range(nb):
+#             print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
 
-    print("""
-} { kernel }
-""")
+#     print("""
+# } { kernel }
+# """)
 
-    print("""
-iara.actor @kernel_join {
-""")
+#     print("""
+# iara.actor @kernel_join {
+# """)
 
-    for x in range(nb):
-        for y in range(nb):
-            print(f"    iara.in : tensor<{ts * ts}x{datatype}>")
+#     for x in range(nb):
+#         for y in range(nb):
+#             print(f"    iara.in : tensor<{ts * ts}x{datatype}>")
 
-    print("""} { kernel }
-""")
+#     print("""} { kernel }
+# """)
 
     print("iara.actor @run {")
 
     print("  ", end="")
     # print(labels)
+
     labels = ", ".join([f"%e_{x}_{y}_0" for x in range(nb) for y in range(nb)])
 
     print(f"{labels} = ", end="")
 
     types = ", ".join([f"tensor<{ts*ts}x{datatype}>" for i in range(nb*nb)])
-    print(f"iara.node @kernel_split out : {types}")
+    print(f"iara.node @kernel_split out ( {types} ) ")
 
     for x in range(nb):
         for y in range(nb):
@@ -153,14 +154,13 @@ iara.actor @kernel_join {
         print(f"  {', '.join(outputs)} = ", end="")
         print(f"iara.node @{task['kernel']}", end="")
         if len(inputs) > 0:
-            print(f" in {', '.join(inputs)} : {
-                  ', '.join(input_types)}", end="")
+            print(
+                f" in ( {', '.join([f"{input}:{in_type}" for input, in_type in zip(inputs, input_types)])} )")
         if len(inouts) > 0:
             print(
-                f" inout {', '.join(inouts)} : {', '.join(inout_types)}", end="")
+                f" inout ( {', '.join([f"{inout}:{inout_type}" for inout, inout_type in zip(inouts, inout_types)])} )")
         if len(outputs) > 0:
-            print(f" out : {', '.join(output_types)}", end="")
-        print()
+            print(f" out ( {', '.join(output_types)} )")
 
     for edge in incremented_edges:
         edges[edge]
@@ -168,12 +168,7 @@ iara.actor @kernel_join {
     assert all([writes[edge] == 1 for edge in writes])
 
 
-print(f"  iara.node @kernel_join in ", end="")
-
-labels = ", ".join([f"%e_{x}_{y}_{edges[(x, y)]}" for x in range(nb)
-                    for y in range(nb)])
-types = ", ".join([f"tensor<{ts*ts}x{datatype}>" for i in range(nb*nb)])
-
-print(f"{labels} : {types}")
+print(f"  iara.node @kernel_join in ({", ".join([f"%e_{x}_{y}_{edges[(x, y)]} : tensor<{ts*ts}x{datatype}>" for (
+    x, y), ty in zip([(x, y) for x in range(nb) for y in range(nb)], range(nb*nb))])})", end="")
 
 print("}")
