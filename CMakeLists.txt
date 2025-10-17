@@ -7,12 +7,12 @@ set(CMAKE_CXX_STANDARD 26 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# set(CMAKE_C_COMPILER clang)
-# set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_C_COMPILER $ENV{LLVM_INSTALL}/bin/clang)
+set(CMAKE_CXX_COMPILER $ENV{LLVM_INSTALL}/bin/clang++)
+add_compile_options("-ftime-trace")
 
 # add_compile_definitions("IARA_DEBUG")
 add_compile_definitions("IARA_COMPILER")
-add_compile_options("-ftime-trace")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   find_package(MLIR REQUIRED CONFIG)

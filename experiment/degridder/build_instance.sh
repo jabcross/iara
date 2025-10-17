@@ -16,6 +16,7 @@ INSTANCE_NAME=$(basename $(realpath ..))
 export INSTANCE_BUILD_DIR=$(realpath .)
 SOURCE_DIR=$IARA_DIR/experiment/degridder/Code
 EXPERIMENT_DIR=$IARA_DIR/experiment/degridder
+MEASUREMENT_DIR=$INSTANCE_BUILD_DIR/measurements
 
 echo "DEBUG: Instance name parsing"
 echo "  INSTANCE_NAME=$INSTANCE_NAME"
@@ -123,11 +124,10 @@ MAIN_ACTOR_NAME=$(python -c "print('top_parallel_degridder_complete' if 'complet
 
 echo $MAIN_ACTOR_NAME
 
+mkdir -p $MEASUREMENT_DIR
 rm -f schedule.mlir
-rm -f $EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_stderr.txt
 
-/usr/bin/time -v -o "$EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_scheduling_time.txt" timeout 3m iara-opt --iara-canonicalize --flatten --$SCHEDULER_MODE=main-actor=$MAIN_ACTOR_NAME "topology.mlir" >"schedule.mlir" 2>$EXPERIMENT_DIR/instances/$INSTANCE_NAME/iara_stderr.txt
-
+/usr/bin/time -v -o >(tee -a "$EXPERIMENT_DIR/instances/$INSTANCE_NAME/build/measurements/scheduling_time.txt") timeout 3m iara-opt --iara-canonicalize --flatten --$SCHEDULER_MODE=main-actor=$MAIN_ACTOR_NAME "topology.mlir" >"schedule.mlir" 2>$MEASUREMENT_DIR/iara_stderr.txt
 
 # Check if iara-opt succeeded
 if [ $? -ne 0 ]; then

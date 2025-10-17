@@ -11,7 +11,7 @@ echo checking for dependencies...
 # read discard__
 
 echo Checking for build dependencies:
-for command in cmake ninja g++ mold gdb lldb ccache /usr/bin/time; do
+for command in cmake ninja g++ mold gdb lldb ccache /usr/bin/time fzf ; do
   if ! which $command; then
     echo "$command not found"
     exit 1

@@ -32,10 +32,11 @@ config.test_exec_root = os.path.join(config.iara_obj_root, "test")
 config.substitutions.append(("%PATH%", config.environment["PATH"]))
 config.substitutions.append(("%shlibext", config.llvm_shlib_ext))
 
+llvm_config.use_default_substitutions()
+
 llvm_config.with_system_environment(
     ["HOME", "INCLUDE", "LIB", "TMP", "TEMP", "IARA_DIR", "LLVM_DIR", "SCHEDULER_MODE", "LLVM_INSTALL"])
 
-llvm_config.use_default_substitutions()
 
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
@@ -51,15 +52,15 @@ config.iara_libs_dir = os.path.join(config.iara_obj_root, "lib")
 config.substitutions.append(("%iara_libs", config.iara_libs_dir))
 
 # Tweak the PATH to include the tools dir.
-# llvm_config.with_environment("PATH", config.llvm_tools_dir, append_path=True)
+llvm_config.with_environment("PATH", config.llvm_tools_dir, append_path=True)
 
-tool_dirs = [config.iara_tools_dir, config.llvm_tools_dir]
+tool_dirs = [config.llvm_tools_dir, config.iara_tools_dir]
 tools = [
     "mlir-opt",
     "iara-opt",
 ]
 
-llvm_config.add_tool_substitutions(tools, tool_dirs)
+# llvm_config.add_tool_substitutions(tools, tool_dirs)
 
 llvm_config.with_environment(
     "PYTHONPATH",

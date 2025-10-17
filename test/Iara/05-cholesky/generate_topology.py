@@ -97,21 +97,25 @@ if __name__ == "__main__":
 
     print("iara.actor @run {")
 
-    print("  ", end="")
-    # print(labels)
+    # print(f"  %in = iara.in inout : tensor<{ts*ts}x{datatype}>")
 
-    labels = ", ".join([f"%e_{x}_{y}_0" for x in range(nb) for y in range(nb)])
+    # print("  ", end="")
+    # # print(labels)
+
+    labels = ", ".join(
+        [f"%e_{row}_{col}_0" for col in range(nb) for row in range(nb)])
 
     print(f"{labels} = ", end="")
 
     types = ", ".join([f"tensor<{ts*ts}x{datatype}>" for i in range(nb*nb)])
+
     print(f"iara.node @kernel_split out ( {types} ) ")
 
-    for x in range(nb):
-        for y in range(nb):
+    for row in range(nb):
+        for col in range(nb):
             # print(f"    interface out_{x}_{y}->e_{x}_{y}_0;")
-            edges[(x, y)] = 0
-            deps[(x, y)] = f"e_{x}_{y}_0"
+            edges[(row, col)] = 0
+            deps[(row, col)] = f"e_{row}_{col}_0"
 
     counter = 0
     incremented_edges = []
@@ -129,11 +133,11 @@ if __name__ == "__main__":
         inouts = []
         inout_types = []
         for i in kernels[task['kernel']]['in']:
-            x, y = task[i]
-            edge_name = f"e_{x}_{y}_{edges[(x, y)]}"
+            row, col = task[i]
+            edge_name = f"e_{row}_{col}_{edges[(row, col)]}"
             # print(f"    interface {edge_name}->in_{i};")
             reads[edge_name] += 1
-            input_edges.append((x, y))
+            input_edges.append((row, col))
             if (i not in kernels[task['kernel']]['out']):
                 inputs.append(f"%{edge_name}")
                 input_types.append(f"tensor<{ts*ts}x{datatype}>")
@@ -141,13 +145,13 @@ if __name__ == "__main__":
                 inouts.append(f"%{edge_name}")
                 inout_types.append(f"tensor<{ts*ts}x{datatype}>")
         for i in kernels[task['kernel']]['out']:
-            x, y = task[i]
-            edges[(x, y)] += 1
-            edge_name = f"e_{x}_{y}_{edges[(x, y)]}"
+            row, col = task[i]
+            edges[(row, col)] += 1
+            edge_name = f"e_{row}_{col}_{edges[(row, col)]}"
             # print(
             #     f"    interface out_{i}->{edge_name};")
             writes[edge_name] += 1
-            incremented_edges.append((x, y))
+            incremented_edges.append((row, col))
             outputs.append(f"%{edge_name}")
             output_types.append(f"tensor<{ts*ts}x{datatype}>")
         # print('}')
@@ -168,7 +172,7 @@ if __name__ == "__main__":
     assert all([writes[edge] == 1 for edge in writes])
 
 
-print(f"  iara.node @kernel_join in ({", ".join([f"%e_{x}_{y}_{edges[(x, y)]} : tensor<{ts*ts}x{datatype}>" for (
-    x, y), ty in zip([(x, y) for x in range(nb) for y in range(nb)], range(nb*nb))])})", end="")
+print(f"  iara.node @kernel_join in ({", ".join([f"%e_{row}_{col}_{edges[(row, col)]} : tensor<{ts*ts}x{datatype}>" for (
+    row, col), ty in zip([(row, col) for col in range(nb) for row in range(nb)], range(nb*nb))])})", end="")
 
 print("}")

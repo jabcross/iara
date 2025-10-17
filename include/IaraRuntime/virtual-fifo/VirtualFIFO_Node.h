@@ -15,7 +15,7 @@
 
 struct VirtualFIFO_Edge; // forward decl
 
-using KernelWrapper = void(i64 seq, VirtualFIFO_Chunk *args);
+using KernelWrapper = void(i64 seq, std::span<VirtualFIFO_Chunk> args);
 
 extern "C" {
 

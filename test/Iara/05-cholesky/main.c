@@ -3,7 +3,8 @@
 #include "cholesky.h"
 #include <IaraRuntime/common/Scheduler.h>
 #include <assert.h>
-#include <errno.h>
+// #include <climits>
+// #include <errno.h>
 #include <malloc.h>
 #include <omp.h>
 #include <openblas/lapack.h>
@@ -30,18 +31,18 @@ const int matrix_size = MATRIX_SIZE;
   #define BLOCK_SIZE (MATRIX_SIZE / NUM_BLOCKS)
 #endif
 
-const int block_size = BLOCK_SIZE;
+const int block_size = BLOCK_SIZE; // side of the square
 
-const int block_size_doubles = block_size * block_size;
+const int block_size_doubles = block_size * block_size; // area of the square
 
 const int block_size_bytes = block_size_doubles * sizeof(double);
 
 // #define VERBOSE
 
-void omp_potrf(double *const A) {
+void omp_potrf(double *inout_A) {
   static int INFO;
   static const char L = 'L';
-  dpotrf_(&L, &block_size, A, &block_size, &INFO, 1);
+  dpotrf_(&L, &block_size, inout_A, &block_size, &INFO, 1);
 }
 
 void kernel_potrf(double *inout_A) { //
@@ -114,14 +115,71 @@ void initialize_matrix(double *matrix) {
   add_to_diag(matrix, (double)matrix_size);
 }
 
-void blocked_cholesky_sequential(double const *RESTRICT input_matrix,
-                                 double *RESTRICT output_matrix) {}
+double *blockAt(double *matrix, int row, int col) {
+  return &matrix[(row * num_blocks + col) * block_size_doubles];
+}
 
-void blocked_cholesky_openmp_for(double const *RESTRICT input_matrix,
-                                 double *RESTRICT output_matrix) {}
+void blocked_cholesky_sequential(double *inout_matrix) {
+  {
+    {
+      for (int k = 0; k < num_blocks; k++) {
 
-void blocked_cholesky_openmp_tasks(double const *RESTRICT input_matrix,
-                                   double *RESTRICT output_matrix) {}
+        omp_potrf(blockAt(inout_matrix, k, k));
+
+        for (int i = k + 1; i < num_blocks; i++) {
+          omp_trsm(blockAt(inout_matrix, k, k), blockAt(inout_matrix, k, i));
+        }
+
+        // Update trailing matrix
+        for (int l = k + 1; l < num_blocks; l++) {
+          for (int j = k + 1; j < l; j++) {
+            omp_gemm(blockAt(inout_matrix, k, l),
+                     blockAt(inout_matrix, k, j),
+                     blockAt(inout_matrix, j, l));
+          }
+          omp_syrk(blockAt(inout_matrix, k, l), blockAt(inout_matrix, l, l));
+        }
+      }
+    }
+  }
+}
+
+void blocked_cholesky_openmp_for(double *inout_matrix_blocked) {}
+
+void blocked_cholesky_openmp_tasks(double *inout_matrix) {
+#pragma omp parallel
+#pragma omp single
+  {
+    {
+      for (int k = 0; k < num_blocks; k++) {
+
+#pragma omp task depend(inout : *blockAt(inout_matrix, k, k))
+        omp_potrf(blockAt(inout_matrix, k, k));
+
+        for (int i = k + 1; i < num_blocks; i++) {
+#pragma omp task depend(in : *blockAt(inout_matrix, k, k))                     \
+    depend(inout : *blockAt(inout_matrix, k, i))
+          omp_trsm(blockAt(inout_matrix, k, k), blockAt(inout_matrix, k, i));
+        }
+
+        // Update trailing matrix
+        for (int l = k + 1; l < num_blocks; l++) {
+          for (int j = k + 1; j < l; j++) {
+#pragma omp task depend(in : *blockAt(inout_matrix, k, k))                     \
+    depend(in : *blockAt(inout_matrix, k, j))                                  \
+    depend(inout : *blockAt(inout_matrix, j, l))
+            omp_gemm(blockAt(inout_matrix, k, l),
+                     blockAt(inout_matrix, k, j),
+                     blockAt(inout_matrix, j, l));
+          }
+#pragma omp task depend(in : *blockAt(inout_matrix, k, l))                     \
+    depend(inout : *blockAt(inout_matrix, l, l))
+          omp_syrk(blockAt(inout_matrix, k, l), blockAt(inout_matrix, l, l));
+        }
+      }
+    }
+  }
+}
 
 double const *input_g = NULL;
 double *output_g = NULL;
@@ -135,18 +193,70 @@ void exec() {
   iara_runtime_wait();
 }
 
-void blocked_cholesky_virtual_fifo(double const *RESTRICT input_matrix,
-                                   double *RESTRICT output_matrix) {
-  input_g = input_matrix;
-  output_g = output_matrix;
+void blocked_cholesky_virtual_fifo(double *inout_matrix_blocked) {
+  input_g = inout_matrix_blocked;
+  output_g = inout_matrix_blocked;
 
   iara_runtime_exec(exec);
 }
 
 int main_original(int argc, char *argv[]);
 
+void print_matrix(double *matrix) {
+
+  // get biggest number
+
+  int size = 10;
+
+  printf("matrix_size = %d\n", matrix_size);
+
+  // exit(1);
+
+  printf("╔");
+  for (int i = 1, e = matrix_size * (size + 1); i < e; i++) {
+    printf("═");
+  }
+  printf("╗\n");
+
+  for (int row = 0; row < matrix_size; row++) {
+    printf("║");
+    for (int col = 0; col < matrix_size; col++) {
+      printf("% 10.3f", matrix[row * matrix_size + col]);
+      if (col == matrix_size - 1)
+        continue;
+      if ((col + 1) % block_size == 0) {
+        printf("│");
+      } else {
+        printf(" ");
+      }
+    }
+    printf("║\n");
+    if (row == matrix_size - 1)
+      continue;
+    if ((row + 1) % block_size == 0) {
+      printf("╟");
+      for (int col = 0; col < matrix_size; col++) {
+        printf("──────────");
+        if (col == matrix_size - 1)
+          continue;
+        if ((col + 1) % block_size == 0) {
+          printf("┼");
+        } else {
+          printf("─");
+        }
+      }
+      printf("╢\n");
+    }
+  }
+  printf("╚");
+  for (int i = 1, e = matrix_size * (size + 1); i < e; i++) {
+    printf("═");
+  }
+  printf("╝\n");
+}
+
 double *allocate_matrix() {
-  return (double *)malloc(sizeof(double) * matrix_size * matrix_size);
+  return (double *)calloc(matrix_size * matrix_size, sizeof(double));
 }
 
 static void convert_to_blocks(double const *RESTRICT input_linear_matrix,
@@ -190,22 +300,30 @@ static void convert_to_linear(double const *RESTRICT input_blocked_matrix,
   }
 }
 
-typedef void (*BlockedCholeskyImpl)(double const *RESTRICT input_matrix_blocked,
-                                    double *RESTRICT output_matrix_blocked);
+typedef void (*BlockedCholeskyImpl)(double *inout_matrix_blocked);
 
 // Returns wall time of the given function (in milliseconds)
-int measure_wall_time(BlockedCholeskyImpl impl,
-                      double const *RESTRICT input_matrix_blocked,
-                      double *RESTRICT output_matrix_blocked) {
+double measure_wall_time(BlockedCholeskyImpl impl,
+                         double *inout_matrix_blocked) {
 
   struct timespec time_start;
   struct timespec time_end;
   clock_gettime(CLOCK_MONOTONIC, &time_start);
-  impl(input_matrix_blocked, output_matrix_blocked);
+  impl(inout_matrix_blocked);
+
   clock_gettime(CLOCK_MONOTONIC, &time_end);
 
-  return (time_end.tv_sec - time_start.tv_sec) * 1000 +
-         (time_end.tv_nsec - time_start.tv_nsec) * 1000000;
+  printf("Start time: %20lu.%09lu\n", time_start.tv_sec, time_start.tv_nsec);
+  printf("  End time: %20lu.%09lu\n", time_end.tv_sec, time_end.tv_nsec);
+  printf(" Wall time: %20lu.%09lu\n",
+         time_end.tv_sec - time_start.tv_sec,
+         time_end.tv_nsec - time_start.tv_nsec);
+
+  double wall_time =
+      ((double)(time_end.tv_sec - time_start.tv_sec)) +
+      ((double)(time_end.tv_nsec - time_start.tv_nsec)) / 1000000000L;
+
+  return wall_time;
 }
 
 #define NUM_SCHEDULERS 4
@@ -250,98 +368,27 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "Chosen scheduler: %s\n", scheduler);
 
   double *input_matrix_linear = allocate_matrix();
-  double *input_matrix_blocked = allocate_matrix();
-  double *output_matrix_blocked = allocate_matrix();
+  double *inout_matrix_blocked = allocate_matrix();
   double *output_matrix_linear = allocate_matrix();
 
   initialize_matrix(input_matrix_linear);
-  convert_to_blocks(input_matrix_linear, input_matrix_blocked);
+
+  printf("Original matrix:\n");
+  print_matrix(input_matrix_linear);
+
+  convert_to_blocks(input_matrix_linear, inout_matrix_blocked);
 
   assert(impl != NULL && "Did not set scheduler correctly");
 
-  int wall_time =
-      measure_wall_time(impl, input_matrix_blocked, output_matrix_blocked);
+  fprintf(stderr, "Starting measurement\n");
 
-  printf("Wall time: %d ms\n", wall_time);
+  double wall_time = measure_wall_time(impl, inout_matrix_blocked);
+
+  convert_to_linear(inout_matrix_blocked, output_matrix_linear);
+
+  printf("Blocked cholesky output:\n");
+  print_matrix(output_matrix_linear);
+
+  printf("Wall time: %lf s\n", wall_time);
   return 0;
 }
-
-//   int main_original(int argc, char *argv[]) {
-
-//     const double eps = BLAS_dfpinfo(blas_eps);
-
-//     int num_iter = atoi(argv[2]);
-//     if (num_iter < 0) {
-//       fprintf(stderr, "num_iter must be positive\n");
-//       exit(1);
-//     }
-
-//     const int n = DIM; // matrix size
-//     const int ts = BS; // tile size
-
-//     // #CHECK DYNAMIC_BENCH
-//     // printf("ts = %d\n", ts);
-
-//     int check = 1; // check result?
-
-//     // Init matrix
-//     initialize_matrix(n, ts, matrix);
-
-//     // Allocate dummy
-//     dummy = (double ***)malloc(sizeof(double **) * NB);
-//     for (int i = 0; i < NB; i++)
-//       dummy[i] = (double **)malloc(sizeof(double *) * NB);
-//     for (int i = 0; i < NB; i++)
-//       for (int j = 0; j < NB; j++)
-//         dummy[i][j] = (double *)calloc(BS * BS, sizeof(double));
-
-//     // Allocate blocked matrix
-//     for (int i = 0; i < NB; i++) {
-//       for (int j = 0; j < NB; j++) {
-//         Ah[i][j] = dummy[i][j];
-//       }
-//     }
-
-//     for (int i = 0; i < n * n; i++) {
-//       original_matrix[i] = matrix[i];
-//     }
-
-//     convert_to_blocks(ts, NB, n, (double (*)[n])matrix, Ah);
-
-//     iara_runtime_run_iteration(0);
-
-//     iara_runtime_wait();
-
-//     convert_to_linear(ts, NB, n, Ah, (double (*)[n])matrix);
-
-//     if (check) {
-//       const char uplo = 'L';
-//       if (check_factorization(n, original_matrix, matrix, n, uplo, eps))
-//         check++;
-//     }
-
-//     if (check == 2) {
-//       printf("Factorization correct\n");
-//       // return 0;
-//     }
-
-//     // float time = t2;
-//     // float gflops = (((1.0 / 3.0) * n * n * n) / ((time) * 1.0e+9));
-
-//     // Print results
-// #ifdef VERBOSE
-//     printf("============ CHOLESKY RESULTS ============\n");
-//     printf("  matrix size:          %dx%d\n", n, n);
-//     printf("  block size:           %dx%d\n", ts, ts);
-//   #ifndef SEQ
-//     printf("  number of threads:    %d\n", omp_get_num_threads());
-//   #endif
-//     // printf( "  performance (gflops): %f\n", gflops);
-//     printf("==========================================\n");
-// #else
-//     // printf("\n N    BS  #blocks   msecs  Result    performance
-//     // (gflops)\n"); printf(" N=%4d  BS=%4d  #BLOCKS=%6d  %9.3fms Res=%2.6f
-//     // gflops=%2.6f \n", n, ts, NB*NB, t2*1e3, matrix[n*n-1], gflops);
-// #endif
-//     return 0;
-//   }

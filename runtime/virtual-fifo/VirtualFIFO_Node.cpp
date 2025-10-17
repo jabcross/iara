@@ -168,9 +168,11 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   #endif
   #pragma omp task firstprivate(_this, args, seq)
 #endif
+
+
   {
 
-    codegen_info.wrapper(seq, args.data());
+    codegen_info.wrapper(seq, args);
   }
 
 #ifndef IARA_DISABLE_OMP

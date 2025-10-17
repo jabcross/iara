@@ -3,6 +3,7 @@
 #include "Iara/Passes/VirtualFIFO/BreakLoops.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
+#include "Iara/Passes/Common/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
@@ -72,17 +73,17 @@ struct VirtualFIFOSchedulerPass::Impl {
     return cast<LLVM::LLVMStructType>(VirtualFIFO_Chunk::getMLIRType(ctx()));
   }
 
+
   LLVM::LLVMFunctionType wrapper_type() {
     return LLVM::LLVMFunctionType::get(
         llvm_void_type(),
-        {IntegerType::get(ctx(), 64), llvm_pointer_type()},
+        {IntegerType::get(ctx(), 64), iara::passes::common::codegen::getSpanType(ctx())},
         false);
   }
 
   // Node wrappers call the kernel function with prepopulated parameters, and
   // also spread out the arguments from the given array.
-  // The single argument is a pointer to a buffer of pointers to the memory
-  // accessed by the kernel.
+  // The two arguments are the sequence number and a pointer to a buffer of pointers corresponding to the actor ports.
   LLVM::LLVMFuncOp getOrCodegenNodeWrapper(ModuleOp module,
                                            OpBuilder mod_builder,
                                            NodeCodegenData node_codegen_data) {
@@ -163,7 +164,14 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     for (size_t i = 0; i < num_buffers; i++) {
 
-      // arg1 is a pointer to the first chunk. we want the `data` field.
+      // arg1 is a span struct. We want to get its data field.
+
+      auto data_ptr = CREATE(LLVM::ExtractValueOp,
+                                       func_builder,
+                                       node_op.getLoc(),
+                                       func_builder.getBlock()->getArgument(1), {0});
+
+      // data_ptr is a pointer to the first chunk. we want the `data` field.
 
       // get pointer from array
       auto pointer_to_pointer = CREATE(LLVM::GEPOp,
@@ -171,7 +179,7 @@ struct VirtualFIFOSchedulerPass::Impl {
                                        node_op.getLoc(),
                                        opaque_ptr_type,
                                        chunk_type(),
-                                       func_builder.getBlock()->getArgument(1),
+                                       data_ptr,
                                        {(i32)i, 2 /* `data field` */});
 
       auto pointer_to_data = CREATE(LLVM::LoadOp,

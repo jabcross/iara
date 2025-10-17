@@ -20,6 +20,11 @@ extern std::span<VirtualFIFO_Edge> iara_runtime_edges;
 
 i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 
+// This is always an invalid pointer in current 64 bit architectures (different
+// 63rd and 62nd bits)
+#define IARA_EXTERNALLY_MANAGED_MEMORY                                         \
+  ((i8 *)(-1 ^ (1ul << (sizeof(i8 *) * 8 - 2))))
+
 // std::unordered_map<void *, int> allocated_ptrs;
 
 extern "C" void iara_runtime_alloc(i64 seq, VirtualFIFO_Chunk *chunk) {
@@ -28,12 +33,24 @@ extern "C" void iara_runtime_alloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 
 extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 
+  if (chunk->allocated != IARA_EXTERNALLY_MANAGED_MEMORY) {
+
 #ifdef IARA_DEBUGPRINT
-  // assert(allocated_ptrs.contains(chunk->allocated));
-  // assert(allocated_ptrs[chunk->allocated] > 0);
-  debugPrintThreadColor("freeing ptr %#016lx\n", (size_t)chunk->allocated);
+    // assert(allocated_ptrs.contains(chunk->allocated));
+    // assert(allocated_ptrs[chunk->allocated] > 0);
+    debugPrintThreadColor("freeing ptr %#016lx\n", (size_t)chunk->allocated);
 #endif
-  free(chunk->allocated);
+
+    free(chunk->allocated);
+  }
+#ifdef IARA_DEBUGPRINT
+  else {
+    // assert(allocated_ptrs.contains(chunk->allocated));
+    // assert(allocated_ptrs[chunk->allocated] > 0);
+    debugPrintThreadColor("releasing externally managed memory at %#016lx\n",
+                          (size_t)chunk->allocated);
+  }
+#endif
 }
 
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {

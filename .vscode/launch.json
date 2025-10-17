@@ -123,9 +123,9 @@
       "args": [
         "--iara-canonicalize",
         "--flatten",
-        "-mlir-print-stacktrace-on-diagnostic",
+        // "-mlir-print-stacktrace-on-diagnostic",
         "--mlir-print-ir-after-failure",
-        "--${input:scheduler}",
+        "--${input:scheduler}=main-actor=run",
         "${file}"
       ],
       "stopAtEntry": false,

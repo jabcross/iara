@@ -34,8 +34,16 @@ ln -s ../../Code/output .
 
 cd preesm_build
 
-OMP_NUM_THREADS=$NUM_CORES OMP_PROC_BIND=true OMP_PLACES=cores /usr/bin/time -v -o ../preesm_degridder_time.txt taskset -c $CPU_MASK ./degridder_pipeline >../preesm_degridder_stdout.txt 2>../preesm_degridder_stderr.txt
+echo Instance $ITER run at $(date) >> >(tee -a measurements/degridder_stdout.txt)
+echo Instance $ITER run at $(date) >> >(tee -a measurements/degridder_stderr.txt)
+
+cp build/degridder_pipeline .
+
+OMP_NUM_THREADS=$NUM_CORES OMP_PROC_BIND=true OMP_PLACES=cores /usr/bin/time -v -o >(tee -a measurements/degridder_time_$ITER.txt) taskset -c $CPU_MASK ./degridder_pipeline >> >(tee -a measurements/degridder_stdout.txt) 2>> >(tee -a measurements/degridder_stderr.txt)
 
 cd ../build
 
-OMP_NUM_THREADS=$NUM_CORES OMP_PROC_BIND=true OMP_PLACES=cores /usr/bin/time -v -o ../iara_degridder_time.txt taskset -c $CPU_MASK ./degridder_pipeline >../iara_degridder_stdout.txt 2>../iara_degridder_stderr.txt
+echo Instance $ITER run at $(date) >> >(tee -a measurements/degridder_stdout.txt)
+echo Instance $ITER run at $(date) >> >(tee -a measurements/degridder_stderr.txt)
+
+OMP_NUM_THREADS=$NUM_CORES OMP_PROC_BIND=true OMP_PLACES=cores /usr/bin/time -v -o >(tee -a measurements/degridder_time_$ITER.txt) taskset -c $CPU_MASK ./degridder_pipeline >> >(tee -a measurements/degridder_stdout.txt) 2>> >(tee -a measurements/degridder_stderr.txt)
