@@ -2,6 +2,7 @@
 #define IARA_PASSES_VIRTUALFIFO_SDF_H
 
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Passes/VirtualFIFO/SDF/BufferSizeCalculator.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
@@ -58,6 +59,7 @@ struct SDFEdge : EdgeOp {
 struct StaticAnalysisData {
   DenseMap<EdgeOp, VirtualFIFO_Edge_StaticInfo> edge_static_info;
   DenseMap<NodeOp, VirtualFIFO_Node_StaticInfo> node_static_info;
+  BufferSizeMemo memo;
 };
 
 FailureOr<StaticAnalysisData> analyzeAndAnnotate(ActorOp actor);

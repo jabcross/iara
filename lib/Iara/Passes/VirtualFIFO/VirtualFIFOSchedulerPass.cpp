@@ -361,7 +361,7 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     ok = ok && generateAllocsAndFrees(main_actor, *static_analysis).succeeded();
 
-    main_actor->dump();
+    // main_actor->dump();
 
     ok = ok && codegenStaticData(main_actor, *static_analysis).succeeded();
     return success(ok);

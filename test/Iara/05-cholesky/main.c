@@ -374,7 +374,7 @@ int main(int argc, char *argv[]) {
   initialize_matrix(input_matrix_linear);
 
   printf("Original matrix:\n");
-  print_matrix(input_matrix_linear);
+  // print_matrix(input_matrix_linear);
 
   convert_to_blocks(input_matrix_linear, inout_matrix_blocked);
 
@@ -387,7 +387,7 @@ int main(int argc, char *argv[]) {
   convert_to_linear(inout_matrix_blocked, output_matrix_linear);
 
   printf("Blocked cholesky output:\n");
-  print_matrix(output_matrix_linear);
+  // print_matrix(output_matrix_linear);
 
   printf("Wall time: %lf s\n", wall_time);
   return 0;

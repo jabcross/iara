@@ -1,7 +1,7 @@
+#include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/VirtualFIFO/SDF/BufferSizeCalculator.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
-#include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
@@ -153,14 +153,14 @@ LogicalResult analyzeVirtualInoutChain(Vec<EdgeOp> &chain,
   assert(rates.size() == chain.size() + 1);
   assert(delays.size() == chain.size());
 
-  auto buffer_values = calculateBufferSize(rates, delays);
+  auto buffer_values = calculateBufferSize(data.memo, rates, delays);
   if (failed(buffer_values)) {
     // Problematic case.
     return solveProblematicChain(chain, data);
   }
 
-  auto first_buffer_size = buffer_values->alpha.back() * rates.back();
-  auto next_buffer_sizes = buffer_values->beta.back() * rates.back();
+  auto first_buffer_size = buffer_values.value()->alpha.back() * rates.back();
+  auto next_buffer_sizes = buffer_values.value()->beta.back() * rates.back();
 
   i64 offset = 0;
   for (i64 i = chain.size() - 1; i >= 0; i--) {
@@ -171,10 +171,10 @@ LogicalResult analyzeVirtualInoutChain(Vec<EdgeOp> &chain,
     offset += info.delay_size;
     info.block_size_with_delays = first_buffer_size;
     info.block_size_no_delays = next_buffer_sizes;
-    info.prod_alpha = buffer_values->alpha[i];
-    info.prod_beta = buffer_values->beta[i];
-    info.cons_alpha = buffer_values->alpha[i + 1];
-    info.cons_beta = buffer_values->beta[i + 1];
+    info.prod_alpha = buffer_values.value()->alpha[i];
+    info.prod_beta = buffer_values.value()->beta[i];
+    info.cons_alpha = buffer_values.value()->alpha[i + 1];
+    info.cons_beta = buffer_values.value()->beta[i + 1];
   }
 
   return success();

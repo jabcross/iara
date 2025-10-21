@@ -158,6 +158,7 @@ public:
       llvm::errs() << "Actor: ";
       actor_op.dump();
       signalPassFailure();
+      llvm_unreachable("Error");
       return;
     }
     if (actor_op.getOps<NodeOp>().empty()) {
@@ -183,6 +184,7 @@ public:
       new_actor.dump();
       llvm::errs() << "Node:\n";
       node.dump();
+      llvm_unreachable("Error");
       return;
     }
 
@@ -200,6 +202,7 @@ public:
       new_actor.dump();
       llvm::errs() << "Node:\n";
       node.dump();
+      llvm_unreachable("Error");
       return;
     }
 

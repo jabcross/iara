@@ -1,3 +1,6 @@
+#ifndef IARA_PASSES_VIRTUALFIFO_SDF_BUFFERSIZECALCULATOR_H
+#define IARA_PASSES_VIRTUALFIFO_SDF_BUFFERSIZECALCULATOR_H
+
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/CompilerTypes.h"
 #include <llvm/ADT/SmallString.h>
@@ -20,7 +23,18 @@ struct BufferSizeValues {
   Vec<i64> beta; // Number of firings of a given node that access the buffer
 };
 
-llvm::FailureOr<BufferSizeValues>
-calculateBufferSize(llvm::SmallVector<i64> &rates,
+struct BufferSizeMemo {
+
+  std::unordered_map<llvm::hash_code, BufferSizeValues> memo;
+
+  std::pair<bool, BufferSizeValues *> get(llvm::SmallVector<i64> &rates,
+                                          llvm::SmallVector<i64> &delays);
+};
+
+llvm::FailureOr<BufferSizeValues *>
+calculateBufferSize(BufferSizeMemo &memo,
+                    llvm::SmallVector<i64> &rates,
                     llvm::SmallVector<i64> &delays);
 } // namespace iara::passes::virtualfifo::sdf
+
+#endif

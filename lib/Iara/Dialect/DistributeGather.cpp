@@ -145,9 +145,9 @@ LogicalResult expandToBroadcast(OpResult &value) {
 
   assert(ordered_uses.size() == uses.size());
 
-  for (auto use : ordered_uses) {
-    use->getOwner()->dump();
-  }
+  // for (auto use : ordered_uses) {
+  //   use->getOwner()->dump();
+  // }
 
   auto output_types =
       uses | Map{[](auto &x) { return x->get().getType(); }} | IntoVector();
@@ -168,9 +168,9 @@ LogicalResult expandToBroadcast(OpResult &value) {
   for (auto [new_value, operand] :
        llvm::zip_equal(broadcast_op.getOut(), uses)) {
 
-    llvm::errs() << "Operand index: " << operand->getOperandNumber() << "\n";
-    llvm::errs() << "Result index: " << new_value.getResultNumber() << "\n";
-    operand->getOwner()->dump();
+    // llvm::errs() << "Operand index: " << operand->getOperandNumber() << "\n";
+    // llvm::errs() << "Result index: " << new_value.getResultNumber() << "\n";
+    // operand->getOwner()->dump();
     operand->set(new_value);
   }
 

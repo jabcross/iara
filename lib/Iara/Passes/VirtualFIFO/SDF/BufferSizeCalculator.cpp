@@ -1,20 +1,45 @@
 #include "Iara/Passes/VirtualFIFO/SDF/BufferSizeCalculator.h"
 #include "Iara/Util/Range.h"
+#include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/Support/ErrorHandling.h>
 
 namespace iara::passes::virtualfifo::sdf {
 
-llvm::FailureOr<BufferSizeValues>
-calculateBufferSize(llvm::SmallVector<i64> &rates,
+std::pair<bool, BufferSizeValues *>
+BufferSizeMemo::get(llvm::SmallVector<i64> &rates,
+                    llvm::SmallVector<i64> &delays) {
+  llvm::hash_code code = llvm::hash_combine(
+      llvm::hash_combine_range(rates.begin(), rates.end()),
+      llvm::hash_combine_range(delays.begin(), delays.end()));
+
+  auto pair = memo.find(code);
+
+  if (pair == memo.end()) {
+    return {false, &memo[code]};
+  }
+
+  return {true, &pair->second};
+}
+
+llvm::FailureOr<BufferSizeValues *>
+calculateBufferSize(BufferSizeMemo &memo,
+                    llvm::SmallVector<i64> &rates,
                     llvm::SmallVector<i64> &delays) {
   // WIP: Using slow script.
   // TODO: reimplement using presburger hermite normal form.
 
+  auto [existing, values] = memo.get(rates, delays);
+
+  if (existing) {
+    return {values};
+  }
+
   assert(rates.size() == delays.size() + 1);
 
   if (rates.size() == 2 && rates[0] == rates[1] && delays[0] == 0) {
-    return BufferSizeValues{{1, 1}, {1, 1}};
+    *values = BufferSizeValues{{1, 1}, {1, 1}};
+    return values;
   }
 
   for (auto delay : delays) {
@@ -23,7 +48,6 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
     }
   }
 
-  Vec<i64> alpha{}, beta{};
   std::string command;
   llvm::raw_string_ostream ss(command);
   auto iara_dir = std::getenv("IARA_DIR");
@@ -82,14 +106,15 @@ calculateBufferSize(llvm::SmallVector<i64> &rates,
   {
     i64 val;
     while (!lines[2].consumeInteger(10, val)) {
-      alpha.push_back(val);
+      values->alpha.push_back(val);
       lines[2] = lines[2].drop_while([](char c) { return c == ' '; });
     }
     while (!lines[3].consumeInteger(10, val)) {
-      beta.push_back(val);
+      values->beta.push_back(val);
       lines[3] = lines[3].drop_while([](char c) { return c == ' '; });
     }
   }
-  return {{alpha, beta}};
+
+  return {values};
 }
 } // namespace iara::passes::virtualfifo::sdf
