@@ -21,6 +21,7 @@ add_mlir_dialect_library(MLIRIara
         Passes/VirtualFIFO/Codegen/Codegen.cpp
         Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.cpp
         Passes/VirtualFIFO/SDF/BufferSizeCalculator.cpp
+        Passes/VirtualFIFO/SDF/BufferSizeCalculatorPresburger.cpp
         Passes/VirtualFIFO/SDF/GenerateMemoryManagementNodes.cpp
         Passes/VirtualFIFO/SDF/SDF.cpp
         Passes/VirtualFIFO/BreakLoops.cpp

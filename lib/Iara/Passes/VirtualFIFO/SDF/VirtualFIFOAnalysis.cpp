@@ -6,13 +6,12 @@
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include <cassert>
-#include <format>
+// Removed <format> and <print> as they are not available in libstdc++ and not used
 #include <mlir/Dialect/LLVMIR/LLVMAttrs.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/Dialect/LLVMIR/LLVMTypes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinOps.h>
-#include <print>
 
 namespace iara::passes::virtualfifo::sdf {
 

@@ -13,7 +13,7 @@ def generate_k(R, D):
     beta = [pulp.LpVariable(f"beta{i}", lowBound=0, cat="Integer")
             for i in range(len(R))]
 
-    prob = pulp.LpProblem("Buffer Size", pulp.LpMinimize)
+    prob = pulp.LpProblem("BufferSize", pulp.LpMinimize)
     prob += alpha[-1] * R[-1], "Size of buffer with delays"
 
     for i in range(len(R) - 1):
@@ -25,7 +25,7 @@ def generate_k(R, D):
         prob += beta[i + 1] >= 1, f"remove trivial case of beta_{i+1} = 0"
 
     prob.writeLP("buffer-size.lp")
-    prob.solve(pulp.PULP_CBC_CMD(timeLimit=0.1, msg=False))
+    prob.solve(pulp.COIN_CMD(path='cbc', msg=False, timeLimit=0.1))
     # print(" ".join([str(int(v.varValue)) for v in prob.variables()]))
     for var in prob.variables():
         if str(var).startswith("alpha"):

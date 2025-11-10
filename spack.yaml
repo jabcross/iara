@@ -1,0 +1,52 @@
+# This is a Spack Environment file.
+#
+# It describes a set of packages to be installed, along with
+# configuration settings.
+spack:
+  # add package specs to the `specs` list
+  specs:
+  # Build tools
+  - cmake
+  - ninja
+  - ccache
+  - mold              # Optional: faster linking
+  # Compilers & debugging
+  - gcc
+  - llvm
+  - gdb
+  - valgrind
+
+  # CLI tools
+  - fzf               # Optional: fuzzy finder
+  # Python core for Jupyter
+  - py-setuptools
+  - py-ipykernel
+  - py-ipython
+  - py-jupyter-client
+  - py-jupyter-core
+
+  # Data analysis (actually used in notebooks)
+  - py-matplotlib
+  - py-numpy
+  - py-pandas
+
+  # Math & optimization (actually used in scripts)
+  - py-pulp           # Used in buffer-size calculations
+  - py-sympy          # Used in scripts/buffer-size-calculator.py
+  # Configuration parsing
+  - py-pyyaml
+
+  - cbc
+  view: true
+  concretizer:
+    unify: true
+  packages:
+    gcc:
+      externals:
+      - spec: gcc@11.5.0 languages:='c,c++,fortran'
+        prefix: /usr
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc
+            cxx: /usr/bin/g++
+            fortran: /usr/bin/gfortran

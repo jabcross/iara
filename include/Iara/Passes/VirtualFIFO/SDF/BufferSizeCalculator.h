@@ -35,6 +35,11 @@ llvm::FailureOr<BufferSizeValues *>
 calculateBufferSize(BufferSizeMemo &memo,
                     llvm::SmallVector<i64> &rates,
                     llvm::SmallVector<i64> &delays);
+
+llvm::FailureOr<BufferSizeValues *>
+calculateBufferSizePresburger(BufferSizeMemo &memo,
+                               llvm::SmallVector<i64> &rates,
+                               llvm::SmallVector<i64> &delays);
 } // namespace iara::passes::virtualfifo::sdf
 
 #endif

@@ -22,6 +22,13 @@ BufferSizeMemo::get(llvm::SmallVector<i64> &rates,
   return {true, &pair->second};
 }
 
+#ifdef IARA_USE_PRESBURGER_BUFFER_CALC
+llvm::FailureOr<BufferSizeValues *>
+calculateBufferSize(BufferSizeMemo &memo, llvm::SmallVector<i64> &rates,
+                    llvm::SmallVector<i64> &delays) {
+  return calculateBufferSizePresburger(memo, rates, delays);
+}
+#else
 llvm::FailureOr<BufferSizeValues *>
 calculateBufferSize(BufferSizeMemo &memo,
                     llvm::SmallVector<i64> &rates,
@@ -117,4 +124,5 @@ calculateBufferSize(BufferSizeMemo &memo,
 
   return {values};
 }
+#endif
 } // namespace iara::passes::virtualfifo::sdf

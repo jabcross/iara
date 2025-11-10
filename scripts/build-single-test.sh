@@ -21,7 +21,9 @@ if [ -z "$PATH_TO_TEST_BUILD_DIR" ]; then
   export PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 fi
 
-$IARA_DIR/scripts/build-iara.sh
+# Use CMake to build iara-opt only if needed (CMake handles dependency tracking)
+echo "==== Building iara-opt ===="
+\time -f 'iara-opt build took %E' cmake --build $IARA_DIR/build --target iara-opt
 
 mkdir -p $PATH_TO_TEST_BUILD_DIR
 
@@ -32,13 +34,6 @@ cd $PATH_TO_TEST_BUILD_DIR
 #   pwd
 #   exit 1
 # fi
-
-mkdir -p build
-cd build
-
-rm -rf *
-
-rm *.o
 
 echo "Building test: $FOLDER_NAME"
 echo ""
@@ -56,6 +51,16 @@ if [[ $SCHEDULER_MODE != virtual-fifo && $SCHEDULER_MODE != ring-buffer ]]; then
   SCHEDULER_MODE="virtual-fifo"
 fi
 
+# Use scheduler-specific build directory to avoid overwriting
+BUILD_SUBDIR="build-$SCHEDULER_MODE"
+
+mkdir -p "$BUILD_SUBDIR"
+cd "$BUILD_SUBDIR"
+
+# Only remove the executable - keep object files and generated MLIR files
+# Dependency tracking below will rebuild only what's needed
+rm -f a.out
+
 if [ -z $LLVM_INSTALL ]; then
   echo "Must provide LLVM_INSTALL"
   exit 1
@@ -72,7 +77,7 @@ fi
 
 CLANG_INCLUDE="$LLVM_INSTALL/lib/clang/21/include"
 
-INCLUDES="-I$CLANG_INCLUDE -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$PATH_TO_TEST_BUILD_DIR/build"
+INCLUDES="-I$CLANG_INCLUDE -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$PATH_TO_TEST_BUILD_DIR/$BUILD_SUBDIR"
 
 # MEMORY_SANITIZER_OPTIONS="-fsanitize=memory -fsanitize-memory-track-origins -fPIE -pie"
 
@@ -111,8 +116,8 @@ else
       TOPOLOGY_FILE="$PATH_TO_TEST_SOURCES/topology.mlir"
   elif [[ -f $PATH_TO_TEST_SOURCES/topology.test ]]; then
       TOPOLOGY_FILE="$PATH_TO_TEST_SOURCES/topology.test"
-  elif [[ -f $PATH_TO_TEST_BUILD_DIR/build/topology.mlir ]]; then
-      TOPOLOGY_FILE="$PATH_TO_TEST_BUILD_DIR/build/topology.mlir"
+  elif [[ -f $PATH_TO_TEST_BUILD_DIR/$BUILD_SUBDIR/topology.mlir ]]; then
+      TOPOLOGY_FILE="$PATH_TO_TEST_BUILD_DIR/$BUILD_SUBDIR/topology.mlir"
   else
       echo "Missing topology file."
       exit 1
@@ -139,87 +144,197 @@ else
 
   echo Topology file = $TOPOLOGY_FILE
 
-  \time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $TOPOLOGY_FILE >schedule.mlir 2>/dev/null"
-  RC=$?
-  echo iara-opt return code: $?
-  if [ $RC -ne 0 ]; then
-    echo "Error: Failed to run iara-opt"
-    exit 1
+  echo "==== Checking schedule.mlir ===="
+  # Check if we need to rebuild schedule.mlir
+  NEED_REBUILD_SCHEDULE=0
+  if [ ! -f "schedule.mlir" ]; then
+    NEED_REBUILD_SCHEDULE=1
+    echo "schedule.mlir not found, will rebuild"
+  elif [ "$TOPOLOGY_FILE" -nt "schedule.mlir" ]; then
+    NEED_REBUILD_SCHEDULE=1
+    echo "Topology file is newer than schedule.mlir, will rebuild"
+  elif [ "$IARA_DIR/build/bin/iara-opt" -nt "schedule.mlir" ]; then
+    NEED_REBUILD_SCHEDULE=1
+    echo "iara-opt is newer than schedule.mlir, will rebuild"
+  else
+    echo "✓ schedule.mlir is up to date, SKIPPED"
   fi
 
-  sh -x mlir-to-llvmir.sh schedule.mlir
-  RC=$?
-  echo mlir-to-llvmir return code: $?
-  if [ $RC -ne 0 ]; then
-    echo "Error: Failed to convert to llvm ir"
-    exit 1
+  if [ $NEED_REBUILD_SCHEDULE -eq 1 ]; then
+    \time -f 'iara-opt took %E and returned code %x' bash -xc "iara-opt $IARA_FLAGS $TOPOLOGY_FILE >schedule.mlir 2>/dev/null"
+    RC=$?
+    echo iara-opt return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to run iara-opt"
+      exit 1
+    fi
+  fi
+
+  echo "==== Checking schedule.ll ===="
+  # Check if we need to rebuild schedule.ll
+  NEED_REBUILD_LL=0
+  if [ ! -f "schedule.ll" ]; then
+    NEED_REBUILD_LL=1
+    echo "schedule.ll not found, will rebuild"
+  elif [ "schedule.mlir" -nt "schedule.ll" ]; then
+    NEED_REBUILD_LL=1
+    echo "schedule.mlir is newer than schedule.ll, will rebuild"
+  else
+    echo "✓ schedule.ll is up to date, SKIPPED"
+  fi
+
+  if [ $NEED_REBUILD_LL -eq 1 ]; then
+    \time -f 'mlir-to-llvmir took %E and returned code %x' sh -x mlir-to-llvmir.sh schedule.mlir
+    RC=$?
+    echo mlir-to-llvmir return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to convert to llvm ir"
+      exit 1
+    fi
   fi
 
   shopt -s nullglob
 
-  echo building schedule
-  \time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_SCHEDULE_ARGS $INCLUDES -xir -c schedule.ll -o schedule.o"
-  RC=$?
-  echo scheduler return code: $?
-  if [ $RC -ne 0 ]; then
-    echo "Error: Failed to build schedule"
-    exit 1
+  echo "==== Checking schedule.o ===="
+  # Check if we need to rebuild schedule.o
+  NEED_REBUILD_SCHEDULE_O=0
+  if [ ! -f "schedule.o" ]; then
+    NEED_REBUILD_SCHEDULE_O=1
+    echo "schedule.o not found, will rebuild"
+  elif [ "schedule.ll" -nt "schedule.o" ]; then
+    NEED_REBUILD_SCHEDULE_O=1
+    echo "schedule.ll is newer than schedule.o, will rebuild"
+  else
+    echo "✓ schedule.o is up to date, SKIPPED"
+  fi
+
+  if [ $NEED_REBUILD_SCHEDULE_O -eq 1 ]; then
+    echo building schedule
+    \time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_SCHEDULE_ARGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+    RC=$?
+    echo scheduler return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to build schedule"
+      exit 1
+    fi
   fi
 
   ls ..
 
   pwd >&2
 
+  echo "==== Checking runtime objects ===="
+  # Check if we need to rebuild runtime objects
+  NEED_REBUILD_RUNTIME=0
+  RUNTIME_OBJS=$(basename -a $IARA_DIR/runtime/$SCHEDULER_MODE/*.c* | sed 's/\.\(cpp\|c\)$/.o/')
+  
+  for obj in $RUNTIME_OBJS; do
+    if [ ! -f "$obj" ]; then
+      NEED_REBUILD_RUNTIME=1
+      echo "Runtime object $obj not found, will rebuild runtime"
+      break
+    fi
+  done
+  
+  if [ $NEED_REBUILD_RUNTIME -eq 0 ]; then
+    for src in $IARA_DIR/runtime/$SCHEDULER_MODE/*.c*; do
+      obj=$(basename "$src" | sed 's/\.\(cpp\|c\)$/.o/')
+      if [ "$src" -nt "$obj" ]; then
+        NEED_REBUILD_RUNTIME=1
+        echo "Runtime source $(basename $src) is newer than $obj, will rebuild runtime"
+        break
+      fi
+    done
+  fi
+
+  if [ $NEED_REBUILD_RUNTIME -eq 1 ]; then
     echo building runtime
-  \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $RUNTIME_FLAGS $EXTRA_RUNTIME_ARGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
-  # \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -xc++ -std=c++20  $SCHEDULER_SOURCES $INCLUDES"
-  RC=$?
-  echo executable return code: $?
-  if [ $RC -ne 0 ]; then
-    echo "Error: Failed to build runtime"
-    exit 4
+    \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $RUNTIME_FLAGS $EXTRA_RUNTIME_ARGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+    RC=$?
+    echo executable return code: $?
+    if [ $RC -ne 0 ]; then
+      echo "Error: Failed to build runtime"
+      exit 4
+    fi
+  else
+    echo "✓ Runtime objects are up to date, SKIPPED"
   fi
 fi
 
-echo building c kernels
+echo "==== Building C kernels ===="
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
   for c_file in $PATH_TO_TEST_SOURCES/*.c; do
-    echo "Compiling $c_file"
-    \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $COMPILER_FLAGS -ftime-trace=ckernels.json $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
-    RC=$?
-    echo c kernels return code: $?
-    if [ $RC -ne 0 ]; then
-      echo "Error: Failed to build c files"
-      exit 2
+    obj_file=$(basename "$c_file" .c).o
+    
+    # Check if object file needs rebuilding
+    if [ ! -f "$obj_file" ] || [ "$c_file" -nt "$obj_file" ]; then
+      echo "Compiling $c_file"
+      \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $COMPILER_FLAGS -ftime-trace=ckernels.json $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
+      RC=$?
+      echo c kernels return code: $?
+      if [ $RC -ne 0 ]; then
+        echo "Error: Failed to build c files"
+        exit 2
+      fi
+    else
+      echo "✓ Object file $obj_file is up to date, SKIPPED"
     fi
   done
 fi
 
-echo building cpp kernels
+echo "==== Building C++ kernels ===="
 if [ "$(ls $PATH_TO_TEST_SOURCES/*.cpp 2>/dev/null)" ]; then
   for cpp_file in $PATH_TO_TEST_SOURCES/*.cpp; do
-    echo "Compiling $cpp_file"
-    \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 -ftime-trace=cppkernels.json $COMPILER_FLAGS $EXTRA_KERNEL_ARGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
-    RC=$?
-    echo cpp kernels return code: $?
-    if [ $RC -ne 0 ]; then
-      echo "Error: Failed to build cpp files"
-      exit 3
+    obj_file=$(basename "$cpp_file" .cpp).o
+    
+    # Check if object file needs rebuilding
+    if [ ! -f "$obj_file" ] || [ "$cpp_file" -nt "$obj_file" ]; then
+      echo "Compiling $cpp_file"
+      \time -f 'compiling cpp kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $INCLUDES -xc++ -std=c++20 -ftime-trace=cppkernels.json $COMPILER_FLAGS $EXTRA_KERNEL_ARGS $INCLUDES -c $cpp_file $SCHEDULER_SOURCES "
+      RC=$?
+      echo cpp kernels return code: $?
+      if [ $RC -ne 0 ]; then
+        echo "Error: Failed to build cpp files"
+        exit 3
+      fi
+    else
+      echo "✓ Object file $obj_file is up to date, SKIPPED"
     fi
   done
 fi
 
+echo "==== Linking ===="
 EXTRAOBJS=""
 
 for DIR in $EXTRA_OBJ_DIRS; do
   EXTRAOBJS="$EXTRAOBJS $PATH_TO_TEST_SOURCES/$DIR/*.o"
 done
 
-echo linking
-\time -f 'linking took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o $EXTRAOBJS"
-RC=$?
-echo linker return code: $?
-if [ $RC -ne 0 ]; then
-  echo "Error: Failed to link"
-  exit 5
+# Check if we need to relink
+NEED_RELINK=0
+if [ ! -f "a.out" ]; then
+  NEED_RELINK=1
+  echo "Executable not found, will link"
+else
+  # Check if any object file is newer than the executable
+  for obj in *.o $EXTRAOBJS; do
+    if [ -f "$obj" ] && [ "$obj" -nt "a.out" ]; then
+      NEED_RELINK=1
+      echo "Object file $obj is newer than a.out, will relink"
+      break
+    fi
+  done
+fi
+
+if [ $NEED_RELINK -eq 1 ]; then
+  echo linking
+  \time -f 'linking took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o $EXTRAOBJS"
+  RC=$?
+  echo linker return code: $?
+  if [ $RC -ne 0 ]; then
+    echo "Error: Failed to link"
+    exit 5
+  fi
+else
+  echo "✓ Executable a.out is up to date, SKIPPED"
 fi

@@ -26,6 +26,8 @@ extern "C" void c(size_t a[1], size_t b[1]) {
     printf("Ran in different threads.\n");
   } else {
     printf("Ran in same thread.\n");
+    fprintf(stderr, "ERROR: Expected nodes to run in different threads\n");
+    exit(1);
   }
 }
 

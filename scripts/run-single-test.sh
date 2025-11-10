@@ -16,31 +16,25 @@ if [ "$#" -lt 1 ]; then
   FOLDER_NAME=$(ls $IARA_DIR/test/Iara | fzf --prompt="Choose test")
 fi
 
+# Get scheduler mode from second argument or use default
+SCHEDULER_MODE=${2:-virtual-fifo}
+
 # Store arguments in variables
-
-
 PATH_TO_TEST_SOURCES=$IARA_DIR/test/Iara/$FOLDER_NAME
 PATH_TO_TEST_BUILD_DIR=$IARA_DIR/build/test/Iara/$FOLDER_NAME
 
-if [[ ! -d $PATH_TO_TEST_BUILD_DIR ]]; then
-  $IARA_DIR/scripts/build-single-test.sh $PATH_TO_TEST_SOURCES
-fi
+# Use scheduler-specific build directory
+BUILD_SUBDIR="build-$SCHEDULER_MODE"
 
-cd $PATH_TO_TEST_BUILD_DIR
+# Navigate to the build directory
+cd $PATH_TO_TEST_BUILD_DIR/$BUILD_SUBDIR
 
-if [[ $(basename $(realpath ..)) != "Iara" ]]; then
-  echo "Wrong directory!"
+if [[ ! -f ./a.out ]]; then
+  echo "Error: Executable not found. Build may have failed."
   exit 1
 fi
 
-mkdir -p build
-cd build
+echo "==== Running test executable ===="
 
-build-single-test.sh $PATH_TO_TEST_SOURCES
-
-color() (
-  set -o pipefail
-  "$@" 2>&1 >&3 | sed $'s,.*,    \e[31m> &\e[m,' >&2
-) 3>&1
-
-color ./a.out
+# Run the test with timing - color function needs to be available in the subshell
+\time -f 'Test execution took %E and returned code %x' bash -c './a.out'

@@ -23,5 +23,6 @@
     "--background-index",
     "--compile-commands-dir=/home/jabcross/repos/iara/build",
     "-j=10"
-  ]
+  ],
+  "terminal.integrated.defaultProfile.linux": "bash"
 }

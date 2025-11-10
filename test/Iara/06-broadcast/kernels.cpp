@@ -2,8 +2,10 @@
 #include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
+#include <atomic>
 
 std::mutex mutex;
+std::atomic<int> success_count{0};
 
 extern "C" {
 
@@ -18,6 +20,12 @@ void b(int val[1]) {
   printf("Broadcast 1! Val = %d\n", val[0]);
   printf("Address = %lu\n", (size_t)&val[0]);
   mutex.unlock();
+  if (val[0] == 42) {
+    success_count++;
+  } else {
+    fprintf(stderr, "ERROR: b received %d instead of 42\n", val[0]);
+    exit(1);
+  }
 }
 
 void c(int val[1]) {
@@ -25,12 +33,25 @@ void c(int val[1]) {
   printf("Broadcast 2! Val = %d\n", val[0]);
   printf("Address = %lu\n", (size_t)&val[0]);
   mutex.unlock();
+  if (val[0] == 42) {
+    success_count++;
+  } else {
+    fprintf(stderr, "ERROR: c received %d instead of 42\n", val[0]);
+    exit(1);
+  }
 }
 
 void exec() {
 
   iara_runtime_init();
   iara_runtime_run_iteration(0);
+  
+  // Verify both b and c ran successfully
+  if (success_count != 2) {
+    fprintf(stderr, "ERROR: Expected 2 successful broadcasts, got %d\n", success_count.load());
+    exit(1);
+  }
+  printf("Test passed: Both nodes received broadcast value correctly\n");
 }
 }
 

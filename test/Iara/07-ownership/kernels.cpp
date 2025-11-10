@@ -63,5 +63,18 @@ int main() {
          num_reuses,
          (num_reuses > 1 ? "s" : ""));
 
+  // Validate test expectations
+  if (num_mistakes != 0) {
+    fprintf(stderr, "ERROR: Expected 0 mistakes, got %d\n", num_mistakes);
+    return 1;
+  }
+  
+  if ((4 - num_reuses) != 3 || num_reuses != 1) {
+    fprintf(stderr, "ERROR: Expected 3 copies and 1 reuse, got %d copies and %d reuses\n", 
+            4 - num_reuses, num_reuses);
+    return 1;
+  }
+  
+  printf("Test passed\n");
   return 0;
 }

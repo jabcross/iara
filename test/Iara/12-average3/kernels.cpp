@@ -1,9 +1,13 @@
 #include <IaraRuntime/common/Scheduler.h>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <omp.h>
 
 std::mutex m;
+static int iteration_count = 0;
+static float expected_iteration_0[] = {0, 1, 3, 3, 3, 3, 3, 3, 3};
+static float expected_iteration_1[] = {3, 3, 3, 3, 3, 3, 3, 3, 3};
 
 extern "C" void iara_runtime_init();
 extern "C" void iara_runtime_run_iteration(int64_t graph_iteration);
@@ -27,11 +31,19 @@ extern "C" void b(const float in[1],
 // expects 0 1 3 3 3 3 3 3 3 (original values in delay are 0)
 extern "C" void c(const float in[9]) {
   m.lock();
+  float *expected = (iteration_count == 0) ? expected_iteration_0 : expected_iteration_1;
+  
   for (int i = 0; i < 9; i++) {
     printf("%.0f ", in[i]);
+    if (in[i] != expected[i]) {
+      fprintf(stderr, "\nERROR: Iteration %d, position %d: expected %.0f, got %.0f\n",
+              iteration_count, i, expected[i], in[i]);
+      exit(1);
+    }
   }
   printf("\n");
   fflush(stdout);
+  iteration_count++;
   m.unlock();
 }
 
