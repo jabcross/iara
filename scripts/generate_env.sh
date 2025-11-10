@@ -21,11 +21,13 @@ spack env activate iara_env
 
 # Export Spack view paths for all libraries
 SPACK_VIEW_PATH=\$PROJECTS_DIR/iara/spack/var/spack/environments/iara_env/.spack-env/view
+export SPACK_VIEW_PATH
 export C_INCLUDE_PATH=\$SPACK_VIEW_PATH/include:\$C_INCLUDE_PATH
 export CPLUS_INCLUDE_PATH=\$SPACK_VIEW_PATH/include:\$CPLUS_INCLUDE_PATH
 export LIBRARY_PATH=\$SPACK_VIEW_PATH/lib:\$LIBRARY_PATH
 export LD_LIBRARY_PATH=\$SPACK_VIEW_PATH/lib:\$LLVM_INSTALL/lib:\$LLVM_INSTALL/lib/x86_64-unknown-linux-gnu:\$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=\$SPACK_VIEW_PATH/lib/pkgconfig:\$PKG_CONFIG_PATH
+export LDFLAGS="-L\$SPACK_VIEW_PATH/lib \$LDFLAGS"
 
 EOF
 

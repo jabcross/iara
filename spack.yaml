@@ -36,6 +36,9 @@ spack:
   # Configuration parsing
   - py-pyyaml
 
+  # Linear algebra libraries for cholesky experiment
+  - openblas
+  
   - cbc
   view: true
   concretizer:

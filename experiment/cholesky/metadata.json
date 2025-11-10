@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-11-10T11:13:38.904821",
+  "iara_dir": "/home/pedro.ciambra/repos/iara",
+  "num_repetitions": 3,
+  "warmup_runs": 1,
+  "num_configurations": 1,
+  "configurations": [
+    {
+      "matrix_size": 256,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    }
+  ],
+  "git_commit": "9c3acaf7c6f32659006ceb6dd1bd4ba4687a85d0"
+}

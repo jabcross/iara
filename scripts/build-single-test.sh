@@ -328,7 +328,7 @@ fi
 
 if [ $NEED_RELINK -eq 1 ]; then
   echo linking
-  \time -f 'linking took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o $EXTRAOBJS"
+  \time -f 'linking took %E and returned code %x' bash -xc "$CPP_COMPILER --std=c++20 -g -fuse-ld=mold $LINKER_FLAGS $LDFLAGS $INCLUDES $EXTRA_LINKER_ARGS *.o $EXTRAOBJS"
   RC=$?
   echo linker return code: $?
   if [ $RC -ne 0 ]; then

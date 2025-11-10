@@ -1,0 +1,356 @@
+[2025-11-10 05:27:05] === Experiment started at 2025-11-10 05:27:05.027033 ===
+[2025-11-10 05:27:05] Starting experiment with 12 configurations
+[2025-11-10 05:27:05] Repetitions: 5, Warmup: 2
+[2025-11-10 05:27:05] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 05:27:05] 
+=== BUILD PHASE ===
+[2025-11-10 05:27:05] 
+Building 1/12: 256_1_sequential
+[2025-11-10 05:27:05] Building 256_1_sequential...
+[2025-11-10 05:27:06] ERROR: Build failed for 256_1_sequential
+[2025-11-10 05:27:06]   Exit code: 1
+[2025-11-10 05:27:06]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:06] 
+Building 2/12: 256_1_omp-task
+[2025-11-10 05:27:06] Building 256_1_omp-task...
+[2025-11-10 05:27:06] ERROR: Build failed for 256_1_omp-task
+[2025-11-10 05:27:06]   Exit code: 1
+[2025-11-10 05:27:06]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:06] 
+Building 3/12: 256_1_virtual-fifo
+[2025-11-10 05:27:06] Building 256_1_virtual-fifo...
+[2025-11-10 05:27:06] ERROR: Build failed for 256_1_virtual-fifo
+[2025-11-10 05:27:06]   Exit code: 1
+[2025-11-10 05:27:06]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:06] 
+Building 4/12: 256_4_sequential
+[2025-11-10 05:27:06] Building 256_4_sequential...
+[2025-11-10 05:27:06] ERROR: Build failed for 256_4_sequential
+[2025-11-10 05:27:06]   Exit code: 1
+[2025-11-10 05:27:06]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:06] 
+Building 5/12: 256_4_omp-task
+[2025-11-10 05:27:06] Building 256_4_omp-task...
+[2025-11-10 05:27:07] ERROR: Build failed for 256_4_omp-task
+[2025-11-10 05:27:07]   Exit code: 1
+[2025-11-10 05:27:07]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:07] 
+Building 6/12: 256_4_virtual-fifo
+[2025-11-10 05:27:07] Building 256_4_virtual-fifo...
+[2025-11-10 05:27:07] ERROR: Build failed for 256_4_virtual-fifo
+[2025-11-10 05:27:07]   Exit code: 1
+[2025-11-10 05:27:07]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:07] 
+Building 7/12: 1024_1_sequential
+[2025-11-10 05:27:07] Building 1024_1_sequential...
+[2025-11-10 05:27:07] ERROR: Build failed for 1024_1_sequential
+[2025-11-10 05:27:07]   Exit code: 1
+[2025-11-10 05:27:07]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:07] 
+Building 8/12: 1024_1_omp-task
+[2025-11-10 05:27:07] Building 1024_1_omp-task...
+[2025-11-10 05:27:07] ERROR: Build failed for 1024_1_omp-task
+[2025-11-10 05:27:07]   Exit code: 1
+[2025-11-10 05:27:07]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:07] 
+Building 9/12: 1024_1_virtual-fifo
+[2025-11-10 05:27:07] Building 1024_1_virtual-fifo...
+[2025-11-10 05:27:07] ERROR: Build failed for 1024_1_virtual-fifo
+[2025-11-10 05:27:07]   Exit code: 1
+[2025-11-10 05:27:07]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:07] 
+Building 10/12: 1024_4_sequential
+[2025-11-10 05:27:07] Building 1024_4_sequential...
+[2025-11-10 05:27:08] ERROR: Build failed for 1024_4_sequential
+[2025-11-10 05:27:08]   Exit code: 1
+[2025-11-10 05:27:08]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:08] 
+Building 11/12: 1024_4_omp-task
+[2025-11-10 05:27:08] Building 1024_4_omp-task...
+[2025-11-10 05:27:08] ERROR: Build failed for 1024_4_omp-task
+[2025-11-10 05:27:08]   Exit code: 1
+[2025-11-10 05:27:08]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:08] 
+Building 12/12: 1024_4_virtual-fifo
+[2025-11-10 05:27:08] Building 1024_4_virtual-fifo...
+[2025-11-10 05:27:08] ERROR: Build failed for 1024_4_virtual-fifo
+[2025-11-10 05:27:08]   Exit code: 1
+[2025-11-10 05:27:08]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:27:08] 
+WARNING: 12 configurations failed to build:
+[2025-11-10 05:27:08]   - 256_1_sequential
+[2025-11-10 05:27:08]   - 256_1_omp-task
+[2025-11-10 05:27:08]   - 256_1_virtual-fifo
+[2025-11-10 05:27:08]   - 256_4_sequential
+[2025-11-10 05:27:08]   - 256_4_omp-task
+[2025-11-10 05:27:08]   - 256_4_virtual-fifo
+[2025-11-10 05:27:08]   - 1024_1_sequential
+[2025-11-10 05:27:08]   - 1024_1_omp-task
+[2025-11-10 05:27:08]   - 1024_1_virtual-fifo
+[2025-11-10 05:27:08]   - 1024_4_sequential
+[2025-11-10 05:27:08]   - 1024_4_omp-task
+[2025-11-10 05:27:08]   - 1024_4_virtual-fifo
+[2025-11-10 05:27:08] ERROR: All builds failed. Aborting experiment.
+[2025-11-10 05:28:33] === Experiment started at 2025-11-10 05:28:33.238989 ===
+[2025-11-10 05:28:33] Starting experiment with 12 configurations
+[2025-11-10 05:28:33] Repetitions: 5, Warmup: 2
+[2025-11-10 05:28:33] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 05:28:33] 
+=== BUILD PHASE ===
+[2025-11-10 05:28:33] 
+Building 1/12: 256_1_sequential
+[2025-11-10 05:28:33] Building 256_1_sequential...
+[2025-11-10 05:28:33] ERROR: Build failed for 256_1_sequential
+[2025-11-10 05:28:33]   Exit code: 1
+[2025-11-10 05:28:33]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:33] 
+Building 2/12: 256_1_omp-task
+[2025-11-10 05:28:33] Building 256_1_omp-task...
+[2025-11-10 05:28:34] ERROR: Build failed for 256_1_omp-task
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 3/12: 256_1_virtual-fifo
+[2025-11-10 05:28:34] Building 256_1_virtual-fifo...
+[2025-11-10 05:28:34] ERROR: Build failed for 256_1_virtual-fifo
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 4/12: 256_4_sequential
+[2025-11-10 05:28:34] Building 256_4_sequential...
+[2025-11-10 05:28:34] ERROR: Build failed for 256_4_sequential
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 5/12: 256_4_omp-task
+[2025-11-10 05:28:34] Building 256_4_omp-task...
+[2025-11-10 05:28:34] ERROR: Build failed for 256_4_omp-task
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 6/12: 256_4_virtual-fifo
+[2025-11-10 05:28:34] Building 256_4_virtual-fifo...
+[2025-11-10 05:28:34] ERROR: Build failed for 256_4_virtual-fifo
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 7/12: 1024_1_sequential
+[2025-11-10 05:28:34] Building 1024_1_sequential...
+[2025-11-10 05:28:34] ERROR: Build failed for 1024_1_sequential
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 8/12: 1024_1_omp-task
+[2025-11-10 05:28:34] Building 1024_1_omp-task...
+[2025-11-10 05:28:34] ERROR: Build failed for 1024_1_omp-task
+[2025-11-10 05:28:34]   Exit code: 1
+[2025-11-10 05:28:34]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:34] 
+Building 9/12: 1024_1_virtual-fifo
+[2025-11-10 05:28:34] Building 1024_1_virtual-fifo...
+[2025-11-10 05:28:35] ERROR: Build failed for 1024_1_virtual-fifo
+[2025-11-10 05:28:35]   Exit code: 1
+[2025-11-10 05:28:35]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:35] 
+Building 10/12: 1024_4_sequential
+[2025-11-10 05:28:35] Building 1024_4_sequential...
+[2025-11-10 05:28:35] ERROR: Build failed for 1024_4_sequential
+[2025-11-10 05:28:35]   Exit code: 1
+[2025-11-10 05:28:35]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:35] 
+Building 11/12: 1024_4_omp-task
+[2025-11-10 05:28:35] Building 1024_4_omp-task...
+[2025-11-10 05:28:35] ERROR: Build failed for 1024_4_omp-task
+[2025-11-10 05:28:35]   Exit code: 1
+[2025-11-10 05:28:35]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:35] 
+Building 12/12: 1024_4_virtual-fifo
+[2025-11-10 05:28:35] Building 1024_4_virtual-fifo...
+[2025-11-10 05:28:35] ERROR: Build failed for 1024_4_virtual-fifo
+[2025-11-10 05:28:35]   Exit code: 1
+[2025-11-10 05:28:35]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 05:28:35] 
+WARNING: 12 configurations failed to build:
+[2025-11-10 05:28:35]   - 256_1_sequential
+[2025-11-10 05:28:35]   - 256_1_omp-task
+[2025-11-10 05:28:35]   - 256_1_virtual-fifo
+[2025-11-10 05:28:35]   - 256_4_sequential
+[2025-11-10 05:28:35]   - 256_4_omp-task
+[2025-11-10 05:28:35]   - 256_4_virtual-fifo
+[2025-11-10 05:28:35]   - 1024_1_sequential
+[2025-11-10 05:28:35]   - 1024_1_omp-task
+[2025-11-10 05:28:35]   - 1024_1_virtual-fifo
+[2025-11-10 05:28:35]   - 1024_4_sequential
+[2025-11-10 05:28:35]   - 1024_4_omp-task
+[2025-11-10 05:28:35]   - 1024_4_virtual-fifo
+[2025-11-10 05:28:35] ERROR: All builds failed. Aborting experiment.
+[2025-11-10 11:06:17] === Experiment started at 2025-11-10 11:06:17.829722 ===
+[2025-11-10 11:06:17] Starting experiment with 4 configurations
+[2025-11-10 11:06:17] Repetitions: 5, Warmup: 2
+[2025-11-10 11:06:17] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 11:06:17] 
+=== BUILD PHASE ===
+[2025-11-10 11:06:17] 
+Building 1/4: 256_1_virtual-fifo
+[2025-11-10 11:06:17] Building 256_1_virtual-fifo...
+[2025-11-10 11:06:33] ERROR: Build failed for 256_1_virtual-fifo
+[2025-11-10 11:06:33]   Exit code: 5
+[2025-11-10 11:06:33]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 11:06:33] 
+Building 2/4: 256_4_virtual-fifo
+[2025-11-10 11:06:33] Building 256_4_virtual-fifo...
+[2025-11-10 11:06:48] ERROR: Build failed for 256_4_virtual-fifo
+[2025-11-10 11:06:48]   Exit code: 5
+[2025-11-10 11:06:48]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 11:06:48] 
+Building 3/4: 1024_1_virtual-fifo
+[2025-11-10 11:06:48] Building 1024_1_virtual-fifo...
+[2025-11-10 11:07:02] ERROR: Build failed for 1024_1_virtual-fifo
+[2025-11-10 11:07:02]   Exit code: 5
+[2025-11-10 11:07:02]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 11:07:02] 
+Building 4/4: 1024_4_virtual-fifo
+[2025-11-10 11:07:02] Building 1024_4_virtual-fifo...
+[2025-11-10 11:07:18] ERROR: Build failed for 1024_4_virtual-fifo
+[2025-11-10 11:07:18]   Exit code: 5
+[2025-11-10 11:07:18]   Stderr: +++ realpath /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
+++ basename /home/pedro.ciambra/repos/iara/test/Iara/05-cholesky
++ FOLDER_NAME=05-cholesky
++ echo /home/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view/bin:/home/pedro.ciambra/repos/iara/spack/bin:/home/pedro.ciambra/.vscode-server/cli/servers/Stable-7d842fb85a0275a4a8e4d7e040d2625abbf7f084/server/bin/remote-cli:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/pedro.ciambra/.vscode-server/data
+[2025-11-10 11:07:18] 
+WARNING: 4 configurations failed to build:
+[2025-11-10 11:07:18]   - 256_1_virtual-fifo
+[2025-11-10 11:07:18]   - 256_4_virtual-fifo
+[2025-11-10 11:07:18]   - 1024_1_virtual-fifo
+[2025-11-10 11:07:18]   - 1024_4_virtual-fifo
+[2025-11-10 11:07:18] ERROR: All builds failed. Aborting experiment.
+[2025-11-10 11:12:00] === Experiment started at 2025-11-10 11:12:00.234939 ===
+[2025-11-10 11:12:00] Starting experiment with 1 configurations
+[2025-11-10 11:12:00] Repetitions: 3, Warmup: 1
+[2025-11-10 11:12:00] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 11:12:00] 
+=== BUILD PHASE ===
+[2025-11-10 11:12:00] 
+Building 1/1: 256_1_virtual-fifo
+[2025-11-10 11:12:00] Building 256_1_virtual-fifo...
+[2025-11-10 11:12:01] ERROR: Executable not found for 256_1_virtual-fifo at /home/pedro.ciambra/repos/iara/experiment/cholesky/instances/256_1_virtual-fifo/build/build-virtual-fifo/a.out
+[2025-11-10 11:12:01] 
+WARNING: 1 configurations failed to build:
+[2025-11-10 11:12:01]   - 256_1_virtual-fifo
+[2025-11-10 11:12:01] ERROR: All builds failed. Aborting experiment.
+[2025-11-10 11:12:45] === Experiment started at 2025-11-10 11:12:45.688158 ===
+[2025-11-10 11:12:45] Starting experiment with 1 configurations
+[2025-11-10 11:12:45] Repetitions: 3, Warmup: 1
+[2025-11-10 11:12:45] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 11:12:45] 
+=== BUILD PHASE ===
+[2025-11-10 11:12:45] 
+Building 1/1: 256_1_virtual-fifo
+[2025-11-10 11:12:45] Building 256_1_virtual-fifo...
+[2025-11-10 11:12:46] ERROR: Smoke test failed for 256_1_virtual-fifo
+[2025-11-10 11:12:46] 
+WARNING: 1 configurations failed to build:
+[2025-11-10 11:12:46]   - 256_1_virtual-fifo
+[2025-11-10 11:12:46] ERROR: All builds failed. Aborting experiment.
+[2025-11-10 11:13:38] === Experiment started at 2025-11-10 11:13:38.904546 ===
+[2025-11-10 11:13:38] Starting experiment with 1 configurations
+[2025-11-10 11:13:38] Repetitions: 3, Warmup: 1
+[2025-11-10 11:13:38] Saved metadata to /home/pedro.ciambra/repos/iara/experiment/cholesky/metadata.json
+[2025-11-10 11:13:38] 
+=== BUILD PHASE ===
+[2025-11-10 11:13:38] 
+Building 1/1: 256_1_virtual-fifo
+[2025-11-10 11:13:38] Building 256_1_virtual-fifo...
+[2025-11-10 11:13:40] ✓ Successfully built 256_1_virtual-fifo
+[2025-11-10 11:13:40] 
+=== RUN PHASE ===
+[2025-11-10 11:13:40] 
+Running 1/1: 256_1_virtual-fifo
+[2025-11-10 11:13:40] Running 256_1_virtual-fifo (1 warmup + 3 measured runs)...
+[2025-11-10 11:13:40]   Run 1/3: 0.029010s
+[2025-11-10 11:13:40]   Run 2/3: 0.031309s
+[2025-11-10 11:13:40]   Run 3/3: 0.030877s
+[2025-11-10 11:13:40] Saved 3 results to /home/pedro.ciambra/repos/iara/experiment/cholesky/results.csv
+[2025-11-10 11:13:40] 
+=== Experiment completed ===

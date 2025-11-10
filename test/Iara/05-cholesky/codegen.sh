@@ -28,8 +28,8 @@ fi
 echo MATRIX_SIZE = $MATRIX_SIZE
 echo NUM_BLOCKS = $NUM_BLOCKS
 
-python $PATH_TO_TEST_SOURCES/generate_split_join.py $MATRIX_SIZE $NUM_BLOCKS > $PATH_TO_TEST_BUILD_DIR/build/kernel_split_join.inc.h
+python $PATH_TO_TEST_SOURCES/generate_split_join.py $MATRIX_SIZE $NUM_BLOCKS > kernel_split_join.inc.h
 
-python $PATH_TO_TEST_SOURCES/generate_topology.py $MATRIX_SIZE $NUM_BLOCKS > $PATH_TO_TEST_BUILD_DIR/build/topology.mlir
+python $PATH_TO_TEST_SOURCES/generate_topology.py $MATRIX_SIZE $NUM_BLOCKS > topology.mlir
 
 echo End generating topology and IO kernels

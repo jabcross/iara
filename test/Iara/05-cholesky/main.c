@@ -7,7 +7,7 @@
 // #include <errno.h>
 #include <malloc.h>
 #include <omp.h>
-#include <openblas/lapack.h>
+#include <lapack.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
