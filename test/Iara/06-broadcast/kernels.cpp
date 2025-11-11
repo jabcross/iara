@@ -45,6 +45,7 @@ void exec() {
 
   iara_runtime_init();
   iara_runtime_run_iteration(0);
+  iara_runtime_wait();
   
   // Verify both b and c ran successfully
   if (success_count != 2) {

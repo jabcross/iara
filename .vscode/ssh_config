@@ -1,0 +1,9 @@
+# SSH Config for iara workspace
+# This file is used by VSCode Remote SSH for this workspace only
+
+Host sorgan-iara
+    HostName sorgan
+    User pedro.ciambra
+    ProxyJump lsc
+    RemoteCommand source /scratch/pedro.ciambra/repos/iara/.env 2>/dev/null; exec $SHELL -l
+    RequestTTY yes
