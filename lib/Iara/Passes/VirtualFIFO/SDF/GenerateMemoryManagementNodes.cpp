@@ -12,6 +12,7 @@
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Value.h>
 #include <mlir/IR/ValueRange.h>

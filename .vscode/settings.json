@@ -1,29 +1,4 @@
 {
-  "workbench.colorTheme": "Visual Studio 2017 Dark - C++",
-  "cmake.configureOnOpen": false,
-  "cmake.buildTask": true,
-  "cmake.environment": {
-    "CLICOLOR_FORCE": "1"
-  },
-  "remote.SSH.configFile": "${workspaceFolder}/.vscode/ssh_config",
-  "python.analysis.extraPaths": [
-    "${env:LLVM_SOURCES}/llvm/utils/lit"
-  ],
-  "dotnetAcquisitionExtension.enableTelemetry": false,
-  "clang-tidy.blacklist": [
-    "scripts/.*"
-  ],
-  "clang-format.assumeFilename": ".clang-format",
-  "clangd.enableCodeCompletion": true,
-  "lldb.displayFormat": "auto",
-  "lldb.showDisassembly": "auto",
-  "lldb.dereferencePointers": true,
-  "lldb.consoleMode": "commands",
   "clangd.path": "${env:LLVM_INSTALL}/bin/clangd",
-  "clangd.arguments": [
-    "--background-index",
-    "--compile-commands-dir=${workspaceFolder}/build",
-    "-j=10"
-  ],
   "terminal.integrated.defaultProfile.linux": "bash"
 }

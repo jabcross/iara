@@ -45,14 +45,20 @@ fi
 
 echo Scheduler mode: \"$SCHEDULER_MODE\"
 
-if [[ $SCHEDULER_MODE != virtual-fifo && $SCHEDULER_MODE != ring-buffer ]]; then
-  echo "Not a IaRa scheduler mode. Setting it to virtual-fifo just to compile."
-  # NOT_IARA=1
-  SCHEDULER_MODE="virtual-fifo"
+# Check if this is an IaRa scheduler or external (OpenMP) scheduler
+if [[ $SCHEDULER_MODE == "sequential" || $SCHEDULER_MODE == "omp-for" || $SCHEDULER_MODE == "omp-task" ]]; then
+  echo "External/non-IaRa scheduler. Will not compile IaRa runtime."
+  NOT_IARA=1
+  # For non-IaRa builds, use a separate build directory to keep them isolated
+  BUILD_SUBDIR="build-$SCHEDULER_MODE"
+elif [[ $SCHEDULER_MODE == "virtual-fifo" || $SCHEDULER_MODE == "ring-buffer" ]]; then
+  echo "IaRa scheduler mode."
+  NOT_IARA=0
+  BUILD_SUBDIR="build-$SCHEDULER_MODE"
+else
+  echo "Unknown scheduler mode: $SCHEDULER_MODE"
+  exit 1
 fi
-
-# Use scheduler-specific build directory to avoid overwriting
-BUILD_SUBDIR="build-$SCHEDULER_MODE"
 
 mkdir -p "$BUILD_SUBDIR"
 cd "$BUILD_SUBDIR"
@@ -81,10 +87,40 @@ INCLUDES="-I$CLANG_INCLUDE -I. -I$IARA_DIR/include -I$IARA_DIR/external -I$PATH_
 
 # MEMORY_SANITIZER_OPTIONS="-fsanitize=memory -fsanitize-memory-track-origins -fPIE -pie"
 
+# Use BUILD_OPTIMIZATION if set, otherwise default to -g for debug
+if [ -z "$BUILD_OPTIMIZATION" ]; then
+  BUILD_OPTIMIZATION="-g"
+fi
+
+# Check if ccache should be used
+# By default, use ccache if available unless USE_CCACHE is explicitly set to 0
+if [ -z "$USE_CCACHE" ]; then
+  # Not set - use ccache if available (default behavior)
+  if command -v ccache &> /dev/null; then
+    echo "Using ccache for faster compilation (default)"
+    CCACHE="ccache"
+  else
+    CCACHE=""
+  fi
+elif [ "$USE_CCACHE" = "1" ]; then
+  # Explicitly enabled
+  if command -v ccache &> /dev/null; then
+    echo "Using ccache for faster compilation (enabled via USE_CCACHE)"
+    CCACHE="ccache"
+  else
+    echo "WARNING: ccache requested but not found, proceeding without it"
+    CCACHE=""
+  fi
+else
+  # Explicitly disabled (e.g., for compile time measurement)
+  echo "ccache disabled (USE_CCACHE not set to 1)"
+  CCACHE=""
+fi
+
 CPP_COMPILER=$LLVM_INSTALL/bin/clang++
 C_COMPILER=$LLVM_INSTALL/bin/clang
 # COMPILER_FLAGS="-stdlib=libc++ -fopenmp"
-COMPILER_FLAGS="-stdlib=libc++ -fopenmp $MEMORY_SANITIZER_OPTIONS"
+COMPILER_FLAGS="-stdlib=libc++ -fopenmp $BUILD_OPTIMIZATION $MEMORY_SANITIZER_OPTIONS"
 # COMPILER_FLAGS="-stdlib=libc++"
 LINKER_FLAGS="-L$LLVM_INSTALL/lib -lomp -lpthread -lc++ -lc++abi $MEMORY_SANITIZER_OPTIONS"
 # LINKER_FLAGS="-L$LLVM_INSTALL/lib -lc++ -lc++abi "
@@ -210,7 +246,7 @@ else
 
   if [ $NEED_REBUILD_SCHEDULE_O -eq 1 ]; then
     echo building schedule
-    \time -f 'compiling schedule took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_SCHEDULE_ARGS $INCLUDES -xir -c schedule.ll -o schedule.o"
+    \time -f 'compiling schedule took %E and returned code %x' bash -xc "$CCACHE $CPP_COMPILER -ftime-trace=schedule.json --std=c++20 -g $COMPILER_FLAGS $EXTRA_SCHEDULE_ARGS $INCLUDES -xir -c schedule.ll -o schedule.o"
     RC=$?
     echo scheduler return code: $?
     if [ $RC -ne 0 ]; then
@@ -249,7 +285,7 @@ else
 
   if [ $NEED_REBUILD_RUNTIME -eq 1 ]; then
     echo building runtime
-    \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $RUNTIME_FLAGS $EXTRA_RUNTIME_ARGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
+    \time -f 'compiling runtime took %E and returned code %x' bash -xc "$CCACHE $CPP_COMPILER -ftime-trace=runtime.json --std=c++20 -g $COMPILER_FLAGS $RUNTIME_FLAGS $EXTRA_RUNTIME_ARGS $INCLUDES -xc++ -std=c++20 $SCHEDULER_SOURCES"
     RC=$?
     echo executable return code: $?
     if [ $RC -ne 0 ]; then
@@ -269,7 +305,7 @@ if [ "$(ls $PATH_TO_TEST_SOURCES/*.c 2>/dev/null)" ]; then
     # Check if object file needs rebuilding
     if [ ! -f "$obj_file" ] || [ "$c_file" -nt "$obj_file" ]; then
       echo "Compiling $c_file"
-      \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CPP_COMPILER -g $COMPILER_FLAGS -ftime-trace=ckernels.json $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
+      \time -f 'compiling c kernels took %E and returned code %x' bash -xc "$CCACHE $CPP_COMPILER -g $COMPILER_FLAGS -ftime-trace=ckernels.json $INCLUDES $EXTRA_KERNEL_ARGS -xc -c "$c_file" "
       RC=$?
       echo c kernels return code: $?
       if [ $RC -ne 0 ]; then

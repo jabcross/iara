@@ -1,3 +1,6 @@
+#ifndef CHOLESKY_H
+#define CHOLESKY_H
+
 #include <assert.h>
 #include <lapack.h>
 #include <math.h>
@@ -60,6 +63,8 @@ void dsyrk_(char *uplo,
             double *c,
             int *ldc);
 
+#ifndef BLAS_ENUM_DEFINED
+  #define BLAS_ENUM_DEFINED
 enum blas_order_type { blas_rowmajor = 101, blas_colmajor = 102 };
 
 enum blas_cmach_type {
@@ -86,6 +91,7 @@ enum blas_norm_type {
   blas_max_norm = 177,
   blas_real_max_norm = 178
 };
+#endif
 
 static void BLAS_error(char *rname, int err, int val, int x) {
   fprintf(stderr, "%s %d %d %d\n", rname, err, val, x);
@@ -293,3 +299,5 @@ static double *malloc_block(const int ts) {
 
   return block;
 }
+
+#endif // CHOLESKY_H

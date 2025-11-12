@@ -87,7 +87,24 @@ Raw measurements with columns:
 - `wall_time`: Measured execution time (seconds)
 - `real_time`: Total elapsed time including overhead
 - `run_number`: Which repetition (0-indexed, negative for warmup)
+### `results.csv`
+Raw measurements with columns:
+- `matrix_size`, `num_blocks`, `block_size`, `block_memory`
+- `scheduler`: sequential, omp-task, or virtual-fifo
+- `wall_time`: Measured execution time (seconds)
+- `real_time`: Total elapsed time including overhead
+- `max_rss_kb`: Maximum resident set size in KB (memory usage)
+- `run_number`: Which repetition (0-indexed, negative for warmup)
 - `timestamp`: ISO format timestamp
+
+### `build_metrics.csv`
+Compilation and binary size metrics (measured once per configuration):
+- `config_name`: Configuration identifier (e.g., 256_1_sequential)
+- `compile_time`: Total compilation time in seconds
+- `text_size`: Size of .text section (code) in bytes
+- `data_size`: Size of .data section (initialized data) in bytes
+- `bss_size`: Size of .bss section (uninitialized data) in bytes
+- `total_size`: Total binary file size in bytes
 
 ### `statistics.csv`
 Aggregated statistics:

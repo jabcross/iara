@@ -1,13 +1,18 @@
 // adapted from tdg-benchs
 
 #include "cholesky.h"
-#include <IaraRuntime/common/Scheduler.h>
+// adapted from tdg-benchs
+
+#include "cholesky.h"
+#ifdef SCHEDULER_IARA
+  #include <IaraRuntime/common/Scheduler.h>
+#endif
 #include <assert.h>
 // #include <climits>
 // #include <errno.h>
+#include <lapack.h>
 #include <malloc.h>
 #include <omp.h>
-#include <lapack.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -184,7 +189,8 @@ void blocked_cholesky_openmp_tasks(double *inout_matrix) {
 double const *input_g = NULL;
 double *output_g = NULL;
 
-#include "kernel_split_join.inc.h"
+#ifdef SCHEDULER_IARA
+  #include "kernel_split_join.inc.h"
 
 void exec() {
   iara_runtime_init();
@@ -199,6 +205,12 @@ void blocked_cholesky_virtual_fifo(double *inout_matrix_blocked) {
 
   iara_runtime_exec(exec);
 }
+#else
+void blocked_cholesky_virtual_fifo(double *inout_matrix_blocked) {
+  fprintf(stderr, "ERROR: virtual-fifo scheduler not compiled in this build\n");
+  exit(1);
+}
+#endif
 
 int main_original(int argc, char *argv[]);
 
@@ -347,25 +359,28 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "block size: %d\n", block_size);
   fprintf(stderr, "block_size_bytes: %d\n", block_size_bytes);
 
-  char const *scheduler = NULL;
+  // Scheduler is selected at compile time
   BlockedCholeskyImpl impl = NULL;
+  char const *scheduler = NULL;
 
-  for (int i = 1; i < argc; i++) {
-    if (strncmp("--scheduler=", argv[i], 12) == 0) {
-      for (int j = 0; j < NUM_SCHEDULERS; j++) {
-        if (strncmp(argv[i] + 12, schedulers[j], 256) == 0) {
-          scheduler = schedulers[j];
-          impl = scheduler_impls[j];
-          break;
-        }
-      }
-    } else {
-      fprintf(stderr, "Error: Unrecognized argument: \"%s\"\n", argv[i]);
-      exit(1);
-    }
-  }
+#if defined(SCHEDULER_SEQUENTIAL)
+  impl = &blocked_cholesky_sequential;
+  scheduler = "sequential";
+#elif defined(SCHEDULER_OMP_FOR)
+  impl = &blocked_cholesky_openmp_for;
+  scheduler = "omp-for";
+#elif defined(SCHEDULER_OMP_TASK)
+  impl = &blocked_cholesky_openmp_tasks;
+  scheduler = "omp-task";
+#elif defined(SCHEDULER_IARA)
+  impl = &blocked_cholesky_virtual_fifo;
+  scheduler = "virtual-fifo";
+#else
+  #error                                                                       \
+      "Must define one of: SCHEDULER_SEQUENTIAL, SCHEDULER_OMP_FOR, SCHEDULER_OMP_TASK, SCHEDULER_IARA"
+#endif
 
-  fprintf(stderr, "Chosen scheduler: %s\n", scheduler);
+  fprintf(stderr, "Compiled scheduler: %s\n", scheduler);
 
   double *input_matrix_linear = allocate_matrix();
   double *inout_matrix_blocked = allocate_matrix();

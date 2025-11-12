@@ -65,6 +65,42 @@
   ],
   "configurations": [
     {
+      "name": "(lldb) Debug 2048_32_virtual-fifo crash",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--iara-canonicalize",
+        "--flatten",
+        "--virtual-fifo=main-actor=run",
+        "topology.mlir"
+      ],
+      "cwd": "${workspaceFolder}/experiment/cholesky/instances/2048_32_virtual-fifo/build-virtual-fifo",
+      "env": {
+        "POLYGEIST_MLIR_CLANG_BIN": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang",
+        "LLVM_PROJECT": "${workspaceFolder}/../Polygeist/llvm-project"
+      }
+    },
+    {
+      "name": "(lldb) Simple Test",
+      "type": "lldb",
+      "request": "launch",
+      "program": "/tmp/test",
+      "args": [],
+      "cwd": "/tmp"
+    },
+    {
+      "name": "(gdb) Simple Test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/tmp/test",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "/tmp",
+      "externalConsole": false,
+      "MIMode": "gdb"
+    },
+    {
       "name": "total-firings-calculator",
       "type": "debugpy",
       "request": "launch",
@@ -130,6 +166,45 @@
       ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "POLYGEIST_MLIR_CLANG_BIN",
+          "value": "${workspaceFolder}/../Polygeist/build/bin/mlir-clang"
+        },
+        {
+          "name": "LLVM_PROJECT",
+          "value": "${workspaceFolder}/../Polygeist/llvm-project"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "build-iara.sh",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) Debug 2048_32_virtual-fifo crash",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/iara-opt",
+      "args": [
+        "--iara-canonicalize",
+        "--flatten",
+        "--virtual-fifo=main-actor=run",
+        "topology.mlir"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/experiment/cholesky/instances/2048_32_virtual-fifo/build-virtual-fifo",
       "environment": [
         {
           "name": "POLYGEIST_MLIR_CLANG_BIN",

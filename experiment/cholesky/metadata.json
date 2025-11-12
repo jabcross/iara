@@ -1,15 +1,730 @@
 {
-  "timestamp": "2025-11-10T11:13:38.904821",
-  "iara_dir": "/home/pedro.ciambra/repos/iara",
-  "num_repetitions": 3,
+  "timestamp": "2025-11-11T14:49:59.078897",
+  "iara_dir": "/scratch/pedro.ciambra/repos/iara",
+  "num_repetitions": 5,
   "warmup_runs": 1,
-  "num_configurations": 1,
+  "num_configurations": 144,
   "configurations": [
     {
-      "matrix_size": 256,
+      "matrix_size": 2048,
       "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 2048,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 4096,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 6144,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 8192,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 10240,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 12288,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 14336,
+      "num_blocks": 32,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 1,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 1,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 1,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 2,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 2,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 2,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 4,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 4,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 4,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 8,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 8,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 8,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 16,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 16,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 16,
+      "scheduler": "virtual-fifo"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 32,
+      "scheduler": "sequential"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 32,
+      "scheduler": "omp-task"
+    },
+    {
+      "matrix_size": 16384,
+      "num_blocks": 32,
       "scheduler": "virtual-fifo"
     }
   ],
-  "git_commit": "9c3acaf7c6f32659006ceb6dd1bd4ba4687a85d0"
+  "git_commit": "3611dce2d56357730ef735461f280cfff9edfe17"
 }
