@@ -1,4 +1,10 @@
 {
   "clangd.path": "${env:LLVM_INSTALL}/bin/clangd",
-  "terminal.integrated.defaultProfile.linux": "bash"
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "cmake.ctest.debugLaunchTarget": "CMake: Debug Test (lldb)",
+  "cmake.environment": {
+    "LLVM_INSTALL": "/home/pedro.ciambra/llvm-install",
+    "IARA_DIR": "/scratch/pedro.ciambra/repos/iara"
+  },
+  "cmake.buildDirectory": "${workspaceFolder}/build"
 }

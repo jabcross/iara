@@ -65,6 +65,55 @@
   ],
   "configurations": [
     {
+      "name": "CMake: Debug Test (gdb)",
+      "type": "cppdbg",
+      "request": "launch",
+      "presentation": {
+        "hidden": false,
+        "group": "cmake-tests"
+      },
+      "program": "${cmake.testWorkingDirectory}/a.out",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${env:LLVM_INSTALL}/lib:${env:LLVM_INSTALL}/lib/x86_64-unknown-linux-gnu:${env:LD_LIBRARY_PATH}"
+        }
+      ],
+      "args": [
+        "${cmake.testArgs}"
+      ],
+      "cwd": "${cmake.testWorkingDirectory}",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "CMake: Debug Test (lldb)",
+      "type": "lldb-dap",
+      "request": "launch",
+      "presentation": {
+        "hidden": false,
+        "group": "cmake-tests"
+      },
+      "program": "${cmake.testProgram}",
+      "env": [
+        "SCHEDULER_MODE=${input:scheduler}",
+        "LD_LIBRARY_PATH=${env:LLVM_INSTALL}/lib:${env:LLVM_INSTALL}/lib/x86_64-unknown-linux-gnu:${env:LD_LIBRARY_PATH}"
+      ],
+      "args": [
+        "${cmake.testArgs}"
+      ],
+      "cwd": "${cmake.testWorkingDirectory}",
+      "stopOnEntry": false
+    },
+    {
       "name": "(lldb) Debug 2048_32_virtual-fifo crash",
       "type": "lldb",
       "request": "launch",
@@ -137,7 +186,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build-iara.sh",
+      "preLaunchTask": "CMake: build",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -178,7 +227,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build-iara.sh",
+      "preLaunchTask": "CMake: build",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -217,7 +266,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build-iara.sh",
+      "preLaunchTask": "CMake: build",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -258,7 +307,7 @@
       ],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "build-iara.sh",
+      "preLaunchTask": "CMake: build",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -285,14 +334,14 @@
         "--${input:scheduler}",
         "${file}"
       ],
-      "preLaunchTask": "build-iara.sh",
+      "preLaunchTask": "CMake: build",
       "cwd": "${workspaceFolder}",
     },
     {
       "name": "(gdb) Runtime test",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build/a.out",
+      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build-${input:scheduler}/a.out",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
@@ -300,6 +349,10 @@
         {
           "name": "SCHEDULER_MODE",
           "value": "${input:scheduler}"
+        },
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${env:LLVM_INSTALL}/lib:${env:LD_LIBRARY_PATH}"
         }
       ],
       "externalConsole": false,
@@ -331,7 +384,6 @@
       "cwd": "${fileDirname}",
       "externalConsole": false,
       "MIMode": "gdb",
-      // "preLaunchTask": "Build test",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
@@ -378,10 +430,11 @@
       "name": "(lldb) Runtime test",
       "type": "lldb-dap",
       "request": "launch",
-      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build/a.out",
+      "program": "${workspaceFolder}/build/test/Iara/${input:test}/build-${input:scheduler}/a.out",
       "args": [],
       "env": [
-        "SCHEDULER_MODE=${input:scheduler}"
+        "SCHEDULER_MODE=${input:scheduler}",
+        "LD_LIBRARY_PATH=${env:LLVM_INSTALL}/lib:${env:LD_LIBRARY_PATH}"
       ],
       "cwd": "${workspaceFolder}/test/Iara/${input:test}",
       "preLaunchTask": "Build test",
@@ -404,7 +457,7 @@
       "type": "lldb",
       "request": "launch",
       "name": "Launch",
-      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build/a.out",
+      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build-virtual-fifo/a.out",
       "args": [],
       "cwd": "${workspaceFolder}/test/Iara/03-two-nodes/build/"
     },
@@ -431,7 +484,7 @@
       "type": "lldb",
       "request": "launch",
       "name": "Launch",
-      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build/a.out",
+      "program": "${workspaceFolder}/test/Iara/03-two-nodes/build-virtual-fifo/a.out",
       "args": [],
       "cwd": "${workspaceFolder}/test/Iara/03-two-nodes/build/"
     },

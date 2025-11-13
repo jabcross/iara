@@ -12,12 +12,9 @@ spack:
   - mold              # Optional: faster linking
   # Compilers & debugging
   - gcc
-  - llvm
   - gdb
   - valgrind
 
-  # CLI tools
-  - fzf               # Optional: fuzzy finder
   # Python core for Jupyter
   - py-setuptools
   - py-ipykernel

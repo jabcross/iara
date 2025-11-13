@@ -52,12 +52,6 @@
   ],
   "tasks": [
     {
-      "type": "shell",
-      "command": "build-iara.sh",
-      "label": "build-iara.sh",
-      "problemMatcher": "$msCompile"
-    },
-    {
       "type": "cmake",
       "label": "CMake: build",
       "command": "build",
@@ -89,33 +83,11 @@
       "detail": "CMake template test task"
     },
     {
-      "label": "Make SIFT topology",
-      "type": "shell",
-      "command": "bash -c 'cd ${workspaceFolder} ; scripts/build-iara.sh && mkdir -p test/Iara/08-SIFT/build && python scripts/dif-to-iara.py test/Iara/08-SIFT/topology.dif > test/Iara/08-SIFT/build/topology.mlir' "
-    },
-    {
       "label": "Build test",
       "type": "shell",
-      "command": "scripts/build-single-test.sh test/Iara/${input:remember_test} ${input:remember_scheduler}",
+      "command": "cmake --build build --target run-${input:test}-${input:scheduler}",
       "options": {
-        "env": {
-          "MOLD_PATH": "/usr/bin/mold",
-          // "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
-        }
-      },
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Build test (pick)",
-      "type": "shell",
-      "command": "scripts/build-single-test.sh test/Iara/${input:test} ${input:scheduler}",
-      "options": {
-        "env": {
-          "MOLD_PATH": "/usr/bin/mold",
-          // "LIT_OPTS": "--max-tests=1 --order=lexical --filter=${input:remember_test}"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [
         "$gcc"
