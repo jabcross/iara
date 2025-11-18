@@ -362,11 +362,15 @@ function(iara_add_runtime_test entry scheduler)
         add_custom_target(build-${base} DEPENDS ${target_name})
         string(JOIN " " iara_flags_str ${iara_flags})
         set(iara_opt_path ${iara_opt_binary})
+        # Build the test target as the "build-..." test so that the subsequent
+        # "run-..." test has the executable (a.out) available in the
+        # test's build directory. Previously this test only invoked iara-opt
+        # which didn't actually compile the C/C++ test binary.
         add_test(
                 NAME build-${base}
-                COMMAND ${iara_opt_path} ${iara_flags} ${topology_input}
+                COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target build-${base}
         )
-        set_tests_properties(build-${base} PROPERTIES WORKING_DIRECTORY ${build_subdir} FIXTURES_SETUP build-${base})
+        set_tests_properties(build-${base} PROPERTIES WORKING_DIRECTORY ${CMAKE_BINARY_DIR} FIXTURES_SETUP build-${base})
 
         add_test(
                 NAME run-${base}
