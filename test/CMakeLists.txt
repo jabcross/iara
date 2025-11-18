@@ -1,7 +1,14 @@
 include(CTest)
 
-# Scheduler modes to test
-set(SCHEDULER_MODES "virtual-fifo")
+# Disable ccache for test builds to ensure build-type flags are properly applied
+# This is important for size optimization experiments where assertions must be disabled
+set(CMAKE_C_COMPILER_LAUNCHER "")
+set(CMAKE_CXX_COMPILER_LAUNCHER "")
+
+# Scheduler modes to test; only set defaults if the variable isn't already set
+if(NOT DEFINED SCHEDULER_MODES OR "${SCHEDULER_MODES}" STREQUAL "")
+        set(SCHEDULER_MODES "virtual-fifo")
+endif()
 # set(SCHEDULER_MODES "virtual-fifo" "ring-buffer")
 
 if(NOT DEFINED ENV{LLVM_INSTALL})
@@ -73,16 +80,11 @@ function(iara_runtime_sources scheduler out_var)
                         ${PROJECT_SOURCE_DIR}/runtime/ring-buffer/RingBuffer_Scheduler.cpp
                 )
         else()
-                message(FATAL_ERROR "Unknown scheduler mode '${scheduler}'")
+                # No runtime sources for other schedulers (they may be test-specific)
+                set(srcs "")
         endif()
         set(${out_var} ${srcs} PARENT_SCOPE)
 endfunction()
-
-if(DEFINED ENV{BUILD_OPTIMIZATION} AND NOT "$ENV{BUILD_OPTIMIZATION}" STREQUAL "")
-        separate_arguments(IARA_BUILD_OPT UNIX_COMMAND "$ENV{BUILD_OPTIMIZATION}")
-else()
-        set(IARA_BUILD_OPT "-g")
-endif()
 
 function(iara_add_runtime_test entry scheduler)
         set(test_src_dir "${CMAKE_CURRENT_SOURCE_DIR}/Iara/${entry}")
@@ -103,6 +105,18 @@ function(iara_add_runtime_test entry scheduler)
                 message(STATUS "Skipping IaRa test ${base} (no C/C++ sources found)")
                 return()
         endif()
+
+        # Check if this is a baseline scheduler (no IaRa runtime)
+        set(is_baseline_scheduler FALSE)
+        if("${scheduler}" STREQUAL "sequential" OR "${scheduler}" STREQUAL "omp-task" OR "${scheduler}" STREQUAL "omp-for")
+                set(is_baseline_scheduler TRUE)
+        endif()
+
+        # Get build-type-specific flags (e.g., CMAKE_CXX_FLAGS_EXPERIMENTSIZE contains -DNDEBUG)
+        # These flags will be applied to all compilation: schedule.o, runtime sources, and test sources
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type_upper)
+        set(build_type_cxx_flags "${CMAKE_CXX_FLAGS_${build_type_upper}}")
+        separate_arguments(build_type_cxx_flags)
 
         iara_runtime_sources(${scheduler} runtime_sources)
 
@@ -139,120 +153,146 @@ function(iara_add_runtime_test entry scheduler)
                         VERBATIM
                 )
 
-                list(APPEND kernel_extra_args "-DNUM_BLOCKS=$ENV{NUM_BLOCKS}" "-DMATRIX_SIZE=$ENV{MATRIX_SIZE}" "-DSCHEDULER_IARA" "-DVERBOSE")
+                # Set scheduler-specific compile flags
+                if(is_baseline_scheduler)
+                        if("${scheduler}" STREQUAL "sequential")
+                                list(APPEND kernel_extra_args "-DSCHEDULER_SEQUENTIAL")
+                        elseif("${scheduler}" STREQUAL "omp-task")
+                                list(APPEND kernel_extra_args "-DSCHEDULER_OMP_TASK")
+                        elseif("${scheduler}" STREQUAL "omp-for")
+                                list(APPEND kernel_extra_args "-DSCHEDULER_OMP_FOR")
+                        endif()
+                else()
+                        list(APPEND kernel_extra_args "-DSCHEDULER_IARA")
+                endif()
+                list(APPEND kernel_extra_args "-DNUM_BLOCKS=$ENV{NUM_BLOCKS}" "-DMATRIX_SIZE=$ENV{MATRIX_SIZE}" "-DVERBOSE")
                 list(APPEND link_extra_args "-lopenblas")
         endif()
 
-        set(topology_input "")
-        if(DEFINED ENV{TOPOLOGY_FILE} AND NOT "$ENV{TOPOLOGY_FILE}" STREQUAL "")
-                set(topology_input "$ENV{TOPOLOGY_FILE}")
-        elseif(EXISTS "${test_src_dir}/topology.mlir")
-                set(topology_input "${test_src_dir}/topology.mlir")
-        elseif(EXISTS "${test_src_dir}/topology.dif")
-                set(topology_input "${build_subdir}/topology.mlir")
-        elseif(EXISTS "${test_src_dir}/topology.test")
-                set(topology_input "${test_src_dir}/topology.test")
-        else()
-                set(topology_input "${build_subdir}/topology.mlir")
+
+        set(iara_opt_binary "$ENV{IARA_DIR}/build/bin/iara-opt")
+        if(NOT iara_opt_binary)
+                message(FATAL_ERROR "Unable to find iara-opt. Please build iara-opt in the main project and/or set IARA_OPT_PATH to its path.")
         endif()
 
-        set(schedule_mlir "${build_subdir}/schedule.mlir")
-        set(schedule_ll "${build_subdir}/schedule.ll")
-        set(schedule_obj "${build_subdir}/schedule.o")
+        # For baseline schedulers, skip schedule generation entirely
+        set(schedule_obj "")
+        if(NOT is_baseline_scheduler)
+                set(topology_input "")
+                if(DEFINED ENV{TOPOLOGY_FILE} AND NOT "$ENV{TOPOLOGY_FILE}" STREQUAL "")
+                        set(topology_input "$ENV{TOPOLOGY_FILE}")
+                elseif(EXISTS "${test_src_dir}/topology.mlir")
+                        set(topology_input "${test_src_dir}/topology.mlir")
+                elseif(EXISTS "${test_src_dir}/topology.dif")
+                        set(topology_input "${build_subdir}/topology.mlir")
+                elseif(EXISTS "${test_src_dir}/topology.test")
+                        set(topology_input "${test_src_dir}/topology.test")
+                else()
+                        set(topology_input "${build_subdir}/topology.mlir")
+                endif()
 
-        set(schedule_deps iara-opt)
-        if(codegen_stamp)
-                list(APPEND schedule_deps ${codegen_stamp})
-        endif()
-        if(EXISTS "${topology_input}")
-                list(APPEND schedule_deps "${topology_input}")
-        endif()
+                set(schedule_mlir "${build_subdir}/schedule.mlir")
+                set(schedule_ll "${build_subdir}/schedule.ll")
+                set(schedule_obj "${build_subdir}/schedule.o")
 
-        if(EXISTS "${test_src_dir}/topology.dif")
+                set(schedule_deps "")
+                if(codegen_stamp)
+                        list(APPEND schedule_deps ${codegen_stamp})
+                endif()
+                if(EXISTS "${topology_input}")
+                        list(APPEND schedule_deps "${topology_input}")
+                endif()
+
+                if(EXISTS "${test_src_dir}/topology.dif")
+                        add_custom_command(
+                                OUTPUT ${build_subdir}/topology.mlir
+                                COMMAND ${CMAKE_COMMAND} -E make_directory ${build_subdir}
+                                COMMAND python3 ${PROJECT_SOURCE_DIR}/scripts/dif-to-iara.py ${test_src_dir}/topology.dif > ${build_subdir}/topology.mlir
+                                DEPENDS ${test_src_dir}/topology.dif ${PROJECT_SOURCE_DIR}/scripts/dif-to-iara.py
+                                COMMENT "Generating topology.mlir from topology.dif for ${base}"
+                        )
+                endif()
+
                 add_custom_command(
-                        OUTPUT ${build_subdir}/topology.mlir
+                        OUTPUT ${schedule_mlir}
                         COMMAND ${CMAKE_COMMAND} -E make_directory ${build_subdir}
-                        COMMAND python3 ${PROJECT_SOURCE_DIR}/scripts/dif-to-iara.py ${test_src_dir}/topology.dif > ${build_subdir}/topology.mlir
-                        DEPENDS ${test_src_dir}/topology.dif ${PROJECT_SOURCE_DIR}/scripts/dif-to-iara.py
-                        COMMENT "Generating topology.mlir from topology.dif for ${base}"
+                        COMMAND ${CMAKE_COMMAND} -E env
+                        IARA_DIR=$ENV{IARA_DIR}
+                        PATH_TO_TEST_SOURCES=${test_src_dir}
+                        PATH_TO_TEST_BUILD_DIR=${build_subdir}
+                        SCHEDULER_MODE=${scheduler}
+                        ${iara_opt_binary} ${iara_flags} ${topology_input} > ${schedule_mlir}
+                        DEPENDS ${schedule_deps}
+                        WORKING_DIRECTORY ${build_subdir}
+                        COMMENT "Generating schedule.mlir for ${base}"
+                        COMMAND_EXPAND_LISTS
+                        VERBATIM
+                )
+
+                add_custom_command(
+                        OUTPUT ${schedule_ll}
+                        COMMAND ${CMAKE_COMMAND} -E env LLVM_INSTALL=$ENV{LLVM_INSTALL} ${BASH_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/mlir-to-llvmir.sh ${schedule_mlir}
+                        DEPENDS ${schedule_mlir} ${PROJECT_SOURCE_DIR}/scripts/mlir-to-llvmir.sh
+                        WORKING_DIRECTORY ${build_subdir}
+                        COMMENT "Lowering schedule.mlir to LLVM IR for ${base}"
+                        VERBATIM
+                )
+
+                set(schedule_include_args
+                        -I${IARA_CLANG_INCLUDE_DIR}
+                        -I${build_subdir}
+                        -I${PROJECT_SOURCE_DIR}/include
+                        -I${PROJECT_SOURCE_DIR}/external
+                )
+                if(EXISTS "${test_src_dir}")
+                        list(APPEND schedule_include_args -I${test_src_dir})
+                endif()
+                foreach(optional_dir IN ITEMS ${test_src_dir}/include ${test_src_dir}/generated)
+                        if(EXISTS "${optional_dir}")
+                                list(APPEND schedule_include_args -I${optional_dir})
+                        endif()
+                endforeach()
+
+                set(schedule_compile_args
+                        --std=c++20
+                        ${build_type_cxx_flags}
+                        ${IARA_BUILD_OPT}
+                        -stdlib=libc++
+                        ${OpenMP_CXX_FLAGS}
+                        ${schedule_extra_args}
+                        ${schedule_include_args}
+                        -xir
+                        -c
+                        ${schedule_ll}
+                        -o
+                        ${schedule_obj}
+                )
+
+                # Create the schedule.o as a custom command (needed because it's LLVM IR)
+                add_custom_command(
+                        OUTPUT ${schedule_obj}
+                        COMMAND ${CMAKE_COMMAND} -E env LLVM_INSTALL=$ENV{LLVM_INSTALL} ${CMAKE_CXX_COMPILER} ${schedule_compile_args}
+                        DEPENDS ${schedule_ll}
+                        WORKING_DIRECTORY ${build_subdir}
+                        COMMENT "Compiling schedule.ll for ${base}"
+                        COMMAND_EXPAND_LISTS
+                        VERBATIM
                 )
         endif()
 
-        add_custom_command(
-                OUTPUT ${schedule_mlir}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${build_subdir}
-                COMMAND ${CMAKE_COMMAND} -E env
-                IARA_DIR=$ENV{IARA_DIR}
-                PATH_TO_TEST_SOURCES=${test_src_dir}
-                PATH_TO_TEST_BUILD_DIR=${build_subdir}
-                SCHEDULER_MODE=${scheduler}
-                $<TARGET_FILE:iara-opt> ${iara_flags} ${topology_input} > ${schedule_mlir}
-                DEPENDS ${schedule_deps}
-                WORKING_DIRECTORY ${build_subdir}
-                COMMENT "Generating schedule.mlir for ${base}"
-                COMMAND_EXPAND_LISTS
-                VERBATIM
-        )
-
-        add_custom_command(
-                OUTPUT ${schedule_ll}
-                COMMAND ${CMAKE_COMMAND} -E env LLVM_INSTALL=$ENV{LLVM_INSTALL} ${BASH_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/mlir-to-llvmir.sh ${schedule_mlir}
-                DEPENDS ${schedule_mlir} ${PROJECT_SOURCE_DIR}/scripts/mlir-to-llvmir.sh
-                WORKING_DIRECTORY ${build_subdir}
-                COMMENT "Lowering schedule.mlir to LLVM IR for ${base}"
-                VERBATIM
-        )
-
-        set(schedule_include_args
-                -I${IARA_CLANG_INCLUDE_DIR}
-                -I${build_subdir}
-                -I${PROJECT_SOURCE_DIR}/include
-                -I${PROJECT_SOURCE_DIR}/external
-        )
-        if(EXISTS "${test_src_dir}")
-                list(APPEND schedule_include_args -I${test_src_dir})
-        endif()
-        foreach(optional_dir IN ITEMS ${test_src_dir}/include ${test_src_dir}/generated)
-                if(EXISTS "${optional_dir}")
-                        list(APPEND schedule_include_args -I${optional_dir})
-                endif()
-        endforeach()
-
-        set(schedule_compile_args
-                --std=c++20
-                ${IARA_BUILD_OPT}
-                -stdlib=libc++
-                ${OpenMP_CXX_FLAGS}
-                -ftime-trace=schedule.json
-                ${schedule_extra_args}
-                ${schedule_include_args}
-                -xir
-                -c
-                ${schedule_ll}
-                -o
-                ${schedule_obj}
-        )
-
-        add_custom_command(
-                OUTPUT ${schedule_obj}
-                COMMAND ${CMAKE_COMMAND} -E env LLVM_INSTALL=$ENV{LLVM_INSTALL} ${CMAKE_CXX_COMPILER} ${schedule_compile_args}
-                DEPENDS ${schedule_ll}
-                WORKING_DIRECTORY ${build_subdir}
-                COMMENT "Compiling schedule.ll for ${base}"
-                COMMAND_EXPAND_LISTS
-                VERBATIM
-        )
-
         set(target_name "run-${base}")
 
-        add_executable(${target_name}
-                ${c_sources}
-                ${cpp_sources}
-                ${runtime_sources}
-                ${schedule_obj}
-        )
+        # Build list of sources for executable
+        set(exec_sources ${c_sources} ${cpp_sources} ${runtime_sources})
+        if(schedule_obj)
+                list(APPEND exec_sources ${schedule_obj})
+        endif()
 
-        set_source_files_properties(${schedule_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        add_executable(${target_name} ${exec_sources})
+
+        if(schedule_obj)
+                set_source_files_properties(${schedule_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        endif()
 
         set_target_properties(${target_name}
                 PROPERTIES
@@ -282,6 +322,7 @@ function(iara_add_runtime_test entry scheduler)
         )
 
         set(common_compile_options ${OpenMP_CXX_FLAGS})
+        list(APPEND common_compile_options ${build_type_cxx_flags})
         list(APPEND common_compile_options ${IARA_BUILD_OPT})
         list(APPEND common_compile_options ${kernel_extra_args})
         list(APPEND common_compile_options ${runtime_extra_args})
@@ -298,7 +339,7 @@ function(iara_add_runtime_test entry scheduler)
                 target_link_directories(${target_name} PRIVATE ${OpenMP_CXX_LIBRARY_DIR})
         endif()
         target_link_libraries(${target_name} PRIVATE ${OpenMP_CXX_LIBRARY} m pthread)
-        target_link_options(${target_name} PRIVATE ${OpenMP_CXX_FLAGS} -stdlib=libc++)
+        target_link_options(${target_name} PRIVATE ${OpenMP_CXX_FLAGS} -stdlib=libc++ -fuse-ld=mold -Wl,--gc-sections)
         if(OpenMP_CXX_LIBRARY_DIR)
                 target_link_options(${target_name} PRIVATE -Wl,-rpath,${OpenMP_CXX_LIBRARY_DIR})
         else()
@@ -311,9 +352,16 @@ function(iara_add_runtime_test entry scheduler)
                 target_link_options(${target_name} PRIVATE ${link_extra_args})
         endif()
 
+        # Strip symbols from the binary to minimize size
+        add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Stripping symbols from ${build_subdir}/a.out"
+                COMMAND strip ${build_subdir}/a.out
+                COMMENT "Stripping ${base} binary"
+        )
+
         add_custom_target(build-${base} DEPENDS ${target_name})
         string(JOIN " " iara_flags_str ${iara_flags})
-        set(iara_opt_path $<TARGET_FILE:iara-opt>)
+        set(iara_opt_path ${iara_opt_binary})
         add_test(
                 NAME build-${base}
                 COMMAND ${iara_opt_path} ${iara_flags} ${topology_input}

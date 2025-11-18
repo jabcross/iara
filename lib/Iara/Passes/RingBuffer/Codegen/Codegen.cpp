@@ -1,5 +1,5 @@
-#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/Common/Codegen/Codegen.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/RingBuffer/Codegen/Codegen.h"
 #include "Iara/Util/CompilerTypes.h"
@@ -84,7 +84,11 @@ using namespace iara::passes::common::codegen;
 // helper functions
 
 std::string getDebugName(NodeOp node) {
+#ifdef IARA_DEBUG_NAMES
   return llvm::formatv("node_{0}_{1}\0", (i64)node["id"], node.getImpl());
+#else
+  return "";
+#endif
 }
 
 std::string getDebugName(EdgeOp edge) {
@@ -92,6 +96,7 @@ std::string getDebugName(EdgeOp edge) {
   auto cons = getConsumerNode(edge);
   auto prod_index = util::mlir::getResultIndex(edge.getIn());
   auto cons_index = edge->getUses().begin()->getOperandNumber();
+#ifdef IARA_DEBUG_NAMES
   return llvm::formatv("edge_{6}_{4}_{0}[{1}]->{5}_{2}[{3}]\0",
                        prod.getImpl(),
                        prod_index,
@@ -100,6 +105,9 @@ std::string getDebugName(EdgeOp edge) {
                        (i64)prod["id"],
                        (i64)cons["id"],
                        (i64)edge["id"]);
+#else
+  return "";
+#endif
 }
 
 Value createConstOp(OpBuilder builder, Location loc, auto val) {

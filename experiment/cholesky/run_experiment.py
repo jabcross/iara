@@ -46,25 +46,37 @@ class ExperimentConfig:
 class ExperimentRunner:
     """Manages building and running experiments."""
     
-    def __init__(self, 
+    def __init__(self,
                  iara_dir: str,
-                 num_repetitions: int = 10,
-                 warmup_runs: int = 2,
-                 output_file: str = "results.csv",
-                 log_file: str = "experiment.log",
+                 num_repetitions: int = 1,
+                 warmup_runs: int = 0,
                  use_slurm: bool = None,
-                 measure_compile_time: bool = False):
+                 measure_compile_time: bool = True):
         self.iara_dir = Path(iara_dir)
         self.experiment_dir = self.iara_dir / "experiment" / "cholesky"
         self.instances_dir = self.experiment_dir / "instances"
+        # Create the standard experiment subfolders under experiment/cholesky
+        # so we can store results, logs and build metrics in tidy locations.
+        self.results_dir = self.experiment_dir / "results"
+        self.logs_dir = self.experiment_dir / "logs"
+        self.build_metrics_dir = self.experiment_dir / "build_metrics"
+        # Ensure the directories exist
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        self.build_metrics_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir = self.iara_dir / "test" / "Iara" / "05-cholesky"
-        
+
         self.num_repetitions = num_repetitions
         self.warmup_runs = warmup_runs
-        self.output_file = self.experiment_dir / output_file
-        self.log_file = self.experiment_dir / log_file
-        self.measure_compile_time = measure_compile_time
-        
+        # Add datetime suffix to output CSVs
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.output_file = self.results_dir / f"results_{dt_str}.csv"
+        self.build_metrics_file = self.build_metrics_dir / f"build_metrics_{dt_str}.csv"
+        self.log_file = self.logs_dir / f"experiment_{dt_str}.log"
+
+        # Always measure compile time
+        self.measure_compile_time = True
+
         # Determine if we should use SLURM
         hostname = socket.gethostname()
         if use_slurm is None:
@@ -72,22 +84,22 @@ class ExperimentRunner:
             self.use_slurm = (hostname == "sorgan")
         else:
             self.use_slurm = use_slurm
-        
+
         if self.use_slurm:
             # Verify SLURM is available
             if not self._check_slurm_available():
                 print("WARNING: SLURM requested but not available, falling back to local execution")
                 self.use_slurm = False
-        
+
         # Create instances directory
         self.instances_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize log file
         self.log_handle = open(self.log_file, 'a')
         self._log(f"=== Experiment started at {datetime.now()} ===")
         self._log(f"Hostname: {hostname}")
         self._log(f"SLURM execution: {'enabled' if self.use_slurm else 'disabled'}")
-        self._log(f"Compile time measurement: {'enabled' if self.measure_compile_time else 'disabled (using ccache)'}")
+        self._log(f"Compile time measurement: enabled")
     
     def _log(self, message: str):
         """Write to log file and print to stdout."""
@@ -130,41 +142,78 @@ class ExperimentRunner:
         instance_dir = self.instances_dir / config.name
         instance_dir.mkdir(parents=True, exist_ok=True)
         
+
         self._log(f"Building {config.name}...")
-        
+
         # Set up environment variables for the build
         build_env = os.environ.copy()
         build_env.update({
             "MATRIX_SIZE": str(config.matrix_size),
             "NUM_BLOCKS": str(config.num_blocks),
             "SCHEDULER_MODE": config.scheduler,
+            "SCHEDULER_MODES": config.scheduler,
             "PATH_TO_TEST_BUILD_DIR": str(instance_dir),
             "PATH_TO_TEST_SOURCES": str(self.sources_dir),
-            "BUILD_OPTIMIZATION": "-O3",  # Use -O3 for experiments
+            "CMAKE_BUILD_TYPE": "ExperimentSize",  # Use ExperimentSize for minimal binary size
         })
-        
+        # Inform CMake about the IARA directory and optionally iara-opt path
+        build_env["IARA_DIR"] = str(self.iara_dir)
+        main_iara_opt = self.iara_dir / "build" / "bin" / "iara-opt"
+        if main_iara_opt.exists():
+            build_env["IARA_OPT_PATH"] = str(main_iara_opt)
+
         # Enable ccache if not measuring compile time
-        if not self.measure_compile_time:
-            build_env["USE_CCACHE"] = "1"
-        
-        # Run build script with the actual scheduler and optionally measure compilation time
-        build_script = self.iara_dir / "scripts" / "build-single-test.sh"
-        cmd = [str(build_script), str(self.sources_dir), config.scheduler]
-        
+        # if not self.measure_compile_time:
+        build_env["USE_CCACHE"] = "0"
+
+        # Remove old binary and object files before building
+        scheduler_build_dir = instance_dir / f"build"
+        if scheduler_build_dir.exists():
+            old_binary = scheduler_build_dir / "a.out"
+            if old_binary.exists():
+                self._log(f"Removing old binary: {old_binary}")
+                old_binary.unlink()
+            # Remove all object files (*.o) in the build directory
+            for obj_file in scheduler_build_dir.glob("*.o"):
+                self._log(f"Removing object file: {obj_file}")
+                obj_file.unlink()
+
+        # Build using CMake in the instance directory
+        # This allows each experiment instance to have its own build
+        scheduler_build_dir = instance_dir / f"build"
+        scheduler_build_dir.mkdir(parents=True, exist_ok=True)
+
+        # Configure CMake in the scheduler build directory
+        # Pass PATH_TO_TEST_BUILD_DIR to control where outputs go
+        # Include the scheduler as a CMake variable so only the requested
+        # scheduler's targets are generated in this build directory.
+        cmake_cmd = ["cmake", str(self.iara_dir),
+                     f"-DCMAKE_BUILD_TYPE={build_env['CMAKE_BUILD_TYPE']}",
+                     f"-DSCHEDULER_MODES={config.scheduler}",
+                     f"-DPATH_TO_TEST_BUILD_DIR={build_env['PATH_TO_TEST_BUILD_DIR']}",
+                     f"-DPATH_TO_TEST_SOURCES={build_env['PATH_TO_TEST_SOURCES']}"]
+        exit_code, stdout, stderr = self._run_command(cmake_cmd, cwd=scheduler_build_dir, env=build_env)
+        if exit_code != 0:
+            self._log(f"ERROR: CMake configure failed for {config.name}")
+            self._log(f"  Stderr: {stderr}")
+            return None
+
+        # Build the specific target
+        target_name = f"run-05-cholesky-{config.scheduler}"
         compile_start = time.time() if self.measure_compile_time else None
-        exit_code, stdout, stderr = self._run_command(cmd, cwd=self.sources_dir, env=build_env)
+        build_cmd = ["make", "-j", str(os.cpu_count()), target_name]
+        exit_code, stdout, stderr = self._run_command(build_cmd, cwd=scheduler_build_dir, env=build_env)
         compile_time = (time.time() - compile_start) if self.measure_compile_time else 0.0
-        
+
         if exit_code != 0:
             self._log(f"ERROR: Build failed for {config.name}")
             self._log(f"  Exit code: {exit_code}")
-            self._log(f"  Stderr: {stderr[:500]}")  # First 500 chars
+            self._log(f"  Stderr: {stderr}")
             return None
-        
+
         # Verify that executable was created
-        # The build script creates build-{scheduler}/a.out under PATH_TO_TEST_BUILD_DIR
-        scheduler_build_dir = instance_dir / f"build-{config.scheduler}"
-        executable = scheduler_build_dir / "a.out"
+        # CMake builds it in the test subdirectory within our build directory
+        executable = scheduler_build_dir / "test" / "Iara" / "05-cholesky" / f"build-{config.scheduler}" / "a.out"
         if not executable.exists():
             self._log(f"ERROR: Executable not found for {config.name} at {executable}")
             return None
@@ -174,7 +223,8 @@ class ExperimentRunner:
         
         # Run smoke test (no arguments needed - scheduler is compiled in)
         smoke_cmd = [str(executable)]
-        exit_code, stdout, stderr = self._run_command(smoke_cmd, cwd=scheduler_build_dir)
+        smoke_run_dir = executable.parent
+        exit_code, stdout, stderr = self._run_command(smoke_cmd, cwd=smoke_run_dir)
         
         if exit_code != 0:
             self._log(f"ERROR: Smoke test failed for {config.name}")
@@ -211,15 +261,18 @@ class ExperimentRunner:
                 text=True,
                 timeout=5
             )
-            
+
+            # Log full output of size command
+            self._log(f"=== size -A output for {executable} ===\n[stdout]\n{result.stdout}\n[stderr]\n{result.stderr}")
+
             if result.returncode != 0:
                 return {"text_size": 0, "data_size": 0, "bss_size": 0, "total_size": 0}
-            
+
             # Parse output
             text_size = 0
             data_size = 0
             bss_size = 0
-            
+
             for line in result.stdout.split('\n'):
                 parts = line.split()
                 if len(parts) >= 2:
@@ -234,10 +287,10 @@ class ExperimentRunner:
                             bss_size = size
                     except (ValueError, IndexError):
                         continue
-            
+
             # Also get total file size
             total_size = executable.stat().st_size
-            
+
             return {
                 "text_size": text_size,
                 "data_size": data_size,
@@ -248,13 +301,13 @@ class ExperimentRunner:
             self._log(f"WARNING: Could not get binary size info: {e}")
             return {"text_size": 0, "data_size": 0, "bss_size": 0, "total_size": 0}
     
-    def run_single_measurement(self, config: ExperimentConfig, 
+    def run_single_measurement(self, config: ExperimentConfig,
                                run_number: int) -> Optional[Dict[str, Any]]:
         """Run a single measurement. Returns result dict or None on failure."""
         instance_dir = self.instances_dir / config.name
-        scheduler_build_dir = instance_dir / f"build-{config.scheduler}"
-        executable = scheduler_build_dir / "a.out"
-        
+        scheduler_build_dir = instance_dir / f"build"
+        executable = scheduler_build_dir / "test" / "Iara" / "05-cholesky" / f"build-{config.scheduler}" / "a.out"
+
         if not executable.exists():
             self._log(f"ERROR: Executable not found for {config.name} at {executable}")
             return None
@@ -262,15 +315,21 @@ class ExperimentRunner:
         # Use /usr/bin/time to measure max RSS
         # Format: %M = max RSS in KB, %e = elapsed real time
         time_cmd = ["/usr/bin/time", "-f", "%M %e", str(executable)]
-        
+
         start_time = time.time()
-        exit_code, stdout, stderr = self._run_command(time_cmd, cwd=scheduler_build_dir)
+        run_dir = executable.parent
+        exit_code, stdout, stderr = self._run_command(time_cmd, cwd=run_dir)
         elapsed_real = time.time() - start_time
-        
+
+        # Log full output of measurement tool
+        self._log(f"=== Measurement run {run_number} for {config.name} ===")
+        self._log(f"[stdout]\n{stdout}")
+        self._log(f"[stderr]\n{stderr}")
+
         if exit_code != 0:
             self._log(f"ERROR: Run {run_number} failed for {config.name} (exit code: {exit_code})")
             return None
-        
+
         # Parse wall time from stdout (program output)
         wall_time = None
         for line in stdout.split('\n'):
@@ -280,7 +339,7 @@ class ExperimentRunner:
                 except (ValueError, IndexError) as e:
                     self._log(f"ERROR: Could not parse wall time from: {line}")
                     return None
-        
+
         if wall_time is None:
             self._log(f"ERROR: No wall time found in output for {config.name}")
             return None
@@ -316,7 +375,7 @@ class ExperimentRunner:
                             is_warmup: bool = False) -> Path:
         """Create a SLURM batch script for a single measurement run."""
         instance_dir = self.instances_dir / config.name
-        scheduler_build_dir = instance_dir / f"build-{config.scheduler}"
+        scheduler_build_dir = instance_dir / f"build/test/Iara/05-cholesky/build-{config.scheduler}"
         executable = scheduler_build_dir / "a.out"
         
         # Create SLURM scripts directory
@@ -451,7 +510,10 @@ exit $exit_code
         try:
             with open(output_file, 'r') as f:
                 content = f.read()
-            
+
+            # Log full SLURM output file
+            self._log(f"=== SLURM measurement output for {config.name} run {run_number} ===\n{content}")
+
             # Parse wall time from program output
             wall_time = None
             for line in content.split('\n'):
@@ -460,11 +522,11 @@ exit $exit_code
                         wall_time = float(line.split(":")[-1].strip().split()[0])
                     except (ValueError, IndexError):
                         pass
-            
+
             if wall_time is None:
                 self._log(f"ERROR: Could not find wall time in {output_file}")
                 return None
-            
+
             # Parse time command output (last line with two numbers)
             max_rss_kb = 0
             real_time = 0.0
@@ -478,7 +540,7 @@ exit $exit_code
                         break
                     except (ValueError, IndexError):
                         continue
-            
+
             return {
                 "matrix_size": config.matrix_size,
                 "num_blocks": config.num_blocks,
@@ -519,31 +581,6 @@ exit $exit_code
         output_file = slurm_dir / f"{run_type}_{run_number}.out"
         
         return self._parse_slurm_output(output_file, config, run_number)
-        max_rss_kb = 0
-        time_elapsed = 0.0
-        stderr_lines = stderr.strip().split('\n')
-        if stderr_lines:
-            last_line = stderr_lines[-1]
-            parts = last_line.split()
-            if len(parts) >= 2:
-                try:
-                    max_rss_kb = int(parts[0])
-                    time_elapsed = float(parts[1])
-                except (ValueError, IndexError):
-                    self._log(f"WARNING: Could not parse time output: {last_line}")
-        
-        return {
-            "matrix_size": config.matrix_size,
-            "num_blocks": config.num_blocks,
-            "block_size": config.block_size,
-            "block_memory": config.block_memory,
-            "scheduler": config.scheduler,
-            "wall_time": wall_time,
-            "real_time": elapsed_real,
-            "max_rss_kb": max_rss_kb,
-            "run_number": run_number,
-            "timestamp": datetime.now().isoformat(),
-        }
     
     def run_configuration(self, config: ExperimentConfig) -> List[Dict[str, Any]]:
         """Run all repetitions for a configuration. Returns list of results."""
@@ -586,32 +623,31 @@ exit $exit_code
         """Append results to CSV file."""
         if not results:
             return
-        
+
         file_exists = self.output_file.exists()
-        
+
         with open(self.output_file, 'a', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=results[0].keys())
             if not file_exists:
                 writer.writeheader()
             writer.writerows(results)
-        
+
         self._log(f"Saved {len(results)} results to {self.output_file}")
     
     def save_build_metrics(self, build_metrics: List[Dict[str, Any]]):
         """Save build metrics to separate CSV file."""
         if not build_metrics:
             return
-        
-        build_metrics_file = self.experiment_dir / "build_metrics.csv"
-        file_exists = build_metrics_file.exists()
-        
-        with open(build_metrics_file, 'a', newline='') as f:
+
+        file_exists = self.build_metrics_file.exists()
+
+        with open(self.build_metrics_file, 'a', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=build_metrics[0].keys())
             if not file_exists:
                 writer.writeheader()
             writer.writerows(build_metrics)
-        
-        self._log(f"Saved build metrics to {build_metrics_file}")
+
+        self._log(f"Saved build metrics to {self.build_metrics_file}")
     
     def save_metadata(self, configs: List[ExperimentConfig]):
         """Save experiment metadata."""
@@ -651,14 +687,15 @@ exit $exit_code
         
         self._log(f"Saved metadata to {metadata_file}")
     
-    def run_experiment(self, configs: List[ExperimentConfig], 
-                      skip_build: bool = False):
+    def run_experiment(self, configs: List[ExperimentConfig],
+                      skip_build: bool = False,
+                      skip_run: bool = False):
         """Run full experiment for all configurations."""
         self._log(f"Starting experiment with {len(configs)} configurations")
         self._log(f"Repetitions: {self.num_repetitions}, Warmup: {self.warmup_runs}")
-        
+
         self.save_metadata(configs)
-        
+
         # Build phase
         build_metrics_list = []
         if not skip_build:
@@ -671,35 +708,38 @@ exit $exit_code
                     build_failures.append(config)
                 else:
                     build_metrics_list.append(build_metrics)
-            
+
             # Save build metrics
             if build_metrics_list:
                 self.save_build_metrics(build_metrics_list)
-            
+
             if build_failures:
                 self._log(f"\nWARNING: {len(build_failures)} configurations failed to build:")
                 for config in build_failures:
                     self._log(f"  - {config.name}")
-                
+
                 # Remove failed configs from run list
                 configs = [c for c in configs if c not in build_failures]
-                
+
                 if not configs:
                     self._log("ERROR: All builds failed. Aborting experiment.")
                     return
         else:
             self._log("Skipping build phase (--skip-build)")
-        
+
         # Run phase
-        self._log("\n=== RUN PHASE ===")
-        for i, config in enumerate(configs, 1):
-            self._log(f"\nRunning {i}/{len(configs)}: {config.name}")
-            results = self.run_configuration(config)
-            
-            # Save incrementally (resilient to crashes)
-            if results:
-                self.save_results(results)
-        
+        if not skip_run:
+            self._log("\n=== RUN PHASE ===")
+            for i, config in enumerate(configs, 1):
+                self._log(f"\nRunning {i}/{len(configs)}: {config.name}")
+                results = self.run_configuration(config)
+
+                # Save incrementally (resilient to crashes)
+                if results:
+                    self.save_results(results)
+        else:
+            self._log("Skipping run phase (--skip-run)")
+
         self._log("\n=== Experiment completed ===")
         self.log_handle.close()
 
@@ -707,22 +747,24 @@ exit $exit_code
 def main():
     parser = argparse.ArgumentParser(description="Run Cholesky decomposition experiments")
     parser.add_argument("--matrix-sizes", type=int, nargs='+', 
-                       default=[2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384],
+                       default=[2048],
                        help="Matrix sizes to test")
     parser.add_argument("--num-blocks", type=int, nargs='+',
-                       default=[1, 2, 4, 8, 16, 32],
+                       default=[1],
                        help="Number of blocks to test")
     parser.add_argument("--schedulers", type=str, nargs='+',
                        default=["sequential", "omp-task", "virtual-fifo"],
                        help="Schedulers to test")
-    parser.add_argument("--repetitions", type=int, default=10,
+    parser.add_argument("--repetitions", type=int, default=1,
                        help="Number of measurement repetitions per configuration")
-    parser.add_argument("--warmup", type=int, default=2,
+    parser.add_argument("--warmup", type=int, default=0,
                        help="Number of warmup runs per configuration")
     parser.add_argument("--output", type=str, default="results.csv",
                        help="Output CSV file")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip build phase (assume binaries exist)")
+    parser.add_argument("--skip-run", action="store_true",
+                       help="Skip execution phase (only build binaries)")
     parser.add_argument("--subset", type=str, choices=["small", "medium", "large"],
                        help="Run predefined subset of tests")
     parser.add_argument("--slurm", type=str, choices=["auto", "yes", "no"], default="auto",
@@ -774,12 +816,11 @@ def main():
         iara_dir=iara_dir,
         num_repetitions=args.repetitions,
         warmup_runs=args.warmup,
-        output_file=args.output,
         use_slurm=use_slurm,
         measure_compile_time=args.measure_compile_time
     )
     
-    runner.run_experiment(configs, skip_build=args.skip_build)
+    runner.run_experiment(configs, skip_build=args.skip_build, skip_run=args.skip_run)
 
 
 if __name__ == "__main__":
