@@ -339,7 +339,7 @@ function(iara_add_runtime_test entry scheduler)
                 target_link_directories(${target_name} PRIVATE ${OpenMP_CXX_LIBRARY_DIR})
         endif()
         target_link_libraries(${target_name} PRIVATE ${OpenMP_CXX_LIBRARY} m pthread)
-        target_link_options(${target_name} PRIVATE ${OpenMP_CXX_FLAGS} -stdlib=libc++ -fuse-ld=mold -Wl,--gc-sections)
+        target_link_options(${target_name} PRIVATE ${OpenMP_CXX_FLAGS} -stdlib=libc++ -Wl,--gc-sections)
         if(OpenMP_CXX_LIBRARY_DIR)
                 target_link_options(${target_name} PRIVATE -Wl,-rpath,${OpenMP_CXX_LIBRARY_DIR})
         else()
@@ -352,12 +352,12 @@ function(iara_add_runtime_test entry scheduler)
                 target_link_options(${target_name} PRIVATE ${link_extra_args})
         endif()
 
-        # Strip symbols from the binary to minimize size
-        add_custom_command(TARGET ${target_name} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E echo "Stripping symbols from ${build_subdir}/a.out"
-                COMMAND strip ${build_subdir}/a.out
-                COMMENT "Stripping ${base} binary"
-        )
+        # # Strip symbols from the binary to minimize size
+        # add_custom_command(TARGET ${target_name} POST_BUILD
+        #         COMMAND ${CMAKE_COMMAND} -E echo "Stripping symbols from ${build_subdir}/a.out"
+        #         COMMAND strip ${build_subdir}/a.out
+        #         COMMENT "Stripping ${base} binary"
+        # )
 
         add_custom_target(build-${base} DEPENDS ${target_name})
         string(JOIN " " iara_flags_str ${iara_flags})

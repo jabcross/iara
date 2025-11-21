@@ -11,10 +11,12 @@ spack:
   - ccache
   - mold              # Optional: faster linking
   # Compilers & debugging
-  - gcc
+  - llvm
   - gdb
   - valgrind
 
+  # CLI tools
+  - fzf               # Optional: fuzzy finder
   # Python core for Jupyter
   - py-setuptools
   - py-ipykernel
@@ -35,12 +37,29 @@ spack:
 
   # Linear algebra libraries for cholesky experiment
   - openblas
-  
+
   - cbc
+  - gcc
+  - npm
+  - py-tqdm
   view: true
   concretizer:
     unify: true
   packages:
+    llvm:
+      externals:
+      - spec: llvm@22.0.0git+clang~flang~lld~lldb
+        prefix: /home/pedro.ciambra/llvm-install
+        extra_attributes:
+          compilers:
+            c: /home/pedro.ciambra/llvm-install/bin/clang
+            cxx: /home/pedro.ciambra/llvm-install/bin/clang++
+      - spec: llvm@22.0.0git+clang~flang~lld~lldb
+        prefix: /scratch/pedro.ciambra/repos/clangir/build
+        extra_attributes:
+          compilers:
+            c: /scratch/pedro.ciambra/repos/clangir/build/bin/clang
+            cxx: /scratch/pedro.ciambra/repos/clangir/build/bin/clang++
     gcc:
       externals:
       - spec: gcc@11.5.0 languages:='c,c++,fortran'

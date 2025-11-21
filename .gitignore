@@ -18,9 +18,6 @@ CMakeFiles/*
 typescript
 .*/edge_data.inc.h
 _junk/
-experiment/*/instances/*
-experiment/*/build_metrics/*
-experiment/*/images/*
-experiment/*/logs/*
-experiment/*/results/*
+node_modules
+experiment/*/*/*
 experiment/degridder/Code/data

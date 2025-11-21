@@ -71,6 +71,11 @@ set(CMAKE_CXX_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -fn
 set(CMAKE_C_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPERF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
 
+# ExperimentPerf: Enable debug data for profiling
+set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_CXX_FLAGS_DEBUG} -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
+set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_C_FLAGS_DEBUG} -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPROF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
+
 # Mark custom build types as advanced
 mark_as_advanced(
   CMAKE_CXX_FLAGS_COMPILERDEBUG
