@@ -65,7 +65,7 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
            i++) {
         auto node_ptr = &node;
 #ifndef IARA_DISABLE_OMP
-  #pragma omp task firstprivate(node_ptr, i)
+  #pragma omp task default(none) firstprivate(node_ptr, i)
 #endif
         node_ptr->prime(i);
       }

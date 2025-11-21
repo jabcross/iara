@@ -68,19 +68,38 @@ class CholeskyAdapter(ApplicationAdapter):
         return build_dir / "test" / "Iara" / "05-cholesky" / f"build-{scheduler}" / "a.out"
 
     def parse_program_output(self, stdout: str, stderr: str) -> Optional[Dict[str, Any]]:
-        """Parse Cholesky program output for wall time."""
+        """Parse Cholesky program output for timing measurements."""
         wall_time = None
+        init_time = None
+        convert_time = None
+
         for line in stdout.split('\n'):
             if line.startswith("Wall time:"):
                 try:
                     wall_time = float(line.split(":")[-1].strip().split()[0])
                 except (ValueError, IndexError):
-                    return None
+                    pass
+            elif line.startswith("Initialization time:"):
+                try:
+                    init_time = float(line.split(":")[-1].strip().split()[0])
+                except (ValueError, IndexError):
+                    pass
+            elif line.startswith("Block conversion time:"):
+                try:
+                    convert_time = float(line.split(":")[-1].strip().split()[0])
+                except (ValueError, IndexError):
+                    pass
 
         if wall_time is None:
             return None
 
-        return {"wall_time": wall_time}
+        result = {"wall_time": wall_time}
+        if init_time is not None:
+            result["init_time"] = init_time
+        if convert_time is not None:
+            result["convert_time"] = convert_time
+
+        return result
 
     def get_run_command(self, executable: Path) -> List[str]:
         """Return command to run Cholesky (no arguments needed)."""
@@ -164,8 +183,10 @@ Examples:
     # Execution mode
     parser.add_argument("--slurm", type=str, choices=["auto", "yes", "no"], default="auto",
                        help="Use SLURM for running experiments (default: auto, uses SLURM if on sorgan)")
-    parser.add_argument("--measure-compile-time", action="store_true",
-                       help="Measure compilation time (disables ccache for accurate timing)")
+    parser.add_argument("--measure-compile-time", action="store_true", default=True,
+                       help="Measure compilation time (disables ccache for accurate timing, enabled by default)")
+    parser.add_argument("--no-measure-compile-time", dest="measure_compile_time", action="store_false",
+                       help="Disable compilation time measurement (enables ccache)")
 
     args = parser.parse_args()
 

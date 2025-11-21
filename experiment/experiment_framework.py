@@ -538,6 +538,24 @@ class ExperimentRunner:
         if self.measure_compile_time:
             build_metrics["compile_time"] = compile_time
 
+        # Collect binary size if measuring compile time
+        if self.measure_compile_time:
+            try:
+                result = subprocess.run(['size', '-A', str(executable)],
+                                      capture_output=True, text=True, check=True, timeout=10)
+                # Parse size output to get total
+                total_size = 0
+                for line in result.stdout.splitlines():
+                    if line.strip().startswith('Total'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            total_size = int(parts[1])
+                            break
+                if total_size > 0:
+                    build_metrics["total_size"] = total_size
+            except Exception as e:
+                self._log(f"WARNING: Could not get binary size for {config.name}: {e}")
+
         self._log(f"✓ Successfully built {config.name}" +
                  (f" (compile time: {compile_time:.2f}s)" if self.measure_compile_time else ""))
 
@@ -1014,11 +1032,31 @@ class ExperimentRunner:
 
             self._log("\n=== GENERATING VISUALIZATIONS ===")
 
-            # Generate visualizations
-            images_dir = visualize_experiment(self.experiment_dir, scheduler_order)
+            # Generate visualizations with timestamp suffix
+            images_dir = visualize_experiment(self.experiment_dir, scheduler_order, self.run_timestamp)
 
-            # Get list of generated images
-            image_files = [f.name for f in images_dir.glob("*.png")]
+            # Get list of generated images with matching timestamp suffix
+            image_files = [f.name for f in images_dir.glob(f"*_{self.run_timestamp}.png")]
+
+            self._log(f"Found {len(image_files)} images with timestamp suffix '{self.run_timestamp}':")
+            for img in sorted(image_files):
+                self._log(f"  - {img}")
+
+            # Check if any images were generated at all
+            if not image_files:
+                self._log("ERROR: No images were generated with the expected timestamp suffix!")
+                self._log(f"Expected pattern: *_{self.run_timestamp}.png")
+
+                # Show what images are actually in the directory for debugging
+                all_images = list(images_dir.glob("*.png"))
+                if all_images:
+                    self._log(f"Found {len(all_images)} total PNG files in images directory:")
+                    for img in sorted(all_images)[:10]:  # Show first 10
+                        self._log(f"  - {img.name}")
+                    if len(all_images) > 10:
+                        self._log(f"  ... and {len(all_images) - 10} more")
+                else:
+                    self._log("No PNG files found in images directory at all!")
 
             # Generate notebook with embedded images
             self._log("Generating results notebook...")

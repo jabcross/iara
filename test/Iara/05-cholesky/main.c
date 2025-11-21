@@ -386,12 +386,24 @@ int main(int argc, char *argv[]) {
   double *inout_matrix_blocked = allocate_matrix();
   double *output_matrix_linear = allocate_matrix();
 
+  // Measure initialization time
+  struct timespec init_start, init_end;
+  clock_gettime(CLOCK_MONOTONIC, &init_start);
   initialize_matrix(input_matrix_linear);
+  clock_gettime(CLOCK_MONOTONIC, &init_end);
+  double init_time = ((double)(init_end.tv_sec - init_start.tv_sec)) +
+                     ((double)(init_end.tv_nsec - init_start.tv_nsec)) / 1000000000L;
 
   printf("Original matrix:\n");
   // print_matrix(input_matrix_linear);
 
+  // Measure block conversion time
+  struct timespec convert_start, convert_end;
+  clock_gettime(CLOCK_MONOTONIC, &convert_start);
   convert_to_blocks(input_matrix_linear, inout_matrix_blocked);
+  clock_gettime(CLOCK_MONOTONIC, &convert_end);
+  double convert_time = ((double)(convert_end.tv_sec - convert_start.tv_sec)) +
+                        ((double)(convert_end.tv_nsec - convert_start.tv_nsec)) / 1000000000L;
 
   assert(impl != NULL && "Did not set scheduler correctly");
 
@@ -404,6 +416,8 @@ int main(int argc, char *argv[]) {
   printf("Blocked cholesky output:\n");
   // print_matrix(output_matrix_linear);
 
+  printf("Initialization time: %lf s\n", init_time);
+  printf("Block conversion time: %lf s\n", convert_time);
   printf("Wall time: %lf s\n", wall_time);
   return 0;
 }

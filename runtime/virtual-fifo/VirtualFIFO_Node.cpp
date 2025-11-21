@@ -1,8 +1,8 @@
 // #include "IaraRuntime/virtual-fifo/KeyedSemaphore.h"
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include "IaraRuntime/virtual-fifo/SDFSemaphores.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -93,6 +93,9 @@ void VirtualFIFO_Node::prime(i64 seq) {
 #endif
 
   // Schedule the allocation of the memory, if needed
+
+  i64 last_block = -1;
+
   for (auto fifo : codegen_info.input_fifos) {
     auto [b, e] = fifo->firingOfConsToVirtualOffsetRange(seq);
 
@@ -110,22 +113,14 @@ void VirtualFIFO_Node::prime(i64 seq) {
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor(
         "prime(): block number of range %ld:%ld is %ld\n", b, e, block);
+
+    debugPrintThreadColor(
+        "prime(): firing %ld of node %s calling ensureAlloc\n",
+        seq,
+        codegen_info.name);
 #endif
 
-#ifndef IARA_DISABLE_OMP
-  #pragma omp task firstprivate(block)
-#endif
-    {
-
-#ifdef IARA_DEBUGPRINT
-      debugPrintThreadColor(
-          "prime(): firing %ld of node %s calling ensureAlloc\n",
-          seq,
-          codegen_info.name);
-#endif
-
-      fifo->codegen_info.alloc_node->ensureAlloc(block);
-    }
+    fifo->codegen_info.alloc_node->ensureAlloc(block);
   }
 
   auto f = VirtualFIFO_NormalSemaphore::FirstArgs{this};
@@ -147,48 +142,41 @@ void VirtualFIFO_Node::prime(i64 seq) {
 }
 
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
-
-#ifdef IARA_DEBUGPRINT
-  {
-    auto offset = std::hash<std::thread::id>{};
-    (std::this_thread::get_id());
-    debugPrintThreadColor("fire(): Firing %ld of %s from thread %lu\n",
-                          seq,
-                          codegen_info.name,
-                          offset);
-  }
-#endif
-  assert((i64)args.size() == static_info.num_args);
-  [[maybe_unused]] auto _this = this;
-
-#ifndef IARA_DISABLE_OMP
-  #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor("Omp is enabled, num threads =  %lu",
-                        omp_get_num_threads());
-  #endif
-  #pragma omp task firstprivate(_this, args, seq)
-#endif
-
-
+  auto _this = this;
+#pragma omp task default(none) firstprivate(_this, args, seq)
   {
 
-    codegen_info.wrapper(seq, args);
-  }
-
-#ifndef IARA_DISABLE_OMP
-  #pragma omp taskwait
-#endif
-
-  // output_fifos is empty if it's a dealloc node.
-  assert(codegen_info.output_fifos.size() == 0 ||
-         (codegen_info.output_fifos.size() == args.size()));
-  for (size_t i = 0; i < codegen_info.output_fifos.size(); i++) {
-    codegen_info.output_fifos[i]->push(args[i]);
-  }
 #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
+    {
+      auto offset = std::hash<std::thread::id>{};
+      (std::this_thread::get_id());
+      debugPrintThreadColor("fire(): Firing %ld of %s from thread %lu\n",
+                            seq,
+                            codegen_info.name,
+                            offset);
+    }
 #endif
-  free(args.data());
+    assert((i64)args.size() == static_info.num_args);
+    [[maybe_unused]] auto _this = this;
+
+#ifdef IARA_DEBUGPRINT
+    debugPrintThreadColor("Omp is enabled, num threads =  %lu",
+                          omp_get_num_threads());
+#endif
+
+    _this->codegen_info.wrapper(seq, args);
+
+    // output_fifos is empty if it's a dealloc node.
+    assert(codegen_info.output_fifos.size() == 0 ||
+           (codegen_info.output_fifos.size() == args.size()));
+    for (size_t i = 0; i < codegen_info.output_fifos.size(); i++) {
+      codegen_info.output_fifos[i]->push(args[i]);
+    }
+#ifdef IARA_DEBUGPRINT
+    debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
+#endif
+    free(args.data());
+  }
 }
 
 void VirtualFIFO_Node::fireAlloc(i64 seq) {
@@ -261,8 +249,11 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
   runtime_info.sema_variant.alloc->semaphore.arrive(
       firing, 1, static_info.total_iter_firings, f, e, l);
 
+  auto _this = this;
+
   if (may_alloc) {
-    fireAlloc(firing);
+#pragma omp task firstprivate(_this, firing)
+    _this->fireAlloc(firing);
   }
 }
 
