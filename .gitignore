@@ -18,6 +18,7 @@ CMakeFiles/*
 typescript
 *.perf
 *perf\.data*
+*__pycache__*
 .*/edge_data.inc.h
 _junk/
 node_modules

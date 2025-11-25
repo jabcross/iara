@@ -73,49 +73,83 @@ def create_visualization_notebook(
             "source": info_lines
         })
 
-    # Add images
+    # Add visualization code cells
     cells.append({
         "cell_type": "markdown",
         "metadata": {},
         "source": ["## Visualizations\n"]
     })
 
+    # Add code cell to import visualization module and create visualizer
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "# Import visualization module\n",
+            "import sys\n",
+            "sys.path.append('../..')\n",
+            "from visualize_experiment import ExperimentVisualizer\n",
+            "import matplotlib.pyplot as plt\n",
+            "from pathlib import Path\n",
+            "\n",
+            "# Create visualizer instance\n",
+            f"visualizer = ExperimentVisualizer(Path('..'))\n",
+            "visualizer.load_data()\n",
+            "\n",
+            "# Configure matplotlib for notebook display\n",
+            "%matplotlib inline\n",
+            "plt.rcParams['figure.figsize'] = (12, 6)\n",
+            "plt.rcParams['font.size'] = 10\n"
+        ]
+    })
+
     # Try to import experiment-specific notebook configuration
-    # This allows each experiment to define custom image ordering and titles
-    image_info = []
+    # This allows each experiment to define custom plot ordering and titles
+    plot_info = []
     try:
         import sys
         sys.path.insert(0, str(experiment_dir))
-        from notebook_config import get_image_info
-        image_info = get_image_info(image_files)
+        from notebook_config import get_plot_info
+        plot_info = get_plot_info()
         print(f"Using experiment-specific notebook configuration from {experiment_dir / 'notebook_config.py'}")
     except (ImportError, ModuleNotFoundError):
-        # Fall back to generic behavior: display all images in alphabetical order
-        print(f"No experiment-specific notebook configuration found, using default ordering")
-        for img in sorted(image_files):
-            # Generate title from filename: remove extension and replace underscores with spaces
-            title = img.replace('.png', '').replace('_', ' ').title()
-            image_info.append((img, title))
+        # Fall back to generic behavior: generate all plots in default order
+        print(f"No experiment-specific notebook configuration found, using default plot generation")
+        plot_info = [
+            ("plot_binary_size_overhead", "Binary Size Overhead"),
+            ("plot_binary_size_grouped", "Binary Size Comparison"),
+            ("plot_compilation_time", "Compilation Time"),
+            ("plot_runtime_performance", "Runtime Performance"),
+            ("plot_runtime_performance_relative", "Runtime Performance Relative to Sequential"),
+            ("plot_memory_usage", "Memory Usage"),
+            ("plot_memory_usage_relative", "Memory Usage Relative to Sequential")
+        ]
 
-    for image_file, title in image_info:
-        if image_file in image_files:
-            image_path = images_dir / image_file
+    for plot_method, title in plot_info:
+        # Add title
+        cells.append({
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [f"### {title}\n"]
+        })
 
-            # Add title
-            cells.append({
-                "cell_type": "markdown",
-                "metadata": {},
-                "source": [f"### {title}\n"]
-            })
-
-            # Add image using markdown
-            # Use relative path from notebook to image
-            rel_path = Path("..") / "images" / image_file
-            cells.append({
-                "cell_type": "markdown",
-                "metadata": {},
-                "source": [f"![]({rel_path})\n"]
-            })
+        # Add code cell to generate the plot
+        cells.append({
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                f"# Generate {title}\n",
+                f"fig = visualizer.{plot_method}()\n",
+                "if fig is not None:\n",
+                "    plt.show()\n",
+                "else:\n",
+                f'    print("No data available for {title}")\n'
+            ]
+        })
 
     # Data files cell
     cells.append({

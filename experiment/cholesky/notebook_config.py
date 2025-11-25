@@ -2,15 +2,36 @@
 """
 Cholesky experiment-specific notebook configuration.
 
-This module provides experiment-specific image ordering and titles for notebook generation.
+This module provides experiment-specific plot ordering and titles for notebook generation.
 """
 
 from typing import List, Tuple
 
 
+def get_plot_info() -> List[Tuple[str, str]]:
+    """Get ordered list of (plot_method, title) pairs for plots.
+
+    Returns:
+        List of (plot_method, title) tuples in desired display order
+    """
+    plot_info = [
+        ("plot_binary_size_overhead", "Binary Size Overhead"),
+        ("plot_binary_size_grouped", "Binary Size Comparison - All Sections (Layered)"),
+        ("plot_compilation_time", "Compilation Time"),
+        ("plot_runtime_performance", "Runtime Performance (Absolute)"),
+        ("plot_runtime_performance_relative", "Runtime Performance (Relative to Sequential)"),
+        ("plot_memory_usage", "Memory Usage (Absolute)"),
+        ("plot_memory_usage_relative", "Memory Usage (Relative to Sequential)"),
+    ]
+    
+    return plot_info
+
+
 def get_image_info(image_files: List[str]) -> List[Tuple[str, str]]:
     """Get ordered list of (filename, title) pairs for images.
-
+    
+    This function is kept for backward compatibility with older versions.
+    
     Args:
         image_files: List of available image filenames
 

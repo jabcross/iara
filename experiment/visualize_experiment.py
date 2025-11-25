@@ -135,7 +135,8 @@ class ExperimentVisualizer:
     def get_binary_path(self, matrix_size: int, num_blocks: int, scheduler: str) -> Path:
         """Construct path to binary for a given configuration."""
         config_name = f"{matrix_size}_{num_blocks}_{scheduler}"
-        return self.instances_dir / config_name / "build" / "test" / "Iara" / "05-cholesky" / f"build-{scheduler}" / "a.out"
+        binary_dir = f"cholesky-{scheduler}"
+        return self.instances_dir / config_name / "build" / binary_dir / "a.out"
 
     def get_section_sizes(self, binary_path: Path) -> Dict[str, int]:
         """Run 'size -A' and parse all section sizes."""
@@ -160,7 +161,7 @@ class ExperimentVisualizer:
         """Plot binary size overhead relative to sequential, one plot per matrix size showing all num_blocks."""
         if not self.has_binary_size:
             print("Skipping binary size overhead plots (no data)")
-            return
+            return None
 
         try:
             print("Generating binary size overhead plots...")
@@ -283,18 +284,21 @@ class ExperimentVisualizer:
                 plt.subplots_adjust(bottom=0.15)
                 filename = self.images_dir / self._make_filename(f'binary_size_overhead_{matrix_size}.png')
                 plt.savefig(filename, dpi=300, bbox_inches='tight')
-                plt.close()
                 print(f"  Saved: {filename}")
+                
+                # Return the figure for notebook display
+                return fig
         except Exception as e:
             print(f"  ERROR generating binary size overhead plots: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def plot_binary_size_grouped(self):
         """Plot layered binary size comparison with all sections."""
         if not self.has_binary_size:
             print("Skipping binary size grouped plot (no data)")
-            return
+            return None
 
         try:
             print("Generating binary size grouped plot...")
@@ -320,8 +324,25 @@ class ExperimentVisualizer:
                     all_sections.update(sections.keys())
 
             if not config_data:
-                print("  WARNING: No binary section data found, skipping plot")
-                return
+                print("  WARNING: No binary section data found, creating placeholder plot")
+                # Create a placeholder figure with informative message
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.text(0.5, 0.5, 'Binary Size Comparison - All Sections (Layered)\n\nNo binary section data available\n\nThis plot requires binary files to be present in the instances directory\nand the "size" command to be available to analyze binary sections.',
+                       ha='center', va='center', transform=ax.transAxes, fontsize=12,
+                       bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title('Binary Size Comparison - All Sections (Layered)\n(No Data Available)', fontweight='bold', fontsize=14)
+                
+                plt.tight_layout()
+                filename = self.images_dir / self._make_filename('binary_size_grouped.png')
+                plt.savefig(filename, dpi=300, bbox_inches='tight')
+                print(f"  Saved placeholder: {filename}")
+                
+                # Return the figure for notebook display
+                return fig
 
             # Calculate total size for each section
             section_totals = {}
@@ -482,6 +503,7 @@ class ExperimentVisualizer:
             ax.set_xticklabels(scheduler_tick_labels, fontsize=8, rotation=45, ha='right')
             ax.set_xlabel('Scheduler', fontweight='bold', fontsize=11, labelpad=10)
 
+            # Create second x-axis for num_blocks labels
             ax2 = ax.twiny()
             ax2.set_xlim(ax.get_xlim())
             ax2.set_xticks(num_blocks_tick_positions)
@@ -505,19 +527,21 @@ class ExperimentVisualizer:
             plt.tight_layout()
             filename = self.images_dir / self._make_filename('binary_size_grouped.png')
             plt.savefig(filename, dpi=300, bbox_inches='tight')
-            plt.close()
             print(f"  Saved: {filename}")
-
+            
+            # Return the figure for notebook display
+            return fig
         except Exception as e:
             print(f"  ERROR generating binary size grouped plot: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def plot_compilation_time(self):
         """Plot compilation time comparison if available."""
         if not self.has_compile_time:
             print("Skipping compilation time plot (no data)")
-            return
+            return None
 
         try:
             print("Generating compilation time plot...")
@@ -556,15 +580,20 @@ class ExperimentVisualizer:
             ax.grid(True, alpha=0.3, axis='y')
 
             plt.tight_layout()
+            
+            # Save the figure for file output
             filename = self.images_dir / self._make_filename('compilation_time.png')
             plt.savefig(filename, dpi=300, bbox_inches='tight')
-            plt.close()
             print(f"  Saved: {filename}")
+            
+            # Return the figure for notebook display
+            return fig
         except Exception as e:
             print(f"  ERROR generating compilation time plot: {e}")
             import traceback
             traceback.print_exc()
             plt.close()
+            return None
 
     def plot_runtime_performance(self):
         """Plot runtime performance with stacked bars showing initialization, conversion, and compute time."""
@@ -615,7 +644,7 @@ class ExperimentVisualizer:
             available_schedulers = [s for s in self.scheduler_order if s in runtime_stats['scheduler'].unique()]
             if not available_schedulers:
                 print("  WARNING: No schedulers found in data, skipping runtime performance plot")
-                return
+                return None
 
             # Create stacked plot with detailed breakdown
             if has_init_time and has_convert_time:
@@ -637,7 +666,7 @@ class ExperimentVisualizer:
                 pivot_other = pivot_other[available_schedulers]
                 pivot_real = pivot_real[available_schedulers]
 
-                self._plot_detailed_stacked_bars(
+                return self._plot_detailed_stacked_bars(
                     pivot_wall.values,
                     pivot_init.values,
                     pivot_convert.values,
@@ -662,7 +691,7 @@ class ExperimentVisualizer:
                 pivot_setup = pivot_setup[available_schedulers]
                 pivot_real = pivot_real[available_schedulers]
 
-                self._plot_stacked_bars(
+                return self._plot_stacked_bars(
                     pivot_wall.values,
                     pivot_setup.values,
                     pivot_real.values,
@@ -691,6 +720,7 @@ class ExperimentVisualizer:
             print(f"  ERROR generating runtime performance plot: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def plot_runtime_performance_relative(self):
         """Plot runtime performance relative to sequential."""
@@ -740,10 +770,10 @@ class ExperimentVisualizer:
             available_schedulers = [s for s in self.scheduler_order if s in pivot_pct.columns]
             if not available_schedulers:
                 print("  WARNING: No schedulers found, skipping")
-                return
+                return None
             pivot_pct = pivot_pct[available_schedulers]
 
-            self._plot_relative_bars(
+            return self._plot_relative_bars(
                 pivot_pct.values,
                 pivot_pct.index,
                 available_schedulers,
@@ -756,6 +786,7 @@ class ExperimentVisualizer:
             print(f"  ERROR generating runtime performance relative plot: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def plot_memory_usage(self):
         """Plot memory usage with bootstrap CI."""
@@ -790,13 +821,13 @@ class ExperimentVisualizer:
             available_schedulers = [s for s in self.scheduler_order if s in pivot_rss.columns]
             if not available_schedulers:
                 print("  WARNING: No schedulers found in data, skipping memory usage plot")
-                return
+                return None
             pivot_rss = pivot_rss[available_schedulers]
             pivot_rss_low = pivot_rss_low.reindex(columns=available_schedulers).fillna(pivot_rss)
             pivot_rss_high = pivot_rss_high.reindex(columns=available_schedulers).fillna(pivot_rss)
 
             # Create plot
-            self._plot_grouped_bars(
+            return self._plot_grouped_bars(
                 pivot_rss.values,
                 pivot_rss_low.values,
                 pivot_rss_high.values,
@@ -810,6 +841,7 @@ class ExperimentVisualizer:
             print(f"  ERROR generating memory usage plot: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def plot_memory_usage_relative(self):
         """Plot memory usage relative to sequential."""
@@ -859,10 +891,10 @@ class ExperimentVisualizer:
             available_schedulers = [s for s in self.scheduler_order if s in pivot_pct.columns]
             if not available_schedulers:
                 print("  WARNING: No schedulers found, skipping")
-                return
+                return None
             pivot_pct = pivot_pct[available_schedulers]
 
-            self._plot_relative_bars(
+            return self._plot_relative_bars(
                 pivot_pct.values,
                 pivot_pct.index,
                 available_schedulers,
@@ -875,6 +907,7 @@ class ExperimentVisualizer:
             print(f"  ERROR generating memory usage relative plot: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     def _plot_grouped_bars(self, means, lows, highs, index, schedulers, ylabel, title, filename):
         """Helper to create grouped bar plots with error bars."""
@@ -951,8 +984,10 @@ class ExperimentVisualizer:
         plt.tight_layout()
         filepath = self.images_dir / self._make_filename(filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close()
         print(f"  Saved: {filepath}")
+        
+        # Return the figure for notebook display
+        return fig
 
     def _plot_relative_bars(self, values, index, schedulers, ylabel, title, filename):
         """Helper to create relative performance bar plots."""
@@ -1041,8 +1076,10 @@ class ExperimentVisualizer:
         plt.tight_layout()
         filepath = self.images_dir / self._make_filename(filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close()
         print(f"  Saved: {filepath}")
+        
+        # Return the figure for notebook display
+        return fig
 
     def _plot_stacked_bars(self, wall_means, setup_means, real_means, index, schedulers, ylabel, title, filename):
         """Helper to create stacked bar plots showing compute time and setup phase."""
@@ -1144,8 +1181,10 @@ class ExperimentVisualizer:
         plt.tight_layout()
         filepath = self.images_dir / self._make_filename(filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close()
         print(f"  Saved: {filepath}")
+        
+        # Return the figure for notebook display
+        return fig
 
     def _plot_detailed_stacked_bars(self, wall_means, init_means, convert_means, other_means, real_means, index, schedulers, ylabel, title, filename):
         """Helper to create detailed stacked bar plots showing all phases: init + convert + other_setup + compute."""
@@ -1193,7 +1232,6 @@ class ExperimentVisualizer:
 
             # Bottom layer: initialization
             ax.bar(x_positions + offset, init_means[:, i], width,
-                   label=f'{scheduler} (init)',
                    color=base_color, alpha=stack_styles['init']['alpha'],
                    edgecolor='black', linewidth=0.5,
                    hatch=stack_styles['init']['hatch'])
@@ -1201,7 +1239,6 @@ class ExperimentVisualizer:
             # Second layer: block conversion
             ax.bar(x_positions + offset, convert_means[:, i], width,
                    bottom=init_means[:, i],
-                   label=f'{scheduler} (convert)',
                    color=base_color, alpha=stack_styles['convert']['alpha'],
                    edgecolor='black', linewidth=0.5,
                    hatch=stack_styles['convert']['hatch'])
@@ -1209,7 +1246,6 @@ class ExperimentVisualizer:
             # Third layer: other setup
             ax.bar(x_positions + offset, other_means[:, i], width,
                    bottom=init_means[:, i] + convert_means[:, i],
-                   label=f'{scheduler} (other setup)',
                    color=base_color, alpha=stack_styles['other']['alpha'],
                    edgecolor='black', linewidth=0.5,
                    hatch=stack_styles['other']['hatch'])
@@ -1217,7 +1253,6 @@ class ExperimentVisualizer:
             # Top layer: compute time
             ax.bar(x_positions + offset, wall_means[:, i], width,
                    bottom=init_means[:, i] + convert_means[:, i] + other_means[:, i],
-                   label=f'{scheduler} (compute)',
                    color=base_color, alpha=stack_styles['compute']['alpha'],
                    edgecolor='black', linewidth=0.5)
 
@@ -1250,27 +1285,39 @@ class ExperimentVisualizer:
         ax2.set_xlabel('Matrix Size', fontweight='bold', fontsize=12)
         ax2.tick_params(axis='x', which='both', length=0)
 
-        # Create custom legend grouping by scheduler (bottom to top order)
+        # Create custom legend: schedulers as colored boxes, stages as gray boxes with hatches
         legend_elements = []
-        for scheduler in schedulers:
-            base_color = self.scheduler_colors.get(scheduler, 'gray')
-            legend_elements.append(Patch(facecolor=base_color, alpha=stack_styles['init']['alpha'], edgecolor='black',
-                                        label=f'{scheduler} (init)', linewidth=0.5, hatch=stack_styles['init']['hatch']))
-            legend_elements.append(Patch(facecolor=base_color, alpha=stack_styles['convert']['alpha'], edgecolor='black',
-                                        label=f'{scheduler} (convert)', linewidth=0.5, hatch=stack_styles['convert']['hatch']))
-            legend_elements.append(Patch(facecolor=base_color, alpha=stack_styles['other']['alpha'], edgecolor='black',
-                                        label=f'{scheduler} (other setup)', linewidth=0.5, hatch=stack_styles['other']['hatch']))
-            legend_elements.append(Patch(facecolor=base_color, alpha=stack_styles['compute']['alpha'], edgecolor='black',
-                                        label=f'{scheduler} (compute)', linewidth=0.5))
 
-        ax.legend(handles=legend_elements, loc='best', fontsize=8, ncol=2)
+        # First section: Schedulers (colored boxes)
+        for scheduler in schedulers:
+            scheduler_color = self.scheduler_colors.get(scheduler, 'gray')
+            legend_elements.append(Patch(facecolor=scheduler_color, edgecolor='black',
+                                        label=scheduler, linewidth=0.5))
+
+        # Add separator (empty patch)
+        if legend_elements:
+            legend_elements.append(Patch(facecolor='none', edgecolor='none', label=''))
+
+        # Second section: Stages (gray with hatches)
+        legend_elements.append(Patch(facecolor='gray', edgecolor='black',
+                                    label='Initialization', linewidth=0.5, hatch='///'))
+        legend_elements.append(Patch(facecolor='gray', edgecolor='black',
+                                    label='Block Conversion', linewidth=0.5, hatch='//'))
+        legend_elements.append(Patch(facecolor='gray', edgecolor='black',
+                                    label='Other Setup', linewidth=0.5, hatch='/'))
+        legend_elements.append(Patch(facecolor='gray', edgecolor='black',
+                                    label='Compute', linewidth=0.5))
+
+        ax.legend(handles=legend_elements, loc='best', fontsize=9, ncol=2, title='Schedulers & Stages', title_fontsize=10)
         ax.grid(True, alpha=0.3, axis='y')
 
         plt.tight_layout()
         filepath = self.images_dir / self._make_filename(filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close()
         print(f"  Saved: {filepath}")
+        
+        # Return the figure for notebook display
+        return fig
 
     def generate_all(self):
         """Generate all visualizations."""
