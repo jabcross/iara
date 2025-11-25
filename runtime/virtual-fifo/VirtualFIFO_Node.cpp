@@ -1,5 +1,6 @@
 // #include "IaraRuntime/virtual-fifo/KeyedSemaphore.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
+#include "IaraRuntime/common/WorkStealingBackend.h"
 #include "IaraRuntime/virtual-fifo/SDFSemaphores.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
@@ -7,7 +8,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <gtl/phmap.hpp>
-#include <omp.h>
 
 #ifdef IARA_DEBUGPRINT
   #include "IaraRuntime/util/DebugPrint.h"
@@ -143,8 +143,7 @@ void VirtualFIFO_Node::prime(i64 seq) {
 
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   auto _this = this;
-#pragma omp task default(none) firstprivate(_this, args, seq)
-  {
+  IARA_SUBMIT_TASK([_this, args, seq]() {
 
 #ifdef IARA_DEBUGPRINT
     {
@@ -152,31 +151,32 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       (std::this_thread::get_id());
       debugPrintThreadColor("fire(): Firing %ld of %s from thread %lu\n",
                             seq,
-                            codegen_info.name,
+                            _this->codegen_info.name,
                             offset);
     }
 #endif
-    assert((i64)args.size() == static_info.num_args);
-    [[maybe_unused]] auto _this = this;
+    assert((i64)args.size() == _this->static_info.num_args);
 
 #ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor("Omp is enabled, num threads =  %lu",
-                          omp_get_num_threads());
+    debugPrintThreadColor("Parallelism is enabled, num threads = %d\n",
+                          iara_get_num_threads());
 #endif
+    {
+      // Regular node - call the kernel wrapper
+      _this->codegen_info.wrapper(seq, args);
 
-    _this->codegen_info.wrapper(seq, args);
-
-    // output_fifos is empty if it's a dealloc node.
-    assert(codegen_info.output_fifos.size() == 0 ||
-           (codegen_info.output_fifos.size() == args.size()));
-    for (size_t i = 0; i < codegen_info.output_fifos.size(); i++) {
-      codegen_info.output_fifos[i]->push(args[i]);
+      // output_fifos is empty if it's a dealloc node.
+      assert(_this->codegen_info.output_fifos.size() == 0 ||
+             (_this->codegen_info.output_fifos.size() == args.size()));
+      for (size_t i = 0; i < _this->codegen_info.output_fifos.size(); i++) {
+        _this->codegen_info.output_fifos[i]->push(args[i]);
+      }
     }
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
 #endif
     free(args.data());
-  }
+  });
 }
 
 void VirtualFIFO_Node::fireAlloc(i64 seq) {
@@ -252,8 +252,7 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
   auto _this = this;
 
   if (may_alloc) {
-#pragma omp task firstprivate(_this, firing)
-    _this->fireAlloc(firing);
+    IARA_SUBMIT_TASK([_this, firing]() { _this->fireAlloc(firing); });
   }
 }
 

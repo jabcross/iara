@@ -60,7 +60,7 @@ print("\nRuntime Results columns:", results.columns.tolist())
 
 # Define scheduler order and colors
 scheduler_order = ['sequential', 'omp-task', 'virtual-fifo']
-scheduler_colors = {'sequential': '#2ca02c', 'omp-task': '#1f77b4', 'virtual-fifo': '#ff7f0e'}
+scheduler_colors = {'sequential': '#2ca02c', 'omp-task': '#1f77b4', 'omp-for': '#1f77b4', 'virtual-fifo': '#ff7f0e'}
 
 # Get unique number of blocks
 num_blocks_list = sorted(build_metrics['num_blocks'].unique())

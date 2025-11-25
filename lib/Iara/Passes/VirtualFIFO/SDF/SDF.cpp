@@ -1,5 +1,5 @@
-#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
+#include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"

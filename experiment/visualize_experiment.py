@@ -43,11 +43,14 @@ class ExperimentVisualizer:
         self.suffix = suffix
 
         # Default scheduler order and colors
-        self.scheduler_order = scheduler_order or ['sequential', 'omp-task', 'virtual-fifo']
+        self.scheduler_order = scheduler_order or ['sequential', 'omp-for', 'omp-task', 'enkits-task', 'vf-omp', 'vf-enkits']
         self.scheduler_colors = {
             'sequential': '#2ca02c',
             'omp-task': '#1f77b4',
-            'virtual-fifo': '#ff7f0e'
+            'omp-for': "#20b39f",
+            'enkits-task': '#9467bd',
+            'vf-omp': '#ff7f0e',
+            'vf-enkits': '#d62728'
         }
 
         # Set matplotlib style
@@ -355,7 +358,7 @@ class ExperimentVisualizer:
             config_info = []
 
             current_x = 0
-            width = 0.25
+            width = 1/len(self.scheduler_order)
             scheduler_spacing = 0.05
             num_blocks_spacing = 0.3
             matrix_spacing = 0.6

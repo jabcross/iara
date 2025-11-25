@@ -149,7 +149,32 @@ void blocked_cholesky_sequential(double *inout_matrix) {
   }
 }
 
-void blocked_cholesky_openmp_for(double *inout_matrix_blocked) {}
+void blocked_cholesky_openmp_for(double *inout_matrix) {
+#pragma omp parallel shared(inout_matrix)
+  {
+    for (int k = 0; k < num_blocks; k++) {
+#pragma omp single
+      omp_potrf(blockAt(inout_matrix, k, k));
+
+#pragma omp for schedule(static)
+      for (int i = k + 1; i < num_blocks; i++) {
+        omp_trsm(blockAt(inout_matrix, k, k), blockAt(inout_matrix, k, i));
+      }
+
+      // Update trailing matrix
+      for (int l = k + 1; l < num_blocks; l++) {
+#pragma omp for schedule(static)
+        for (int j = k + 1; j < l; j++) {
+          omp_gemm(blockAt(inout_matrix, k, l),
+                   blockAt(inout_matrix, k, j),
+                   blockAt(inout_matrix, j, l));
+        }
+#pragma omp single
+        omp_syrk(blockAt(inout_matrix, k, l), blockAt(inout_matrix, l, l));
+      }
+    }
+  }
+}
 
 void blocked_cholesky_openmp_tasks(double *inout_matrix) {
 #pragma omp parallel
@@ -186,6 +211,98 @@ void blocked_cholesky_openmp_tasks(double *inout_matrix) {
   }
 }
 
+#ifdef SCHEDULER_ENKITS_TASK
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Parallelism_EnkiTS.h"
+
+// Task data structures for EnkiTS
+struct trsm_task_data {
+  double *A;
+  double *B;
+};
+
+struct gemm_task_data {
+  double *A;
+  double *B;
+  double *C;
+};
+
+struct syrk_task_data {
+  double *A;
+  double *B;
+};
+
+// Task functions
+static void trsm_task(void *data) {
+  struct trsm_task_data *d = (struct trsm_task_data *)data;
+  omp_trsm(d->A, d->B);
+}
+
+static void gemm_task(void *data) {
+  struct gemm_task_data *d = (struct gemm_task_data *)data;
+  omp_gemm(d->A, d->B, d->C);
+}
+
+static void syrk_task(void *data) {
+  struct syrk_task_data *d = (struct syrk_task_data *)data;
+  omp_syrk(d->A, d->B);
+}
+
+void blocked_cholesky_enkits_tasks(double *inout_matrix) {
+  // Initialize EnkiTS scheduler
+  iara_parallelism_init_c();
+
+  // EnkiTS doesn't have task dependencies, so we need to implement the same
+  // sequential algorithm with manual synchronization points
+  for (int k = 0; k < num_blocks; k++) {
+    // potrf on diagonal block
+    omp_potrf(blockAt(inout_matrix, k, k));
+
+    // trsm on row blocks (can be done in parallel)
+    struct trsm_task_data *trsm_data = malloc(sizeof(struct trsm_task_data) * (num_blocks - k - 1));
+    for (int i = k + 1; i < num_blocks; i++) {
+      trsm_data[i - k - 1].A = blockAt(inout_matrix, k, k);
+      trsm_data[i - k - 1].B = blockAt(inout_matrix, k, i);
+      iara_submit_task_c(trsm_task, &trsm_data[i - k - 1]);
+    }
+    iara_task_wait_c(); // Wait for all trsm tasks
+    free(trsm_data);
+
+    // Update trailing matrix
+    int update_count = 0;
+    for (int l = k + 1; l < num_blocks; l++) {
+      update_count += (l - k - 1) + 1; // gemm + syrk
+    }
+
+    struct gemm_task_data *gemm_data = malloc(sizeof(struct gemm_task_data) * update_count);
+    struct syrk_task_data *syrk_data = malloc(sizeof(struct syrk_task_data) * (num_blocks - k - 1));
+
+    int gemm_idx = 0;
+    int syrk_idx = 0;
+    for (int l = k + 1; l < num_blocks; l++) {
+      for (int j = k + 1; j < l; j++) {
+        gemm_data[gemm_idx].A = blockAt(inout_matrix, k, l);
+        gemm_data[gemm_idx].B = blockAt(inout_matrix, k, j);
+        gemm_data[gemm_idx].C = blockAt(inout_matrix, j, l);
+        iara_submit_task_c(gemm_task, &gemm_data[gemm_idx]);
+        gemm_idx++;
+      }
+
+      // syrk on diagonal blocks
+      syrk_data[syrk_idx].A = blockAt(inout_matrix, k, l);
+      syrk_data[syrk_idx].B = blockAt(inout_matrix, l, l);
+      iara_submit_task_c(syrk_task, &syrk_data[syrk_idx]);
+      syrk_idx++;
+    }
+    iara_task_wait_c(); // Wait for all update tasks
+    free(gemm_data);
+    free(syrk_data);
+  }
+
+  // Shutdown EnkiTS scheduler
+  iara_parallelism_shutdown_c();
+}
+#endif
+
 double const *input_g = NULL;
 double *output_g = NULL;
 
@@ -204,6 +321,7 @@ void blocked_cholesky_virtual_fifo(double *inout_matrix_blocked) {
   output_g = inout_matrix_blocked;
 
   iara_runtime_exec(exec);
+  iara_runtime_shutdown();
 }
 #else
 void blocked_cholesky_virtual_fifo(double *inout_matrix_blocked) {
@@ -372,12 +490,15 @@ int main(int argc, char *argv[]) {
 #elif defined(SCHEDULER_OMP_TASK)
   impl = &blocked_cholesky_openmp_tasks;
   scheduler = "omp-task";
+#elif defined(SCHEDULER_ENKITS_TASK)
+  impl = &blocked_cholesky_enkits_tasks;
+  scheduler = "enkits-task";
 #elif defined(SCHEDULER_IARA)
   impl = &blocked_cholesky_virtual_fifo;
   scheduler = "virtual-fifo";
 #else
   #error                                                                       \
-      "Must define one of: SCHEDULER_SEQUENTIAL, SCHEDULER_OMP_FOR, SCHEDULER_OMP_TASK, SCHEDULER_IARA"
+      "Must define one of: SCHEDULER_SEQUENTIAL, SCHEDULER_OMP_FOR, SCHEDULER_OMP_TASK, SCHEDULER_ENKITS_TASK, SCHEDULER_IARA"
 #endif
 
   fprintf(stderr, "Compiled scheduler: %s\n", scheduler);

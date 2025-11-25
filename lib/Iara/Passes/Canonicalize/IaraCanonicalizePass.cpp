@@ -1,6 +1,6 @@
+#include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Dialect/Broadcast.h"
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"

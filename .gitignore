@@ -16,6 +16,8 @@ iara.out.ll
 iara.out.mlir
 CMakeFiles/*
 typescript
+*.perf
+*perf\.data*
 .*/edge_data.inc.h
 _junk/
 node_modules

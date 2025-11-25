@@ -62,28 +62,48 @@ function(iara_collect_args output_var env_var)
         endif()
 endfunction()
 
-function(iara_runtime_sources scheduler out_var)
-        if("${scheduler}" STREQUAL "virtual-fifo")
+function(iara_runtime_sources iara_opt_sched runtime_backend out_var out_compile_defs)
+        # Determine which runtime sources to link based on IARA_OPT_SCHEDULER and IARA_RUNTIME_BACKEND
+        # These come from the test's parameters.sh file
+
+        set(srcs "")
+        set(compile_defs "")
+
+        if("${iara_opt_sched}" STREQUAL "virtual-fifo")
+                # Virtual FIFO runtime sources
                 set(srcs
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/Common.cpp
-                        ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/DistributeGather.cpp
+                        ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/ScatterGather.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Chunk.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Edge.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Node.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Scheduler.cpp
                 )
-        elseif("${scheduler}" STREQUAL "ring-buffer")
+
+                # Add backend-specific sources
+                if("${runtime_backend}" STREQUAL "enkits")
+                        list(APPEND srcs
+                                ${PROJECT_SOURCE_DIR}/runtime/common/WorkStealingBackend_EnkiTS.cpp
+                                ${PROJECT_SOURCE_DIR}/external/enkiTS/TaskScheduler.cpp
+                        )
+                        set(compile_defs "IARA_PARALLELISM_ENKITS")
+                else()
+                        # Default to OpenMP
+                        set(compile_defs "IARA_PARALLELISM_OMP")
+                endif()
+
+        elseif("${iara_opt_sched}" STREQUAL "ring-buffer")
                 set(srcs
                         ${PROJECT_SOURCE_DIR}/runtime/ring-buffer/MutexRingBuffer.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/ring-buffer/RingBuffer_Edge.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/ring-buffer/RingBuffer_Node.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/ring-buffer/RingBuffer_Scheduler.cpp
                 )
-        else()
-                # No runtime sources for other schedulers (they may be test-specific)
-                set(srcs "")
+                set(compile_defs "")
         endif()
+
         set(${out_var} ${srcs} PARENT_SCOPE)
+        set(${out_compile_defs} ${compile_defs} PARENT_SCOPE)
 endfunction()
 
 function(iara_add_runtime_test entry scheduler)
@@ -98,8 +118,21 @@ function(iara_add_runtime_test entry scheduler)
         set(test_binary_root "${CMAKE_CURRENT_BINARY_DIR}/Iara/${entry}")
         set(build_subdir "${test_binary_root}/build-${scheduler}")
 
-        file(GLOB c_sources CONFIGURE_DEPENDS "${test_src_dir}/*.c")
-        file(GLOB cpp_sources CONFIGURE_DEPENDS "${test_src_dir}/*.cpp")
+        # Check for centralized application sources first
+        # Extract application name from test directory (e.g., "05-cholesky" -> "cholesky", "05.1-cholesky-10080_10_vf-omp" -> "cholesky")
+        string(REGEX REPLACE "^[0-9.]*-([^-]+).*" "\\1" app_name "${entry}")
+        set(app_src_dir "${PROJECT_SOURCE_DIR}/applications/${app_name}")
+
+        # Try to find sources in applications folder first, then fall back to test directory
+        if(IS_DIRECTORY "${app_src_dir}")
+                file(GLOB c_sources CONFIGURE_DEPENDS "${app_src_dir}/*.c")
+                file(GLOB cpp_sources CONFIGURE_DEPENDS "${app_src_dir}/*.cpp")
+                set(app_include_dir "${app_src_dir}")
+        else()
+                file(GLOB c_sources CONFIGURE_DEPENDS "${test_src_dir}/*.c")
+                file(GLOB cpp_sources CONFIGURE_DEPENDS "${test_src_dir}/*.cpp")
+                set(app_include_dir "${test_src_dir}")
+        endif()
 
         if(NOT c_sources AND NOT cpp_sources)
                 message(STATUS "Skipping IaRa test ${base} (no C/C++ sources found)")
@@ -108,7 +141,7 @@ function(iara_add_runtime_test entry scheduler)
 
         # Check if this is a baseline scheduler (no IaRa runtime)
         set(is_baseline_scheduler FALSE)
-        if("${scheduler}" STREQUAL "sequential" OR "${scheduler}" STREQUAL "omp-task" OR "${scheduler}" STREQUAL "omp-for")
+        if("${scheduler}" STREQUAL "sequential" OR "${scheduler}" STREQUAL "omp-task" OR "${scheduler}" STREQUAL "omp-for" OR "${scheduler}" STREQUAL "enkits-task")
                 set(is_baseline_scheduler TRUE)
         endif()
 
@@ -118,21 +151,124 @@ function(iara_add_runtime_test entry scheduler)
         set(build_type_cxx_flags "${CMAKE_CXX_FLAGS_${build_type_upper}}")
         separate_arguments(build_type_cxx_flags)
 
-        iara_runtime_sources(${scheduler} runtime_sources)
+        # Map test scheduler to IARA components:
+        # - IARA_OPT_SCHEDULER: scheduler algorithm for iara-opt (virtual-fifo or ring-buffer)
+        # - IARA_RUNTIME_BACKEND: runtime parallelism backend (omp or enkits)
+        # - SCHEDULER_FLAG: compile flag for main.c (-DSCHEDULER_xxx)
 
-        iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --${scheduler}=main-actor=run)
+        set(IARA_OPT_SCHEDULER "")
+        set(IARA_RUNTIME_BACKEND "")
+        set(SCHEDULER_FLAG "")
+
+        if("${scheduler}" STREQUAL "virtual-fifo" OR "${scheduler}" STREQUAL "vf-omp")
+                set(IARA_OPT_SCHEDULER "virtual-fifo")
+                set(IARA_RUNTIME_BACKEND "omp")
+                set(SCHEDULER_FLAG "-DSCHEDULER_IARA")
+        elseif("${scheduler}" STREQUAL "vf-enkits")
+                set(IARA_OPT_SCHEDULER "virtual-fifo")
+                set(IARA_RUNTIME_BACKEND "enkits")
+                set(SCHEDULER_FLAG "-DSCHEDULER_IARA")
+        elseif("${scheduler}" STREQUAL "ring-buffer")
+                set(IARA_OPT_SCHEDULER "ring-buffer")
+                set(IARA_RUNTIME_BACKEND "omp")
+                set(SCHEDULER_FLAG "-DSCHEDULER_IARA")
+        elseif("${scheduler}" STREQUAL "sequential")
+                set(SCHEDULER_FLAG "-DSCHEDULER_SEQUENTIAL")
+        elseif("${scheduler}" STREQUAL "omp-for")
+                set(SCHEDULER_FLAG "-DSCHEDULER_OMP_FOR")
+        elseif("${scheduler}" STREQUAL "omp-task")
+                set(SCHEDULER_FLAG "-DSCHEDULER_OMP_TASK")
+        elseif("${scheduler}" STREQUAL "enkits-task")
+                set(SCHEDULER_FLAG "-DSCHEDULER_ENKITS_TASK")
+        endif()
+
+        # Source parameters.sh to get IARA_OPT_SCHEDULER and IARA_RUNTIME_BACKEND
+        set(parameters_script "")
+        if(EXISTS "${test_src_dir}/parameters.sh")
+                set(parameters_script "${test_src_dir}/parameters.sh")
+        endif()
+
+        # Read IARA configuration from parameters.sh if it exists
+        set(iara_opt_from_params "")
+        set(runtime_backend_from_params "")
+        if(parameters_script)
+                execute_process(
+                        COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $IARA_OPT_SCHEDULER"
+                        OUTPUT_VARIABLE iara_opt_from_params
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                )
+                execute_process(
+                        COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $IARA_RUNTIME_BACKEND"
+                        OUTPUT_VARIABLE runtime_backend_from_params
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                )
+        endif()
+
+        # Use parameters from file if available, otherwise use mapped values
+        if(iara_opt_from_params)
+                set(final_iara_opt ${iara_opt_from_params})
+                set(final_runtime_backend ${runtime_backend_from_params})
+        else()
+                set(final_iara_opt ${IARA_OPT_SCHEDULER})
+                set(final_runtime_backend ${IARA_RUNTIME_BACKEND})
+        endif()
+
+        # Only get runtime sources if this is an IaRa scheduler (not baseline)
+        set(runtime_sources "")
+        set(runtime_compile_defs "")
+        if(NOT is_baseline_scheduler AND final_iara_opt)
+                iara_runtime_sources(${final_iara_opt} ${final_runtime_backend} runtime_sources runtime_compile_defs)
+        endif()
+
+        if(NOT is_baseline_scheduler AND final_iara_opt)
+                iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --${final_iara_opt}=main-actor=run)
+        endif()
         iara_collect_args(schedule_extra_args "EXTRA_SCHEDULE_ARGS")
         iara_collect_args(kernel_extra_args "EXTRA_KERNEL_ARGS")
         iara_collect_args(runtime_extra_args "EXTRA_RUNTIME_ARGS")
         iara_collect_args(link_extra_args "EXTRA_LINKER_ARGS")
 
         set(codegen_stamp "")
-        if(EXISTS "${test_src_dir}/codegen.sh")
-                if(NOT DEFINED ENV{NUM_BLOCKS} OR "$ENV{NUM_BLOCKS}" STREQUAL "")
-                        set(ENV{NUM_BLOCKS} 4)
+        # Look for codegen.sh in app directory (centralized) or test directory (legacy)
+        set(codegen_script "")
+        if(EXISTS "${app_include_dir}/codegen.sh")
+                set(codegen_script "${app_include_dir}/codegen.sh")
+        elseif(EXISTS "${test_src_dir}/codegen.sh")
+                set(codegen_script "${test_src_dir}/codegen.sh")
+        endif()
+
+        if(codegen_script)
+                # Read NUM_BLOCKS and MATRIX_SIZE from parameters.sh if available
+                set(num_blocks_val "")
+                set(matrix_size_val "")
+                if(parameters_script)
+                        execute_process(
+                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $NUM_BLOCKS"
+                                OUTPUT_VARIABLE num_blocks_val
+                                OUTPUT_STRIP_TRAILING_WHITESPACE
+                        )
+                        execute_process(
+                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $MATRIX_SIZE"
+                                OUTPUT_VARIABLE matrix_size_val
+                                OUTPUT_STRIP_TRAILING_WHITESPACE
+                        )
                 endif()
-                if(NOT DEFINED ENV{MATRIX_SIZE} OR "$ENV{MATRIX_SIZE}" STREQUAL "")
-                        set(ENV{MATRIX_SIZE} 2048)
+
+                # Use values from parameters.sh if available, otherwise fall back to environment or defaults
+                if(num_blocks_val)
+                        set(final_num_blocks ${num_blocks_val})
+                elseif(DEFINED ENV{NUM_BLOCKS} AND NOT "$ENV{NUM_BLOCKS}" STREQUAL "")
+                        set(final_num_blocks $ENV{NUM_BLOCKS})
+                else()
+                        set(final_num_blocks 4)
+                endif()
+
+                if(matrix_size_val)
+                        set(final_matrix_size ${matrix_size_val})
+                elseif(DEFINED ENV{MATRIX_SIZE} AND NOT "$ENV{MATRIX_SIZE}" STREQUAL "")
+                        set(final_matrix_size $ENV{MATRIX_SIZE})
+                else()
+                        set(final_matrix_size 2048)
                 endif()
 
                 set(codegen_stamp "${build_subdir}/codegen.stamp")
@@ -140,32 +276,27 @@ function(iara_add_runtime_test entry scheduler)
                         OUTPUT ${codegen_stamp}
                         COMMAND ${CMAKE_COMMAND} -E make_directory ${build_subdir}
                         COMMAND ${CMAKE_COMMAND} -E env
+                        PATH_TO_APP_SOURCES=${app_include_dir}
                         PATH_TO_TEST_SOURCES=${test_src_dir}
                         PATH_TO_TEST_BUILD_DIR=${build_subdir}
-                        NUM_BLOCKS=$ENV{NUM_BLOCKS}
-                        MATRIX_SIZE=$ENV{MATRIX_SIZE}
-                        SCHEDULER_MODE=${scheduler}
-                        ${BASH_EXECUTABLE} ${test_src_dir}/codegen.sh
+                        NUM_BLOCKS=${final_num_blocks}
+                        MATRIX_SIZE=${final_matrix_size}
+                        TEST_SCHEDULER=${scheduler}
+                        IARA_OPT_SCHEDULER=${final_iara_opt}
+                        IARA_RUNTIME_BACKEND=${final_runtime_backend}
+                        ${BASH_EXECUTABLE} ${codegen_script}
                         COMMAND ${CMAKE_COMMAND} -E touch ${codegen_stamp}
-                        DEPENDS ${test_src_dir}/codegen.sh
+                        DEPENDS ${codegen_script}
                         WORKING_DIRECTORY ${build_subdir}
                         COMMENT "Running codegen for ${base}"
                         VERBATIM
                 )
 
-                # Set scheduler-specific compile flags
-                if(is_baseline_scheduler)
-                        if("${scheduler}" STREQUAL "sequential")
-                                list(APPEND kernel_extra_args "-DSCHEDULER_SEQUENTIAL")
-                        elseif("${scheduler}" STREQUAL "omp-task")
-                                list(APPEND kernel_extra_args "-DSCHEDULER_OMP_TASK")
-                        elseif("${scheduler}" STREQUAL "omp-for")
-                                list(APPEND kernel_extra_args "-DSCHEDULER_OMP_FOR")
-                        endif()
-                else()
-                        list(APPEND kernel_extra_args "-DSCHEDULER_IARA")
+                # Add scheduler compile flag and other flags
+                if(SCHEDULER_FLAG)
+                        list(APPEND kernel_extra_args "${SCHEDULER_FLAG}")
                 endif()
-                list(APPEND kernel_extra_args "-DNUM_BLOCKS=$ENV{NUM_BLOCKS}" "-DMATRIX_SIZE=$ENV{MATRIX_SIZE}" "-DVERBOSE")
+                list(APPEND kernel_extra_args "-DNUM_BLOCKS=${final_num_blocks}" "-DMATRIX_SIZE=${final_matrix_size}" "-DVERBOSE")
                 list(APPEND link_extra_args "-lopenblas")
         endif()
 
@@ -307,6 +438,8 @@ function(iara_add_runtime_test entry scheduler)
         set(test_include_dirs
                 ${PROJECT_SOURCE_DIR}/include
                 ${PROJECT_SOURCE_DIR}/external
+                ${PROJECT_SOURCE_DIR}/external/enkiTS/src
+                ${app_include_dir}
                 ${test_src_dir}
                 ${build_subdir}
         )
@@ -326,6 +459,9 @@ function(iara_add_runtime_test entry scheduler)
         list(APPEND common_compile_options ${IARA_BUILD_OPT})
         list(APPEND common_compile_options ${kernel_extra_args})
         list(APPEND common_compile_options ${runtime_extra_args})
+        if(runtime_compile_defs)
+                list(APPEND common_compile_options "-D${runtime_compile_defs}")
+        endif()
 
         target_compile_options(${target_name}
                 PRIVATE
@@ -383,8 +519,31 @@ endfunction()
 file(GLOB entries RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/Iara" "${CMAKE_CURRENT_SOURCE_DIR}/Iara/*")
 foreach(entry IN LISTS entries)
         if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Iara/${entry}")
-                foreach(scheduler IN LISTS SCHEDULER_MODES)
-                        iara_add_runtime_test(${entry} ${scheduler})
-                endforeach()
+                # Check if test directory name encodes a specific scheduler
+                # e.g., "05.1-cholesky-10080_10_vf-omp" -> should only build with vf-omp
+                set(specific_scheduler "")
+                if("${entry}" MATCHES "_vf-omp$")
+                        set(specific_scheduler "vf-omp")
+                elseif("${entry}" MATCHES "_vf-enkits$")
+                        set(specific_scheduler "vf-enkits")
+                elseif("${entry}" MATCHES "_omp-for$")
+                        set(specific_scheduler "omp-for")
+                elseif("${entry}" MATCHES "_omp-task$")
+                        set(specific_scheduler "omp-task")
+                elseif("${entry}" MATCHES "_enkits-task$")
+                        set(specific_scheduler "enkits-task")
+                elseif("${entry}" MATCHES "_sequential$")
+                        set(specific_scheduler "sequential")
+                endif()
+
+                if(specific_scheduler)
+                        # Test has a specific scheduler in its name - only build with that
+                        iara_add_runtime_test(${entry} ${specific_scheduler})
+                else()
+                        # No specific scheduler in name - build with all schedulers in SCHEDULER_MODES
+                        foreach(scheduler IN LISTS SCHEDULER_MODES)
+                                iara_add_runtime_test(${entry} ${scheduler})
+                        endforeach()
+                endif()
         endif()
 endforeach()

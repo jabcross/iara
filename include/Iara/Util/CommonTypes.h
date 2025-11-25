@@ -14,4 +14,13 @@ using u32 = uint64_t;
 using i64 = int64_t;
 using u64 = uint64_t;
 
+// Special node type markers (encoded in VirtualFIFO_Node_StaticInfo::arg_bytes)
+enum class NodeType : i64 {
+  Normal = 0,      // Regular compute node (arg_bytes >= 0)
+  Alloc = -2,      // Memory allocation node
+  Dealloc = -3,    // Memory deallocation node
+  Scatter = -4,    // Data scattering/partitioning node
+  Gather = -5,     // Data gathering/concatenation node
+};
+
 #endif // UTIL_TYPES_H

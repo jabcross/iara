@@ -43,8 +43,8 @@ struct VirtualFIFO_Node_StaticInfo {
   i64 needs_priming = 1; // for normal nodes: 0 if can run whenever the inputs
                          // are ready, 1 if needs to be scheduled by run_iter
 
-  bool isAlloc() { return arg_bytes == -2; }
-  bool isDealloc() { return arg_bytes == -3; }
+  bool isAlloc() { return arg_bytes == static_cast<i64>(NodeType::Alloc); }
+  bool isDealloc() { return arg_bytes == static_cast<i64>(NodeType::Dealloc); }
 
   inline void dump() {
     fprintf(stderr, "Dumping nodeinfo {\n");

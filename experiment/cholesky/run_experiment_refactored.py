@@ -39,11 +39,26 @@ class CholeskyAdapter(ApplicationAdapter):
     def get_build_env(self, config: ExperimentConfig) -> Dict[str, str]:
         """Return environment variables for building Cholesky config."""
         params = config.params
+        # Map experiment scheduler names to build system test schedulers
+        # Now using consistent naming:
+        # - sequential, omp-for, omp-task, enkits-task: baseline schedulers
+        # - vf-omp: Virtual FIFO with OpenMP backend
+        # - vf-enkits: Virtual FIFO with EnkiTS backend
+        scheduler_map = {
+            "sequential": "sequential",
+            "omp-for": "omp-for",
+            "omp-task": "omp-task",
+            "enkits-task": "enkits-task",
+            "vf-omp": "vf-omp",
+            "vf-enkits": "vf-enkits",
+        }
+        build_scheduler = scheduler_map.get(params["scheduler"], params["scheduler"])
+
         return {
             "MATRIX_SIZE": str(params["matrix_size"]),
             "NUM_BLOCKS": str(params["num_blocks"]),
-            "SCHEDULER_MODE": params["scheduler"],
-            "SCHEDULER_MODES": params["scheduler"],
+            "SCHEDULER_MODE": build_scheduler,
+            "SCHEDULER_MODES": build_scheduler,
             "PATH_TO_TEST_BUILD_DIR": str(Path(".")),  # Will be set to instance_dir
             "PATH_TO_TEST_SOURCES": str(self.sources_dir),
             "CMAKE_BUILD_TYPE": "ExperimentProf",
@@ -52,20 +67,50 @@ class CholeskyAdapter(ApplicationAdapter):
     def get_cmake_args(self, config: ExperimentConfig) -> List[str]:
         """Return CMake arguments for Cholesky."""
         params = config.params
+        # Map experiment scheduler names to build system test schedulers
+        scheduler_map = {
+            "sequential": "sequential",
+            "omp-for": "omp-for",
+            "omp-task": "omp-task",
+            "enkits-task": "enkits-task",
+            "vf-omp": "vf-omp",
+            "vf-enkits": "vf-enkits",
+        }
+        build_scheduler = scheduler_map.get(params["scheduler"], params["scheduler"])
+
         return [
             f"-DCMAKE_BUILD_TYPE=ExperimentProf",
-            f"-DSCHEDULER_MODES={params['scheduler']}",
+            f"-DSCHEDULER_MODES={build_scheduler}",
             f"-DPATH_TO_TEST_SOURCES={self.sources_dir}",
         ]
 
     def get_build_target(self, config: ExperimentConfig) -> str:
         """Return the CMake target to build."""
-        return f"run-05-cholesky-{config.params['scheduler']}"
+        # Map experiment scheduler names to build system scheduler modes
+        scheduler_map = {
+            "sequential": "sequential",
+            "omp-for": "omp-for",
+            "omp-task": "omp-task",
+            "enkits-task": "enkits-task",  # enkits-task direct implementation
+            "vf-omp": "virtual-fifo",      # vf-omp uses virtual-fifo build mode (OpenMP)
+            "vf-enkits": "vf-enkits",      # vf-enkits uses vf-enkits build mode (EnkiTS)
+        }
+        build_scheduler = scheduler_map.get(config.params["scheduler"], config.params["scheduler"])
+        return f"run-05-cholesky-{build_scheduler}"
 
     def get_executable_path(self, config: ExperimentConfig, build_dir: Path) -> Path:
         """Return path to the Cholesky executable."""
-        scheduler = config.params['scheduler']
-        return build_dir / "test" / "Iara" / "05-cholesky" / f"build-{scheduler}" / "a.out"
+        # Map experiment scheduler names to build system scheduler modes
+        scheduler_map = {
+            "sequential": "sequential",
+            "omp-for": "omp-for",
+            "omp-task": "omp-task",
+            "enkits-task": "enkits-task",  # enkits-task direct implementation
+            "vf-omp": "virtual-fifo",      # vf-omp uses virtual-fifo build mode (OpenMP)
+            "vf-enkits": "vf-enkits",      # vf-enkits uses vf-enkits build mode (EnkiTS)
+        }
+        build_scheduler = scheduler_map.get(config.params["scheduler"], config.params["scheduler"])
+        return build_dir / "test" / "Iara" / "05-cholesky" / f"build-{build_scheduler}" / "a.out"
 
     def parse_program_output(self, stdout: str, stderr: str) -> Optional[Dict[str, Any]]:
         """Parse Cholesky program output for timing measurements."""
@@ -165,8 +210,8 @@ Examples:
     parser.add_argument("--num-blocks", type=int, nargs='+', default=[1],
                        help="Number of blocks to test (default: 1)")
     parser.add_argument("--schedulers", type=str, nargs='+',
-                       default=["sequential", "omp-task", "virtual-fifo"],
-                       help="Schedulers to test (default: sequential omp-task virtual-fifo)")
+                       default=["sequential", "omp-task", "vf-omp"],
+                       help="Schedulers to test (default: sequential omp-task vf-omp)")
 
     # Experiment parameters
     parser.add_argument("--repetitions", type=int, default=1,
