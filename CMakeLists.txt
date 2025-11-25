@@ -26,6 +26,17 @@ if(IARA_USE_PRESBURGER_BUFFER_CALC)
   add_compile_definitions(IARA_USE_PRESBURGER_BUFFER_CALC)
 endif()
 
+# Option to build tests (default: ON)
+option(IARA_BUILD_TESTS
+  "Build IaRa tests"
+  ON)
+
+# Option to build experiments (default: OFF)
+# When ON, builds experiment configurations instead of tests
+option(IARA_BUILD_EXPERIMENTS
+  "Build experiment configurations"
+  OFF)
+
 # Set compilers from environment BEFORE project() command
 # This ensures CMake uses the correct compilers during compiler detection
 set(CMAKE_C_COMPILER $ENV{LLVM_INSTALL}/bin/clang)
@@ -57,8 +68,8 @@ set(CMAKE_C_FLAGS_COMPILERDEBUG "${CMAKE_C_FLAGS_DEBUG}" CACHE STRING "Compiler 
 set(CMAKE_EXE_LINKER_FLAGS_COMPILERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}" CACHE STRING "Compiler Debug linker flags" FORCE)
 
 # TestDebug: Debug build for tests
-set(CMAKE_CXX_FLAGS_TESTDEBUG "${CMAKE_CXX_FLAGS_DEBUG}" CACHE STRING "Test Debug CXX flags" FORCE)
-set(CMAKE_C_FLAGS_TESTDEBUG "${CMAKE_C_FLAGS_DEBUG}" CACHE STRING "Test Debug C flags" FORCE)
+set(CMAKE_CXX_FLAGS_TESTDEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -gdwarf" CACHE STRING "Test Debug CXX flags" FORCE)
+set(CMAKE_C_FLAGS_TESTDEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g -gdwarf" CACHE STRING "Test Debug C flags" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_TESTDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}" CACHE STRING "Test Debug linker flags" FORCE)
 
 # ExperimentSize: Optimize for minimal binary size
@@ -71,10 +82,16 @@ set(CMAKE_CXX_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -fn
 set(CMAKE_C_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPERF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
 
+# # ExperimentPerf: Enable debug data for profiling
+# set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_CXX_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
+# set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_C_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
+# set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPROF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
+
 # ExperimentPerf: Enable debug data for profiling
-set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_CXX_FLAGS_DEBUG} -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
-set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_C_FLAGS_DEBUG} -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
+set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O0 ${CMAKE_CXX_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
+set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O0 ${CMAKE_C_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPROF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
+
 
 # Mark custom build types as advanced
 mark_as_advanced(
@@ -190,7 +207,15 @@ if(MLIR_ENABLE_BINDINGS_PYTHON)
   message(STATUS "Enabling Python API")
   add_subdirectory(python)
 endif()
-add_subdirectory(test)
+
+if(IARA_BUILD_TESTS)
+  add_subdirectory(test)
+endif()
+
+if(IARA_BUILD_EXPERIMENTS)
+  add_subdirectory(experiment)
+endif()
+
 add_subdirectory(iara-opt)
 
 string(REPLACE "-fno-lifetime-dse" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

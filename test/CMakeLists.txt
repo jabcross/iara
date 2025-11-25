@@ -73,7 +73,6 @@ function(iara_runtime_sources iara_opt_sched runtime_backend out_var out_compile
                 # Virtual FIFO runtime sources
                 set(srcs
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/Common.cpp
-                        ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/ScatterGather.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Chunk.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Edge.cpp
                         ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Node.cpp
@@ -218,6 +217,12 @@ function(iara_add_runtime_test entry scheduler)
         set(runtime_compile_defs "")
         if(NOT is_baseline_scheduler AND final_iara_opt)
                 iara_runtime_sources(${final_iara_opt} ${final_runtime_backend} runtime_sources runtime_compile_defs)
+        elseif("${scheduler}" STREQUAL "enkits-task")
+                # enkits-task baseline scheduler needs EnkiTS C bindings
+                set(runtime_sources
+                        ${PROJECT_SOURCE_DIR}/runtime/common/WorkStealingBackend_EnkiTS.cpp
+                        ${PROJECT_SOURCE_DIR}/external/enkiTS/TaskScheduler.cpp
+                )
         endif()
 
         if(NOT is_baseline_scheduler AND final_iara_opt)
@@ -243,24 +248,36 @@ function(iara_add_runtime_test entry scheduler)
                 set(matrix_size_val "")
                 if(parameters_script)
                         execute_process(
-                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $NUM_BLOCKS"
+                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo \$NUM_BLOCKS"
                                 OUTPUT_VARIABLE num_blocks_val
+                                ERROR_VARIABLE num_blocks_err
                                 OUTPUT_STRIP_TRAILING_WHITESPACE
+                                RESULT_VARIABLE num_blocks_rc
                         )
+                        if(NOT num_blocks_rc EQUAL 0)
+                                message(FATAL_ERROR "Error sourcing ${parameters_script} for NUM_BLOCKS (exit ${num_blocks_rc}). Stderr: ${num_blocks_err}")
+                        endif()
+
                         execute_process(
-                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo $MATRIX_SIZE"
+                                COMMAND ${BASH_EXECUTABLE} -c "source ${parameters_script} && echo \$MATRIX_SIZE"
                                 OUTPUT_VARIABLE matrix_size_val
+                                ERROR_VARIABLE matrix_size_err
                                 OUTPUT_STRIP_TRAILING_WHITESPACE
+                                RESULT_VARIABLE matrix_size_rc
                         )
+                        if(NOT matrix_size_rc EQUAL 0)
+                                message(FATAL_ERROR "Error sourcing ${parameters_script} for MATRIX_SIZE (exit ${matrix_size_rc}). Stderr: ${matrix_size_err}")
+                        endif()
                 endif()
 
-                # Use values from parameters.sh if available, otherwise fall back to environment or defaults
+                # Use values from parameters.sh if available, otherwise fall back to environment
+                # Note: parameters.sh should validate and error if these are not set
                 if(num_blocks_val)
                         set(final_num_blocks ${num_blocks_val})
                 elseif(DEFINED ENV{NUM_BLOCKS} AND NOT "$ENV{NUM_BLOCKS}" STREQUAL "")
                         set(final_num_blocks $ENV{NUM_BLOCKS})
                 else()
-                        set(final_num_blocks 4)
+                        set(final_num_blocks "")
                 endif()
 
                 if(matrix_size_val)
@@ -268,7 +285,7 @@ function(iara_add_runtime_test entry scheduler)
                 elseif(DEFINED ENV{MATRIX_SIZE} AND NOT "$ENV{MATRIX_SIZE}" STREQUAL "")
                         set(final_matrix_size $ENV{MATRIX_SIZE})
                 else()
-                        set(final_matrix_size 2048)
+                        set(final_matrix_size "")
                 endif()
 
                 set(codegen_stamp "${build_subdir}/codegen.stamp")
@@ -519,6 +536,15 @@ endfunction()
 file(GLOB entries RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/Iara" "${CMAKE_CURRENT_SOURCE_DIR}/Iara/*")
 foreach(entry IN LISTS entries)
         if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Iara/${entry}")
+                # Filter tests if IARA_TEST_FILTER is set
+                if(DEFINED ENV{IARA_TEST_FILTER} AND NOT "$ENV{IARA_TEST_FILTER}" STREQUAL "")
+                        string(FIND "${entry}" "$ENV{IARA_TEST_FILTER}" filter_pos)
+                        if(${filter_pos} EQUAL -1)
+                                # Test name doesn't contain filter substring, skip it
+                                continue()
+                        endif()
+                endif()
+
                 # Check if test directory name encodes a specific scheduler
                 # e.g., "05.1-cholesky-10080_10_vf-omp" -> should only build with vf-omp
                 set(specific_scheduler "")

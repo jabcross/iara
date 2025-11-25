@@ -212,7 +212,7 @@ void blocked_cholesky_openmp_tasks(double *inout_matrix) {
 }
 
 #ifdef SCHEDULER_ENKITS_TASK
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Parallelism_EnkiTS.h"
+#include "IaraRuntime/common/WorkStealingBackend_EnkiTS.h"
 
 // Task data structures for EnkiTS
 struct trsm_task_data {

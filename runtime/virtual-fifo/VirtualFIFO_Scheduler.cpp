@@ -37,7 +37,7 @@ extern "C" void iara_runtime_alloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 
 extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 
-  if (chunk->owns_memory) {
+  if (chunk->allocated != IARA_EXTERNALLY_MANAGED_MEMORY) {
 
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("freeing ptr %#016lx\n", (size_t)chunk->allocated);
@@ -62,20 +62,20 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
            i < e;
            i++) {
         auto node_ptr = &node;
-        IARA_TASK_SUBMIT(node_ptr->prime(i), node_ptr, i);
+        iara_submit_task([=]() { node_ptr->prime(i); });
       }
     }
   }
 }
 
-extern "C" void iara_runtime_wait() { IARA_TASK_WAIT(); }
+extern "C" void iara_runtime_wait() { iara_task_wait(); }
 
 extern "C" void iara_runtime_exec(void (*exec)()) {
 
   auto &nodes = iara_runtime_nodes;
   auto &edges = iara_runtime_edges;
 
-  IARA_TASK_PARALLEL(IARA_TASK_SINGLE(exec();));
+  iara_parallel_single([&]() { exec(); });
 }
 
 // Global storage for I/O sources and sinks
@@ -124,20 +124,12 @@ extern "C" void iara_runtime_init() {
     node.init();
   }
 
-  // Provide input chunks from sources to scatter nodes
-  // For now, assume first source goes to first scatter node
-  // TODO: Add proper mapping from sources to nodes
-  if (!iara_runtime_sources.empty()) {
-    for (auto &node : iara_runtime_nodes) {
-      if (node.static_info.isScatter()) {
-        // Inject the source chunk into the scatter node
-        // The scatter node will partition it and push to its output FIFOs
-        auto &source = *iara_runtime_sources[0];
-        node.consume(0, source.chunk, 0, 0);
-        break;
-      }
-    }
-  }
+  // Scatter/gather functionality removed - TODO: re-implement if needed
+  // if (!iara_runtime_sources.empty()) {
+  //   for (auto &node : iara_runtime_nodes) {
+  //     // Handle source injection
+  //   }
+  // }
 
   for (auto &node : iara_runtime_nodes) {
     if (node.static_info.isAlloc())

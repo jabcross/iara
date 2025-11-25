@@ -1,6 +1,6 @@
 // EnkiTS backend implementation - global variable definitions
 
-#include "IaraRuntime/virtual-fifo/WorkStealingBackend_EnkiTS.h"
+#include "IaraRuntime/common/WorkStealingBackend_EnkiTS.h"
 
 namespace iara_enkits {
   // Global EnkiTS scheduler instance

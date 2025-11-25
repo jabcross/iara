@@ -143,7 +143,7 @@ void VirtualFIFO_Node::prime(i64 seq) {
 
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   auto _this = this;
-  IARA_SUBMIT_TASK([_this, args, seq]() {
+  iara_submit_task([_this, args, seq]() {
 
 #ifdef IARA_DEBUGPRINT
     {
@@ -252,7 +252,7 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
   auto _this = this;
 
   if (may_alloc) {
-    IARA_SUBMIT_TASK([_this, firing]() { _this->fireAlloc(firing); });
+    iara_submit_task([_this, firing]() { _this->fireAlloc(firing); });
   }
 }
 

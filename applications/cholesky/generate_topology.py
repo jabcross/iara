@@ -97,18 +97,19 @@ if __name__ == "__main__":
 
     print("iara.actor @run {")
 
-    # Input: full matrix
-    print(f"  %input = iara.in inout : tensor<{dim*dim}x{datatype}>")
+    # print(f"  %in = iara.in inout : tensor<{ts*ts}x{datatype}>")
 
-    # Scatter the input matrix into blocks
+    # print("  ", end="")
+    # # print(labels)
+
     labels = ", ".join(
         [f"%e_{row}_{col}_0" for col in range(nb) for row in range(nb)])
 
-    print(f"  {labels} = ", end="")
+    print(f"{labels} = ", end="")
 
     types = ", ".join([f"tensor<{ts*ts}x{datatype}>" for i in range(nb*nb)])
 
-    print(f"iara.node @__iara_scatter__ in (%input : tensor<{dim*dim}x{datatype}>) out ( {types} )")
+    print(f"iara.node @kernel_split out ( {types} ) ")
 
     for row in range(nb):
         for col in range(nb):
@@ -170,13 +171,8 @@ if __name__ == "__main__":
 
     assert all([writes[edge] == 1 for edge in writes])
 
-    # Gather all blocks back into a single output matrix
-    gather_inputs = ", ".join([f"%e_{row}_{col}_{edges[(row, col)]} : tensor<{ts*ts}x{datatype}>" for (
-        row, col) in [(row, col) for col in range(nb) for row in range(nb)]])
 
-    print(f"  %output = iara.node @__iara_gather__ in ({gather_inputs}) out (tensor<{dim*dim}x{datatype}>)")
-
-    # Output: full matrix result
-    print(f"  iara.out (%output : tensor<{dim*dim}x{datatype}>)")
+    print(f"  iara.node @kernel_join in ({", ".join([f"%e_{row}_{col}_{edges[(row, col)]} : tensor<{ts*ts}x{datatype}>" for (
+        row, col), ty in zip([(row, col) for col in range(nb) for row in range(nb)], range(nb*nb))])})", end="")
 
     print("}")

@@ -28,13 +28,13 @@ from experiment_framework import (
 class CholeskyAdapter(ApplicationAdapter):
     """Adapter for Cholesky decomposition experiments."""
 
-    def __init__(self, sources_dir: Path):
+    def __init__(self):
         """Initialize adapter.
 
-        Args:
-            sources_dir: Path to the Cholesky test sources directory
+        Note: The experiment CMakeLists.txt directly references source files
+        via IARA_DIR environment variable, so we don't need to track paths here.
         """
-        self.sources_dir = sources_dir
+        pass
 
     def get_build_env(self, config: ExperimentConfig) -> Dict[str, str]:
         """Return environment variables for building Cholesky config."""
@@ -58,59 +58,29 @@ class CholeskyAdapter(ApplicationAdapter):
             "MATRIX_SIZE": str(params["matrix_size"]),
             "NUM_BLOCKS": str(params["num_blocks"]),
             "SCHEDULER_MODE": build_scheduler,
-            "SCHEDULER_MODES": build_scheduler,
-            "PATH_TO_TEST_BUILD_DIR": str(Path(".")),  # Will be set to instance_dir
-            "PATH_TO_TEST_SOURCES": str(self.sources_dir),
-            "CMAKE_BUILD_TYPE": "ExperimentProf",
         }
 
     def get_cmake_args(self, config: ExperimentConfig) -> List[str]:
-        """Return CMake arguments for Cholesky."""
-        params = config.params
-        # Map experiment scheduler names to build system test schedulers
-        scheduler_map = {
-            "sequential": "sequential",
-            "omp-for": "omp-for",
-            "omp-task": "omp-task",
-            "enkits-task": "enkits-task",
-            "vf-omp": "vf-omp",
-            "vf-enkits": "vf-enkits",
-        }
-        build_scheduler = scheduler_map.get(params["scheduler"], params["scheduler"])
+        """Return CMake arguments for Cholesky.
 
+        Uses the main IaRa CMakeLists.txt with IARA_BUILD_EXPERIMENTS=ON.
+        """
         return [
             f"-DCMAKE_BUILD_TYPE=ExperimentProf",
-            f"-DSCHEDULER_MODES={build_scheduler}",
-            f"-DPATH_TO_TEST_SOURCES={self.sources_dir}",
+            "-DIARA_BUILD_TESTS=OFF",  # Don't build tests
+            "-DIARA_BUILD_EXPERIMENTS=ON",  # Build experiment instead
         ]
 
     def get_build_target(self, config: ExperimentConfig) -> str:
         """Return the CMake target to build."""
-        # Map experiment scheduler names to build system scheduler modes
-        scheduler_map = {
-            "sequential": "sequential",
-            "omp-for": "omp-for",
-            "omp-task": "omp-task",
-            "enkits-task": "enkits-task",  # enkits-task direct implementation
-            "vf-omp": "virtual-fifo",      # vf-omp uses virtual-fifo build mode (OpenMP)
-            "vf-enkits": "vf-enkits",      # vf-enkits uses vf-enkits build mode (EnkiTS)
-        }
-        build_scheduler = scheduler_map.get(config.params["scheduler"], config.params["scheduler"])
-        return f"run-05-cholesky-{build_scheduler}"
+        # Build the cholesky experiment target
+        return "cholesky-experiment"
 
     def get_executable_path(self, config: ExperimentConfig, build_dir: Path) -> Path:
         """Return path to the Cholesky executable."""
-        # Map experiment scheduler names to build system scheduler modes
-        scheduler_map = {
-            "sequential": "sequential",
-            "omp-for": "omp-for",
-            "omp-task": "omp-task",
-            "enkits-task": "enkits-task",  # enkits-task direct implementation
-            "vf-omp": "virtual-fifo",      # vf-omp uses virtual-fifo build mode (OpenMP)
-            "vf-enkits": "vf-enkits",      # vf-enkits uses vf-enkits build mode (EnkiTS)
-        }
-        build_scheduler = scheduler_map.get(config.params["scheduler"], config.params["scheduler"])
-        return build_dir / "test" / "Iara" / "05-cholesky" / f"build-{build_scheduler}" / "a.out"
+        # The experiment CMakeLists.txt puts the executable in cholesky-{scheduler}/a.out
+        scheduler = config.params["scheduler"]
+        return build_dir / f"cholesky-{scheduler}" / "a.out"
 
     def parse_program_output(self, stdout: str, stderr: str) -> Optional[Dict[str, Any]]:
         """Parse Cholesky program output for timing measurements."""
@@ -243,12 +213,6 @@ Examples:
         sys.exit(1)
 
     project_dir = Path(iara_dir)
-    sources_dir = project_dir / "test" / "Iara" / "05-cholesky"
-
-    # Validate sources directory
-    if not sources_dir.exists():
-        print(f"ERROR: Sources directory not found: {sources_dir}", file=sys.stderr)
-        sys.exit(1)
 
     # Generate configurations
     configs = [
@@ -263,7 +227,9 @@ Examples:
         print(f"  - {config.name}")
 
     # Set up adapter and runner
-    adapter = CholeskyAdapter(sources_dir)
+    # Note: CholeskyAdapter no longer needs sources_dir since the experiment CMakeLists.txt
+    # directly references application sources via IARA_DIR env var
+    adapter = CholeskyAdapter()
 
     use_slurm = None if args.slurm == "auto" else (args.slurm == "yes")
 

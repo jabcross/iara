@@ -523,38 +523,36 @@ class ExperimentVisualizer:
             print("Generating compilation time plot...")
             fig, ax = plt.subplots(figsize=(12, 6))
 
-            pivot_compile = self.build_metrics.pivot_table(
-                index='config_name', columns='scheduler', values='compile_time')
+            # Each config has exactly one scheduler, so just plot them directly
+            configs = self.build_metrics['config_name'].values
+            compile_times = self.build_metrics['compile_time'].values
+            schedulers = self.build_metrics['scheduler'].values
 
-            # Only use schedulers that exist in the data
-            available_schedulers = [s for s in self.scheduler_order if s in pivot_compile.columns]
-            if not available_schedulers:
-                print("  WARNING: No schedulers found in data, skipping compilation time plot")
-                plt.close()
-                return
-            pivot_compile = pivot_compile[available_schedulers]
+            x = np.arange(len(configs))
 
-            x = np.arange(len(pivot_compile.index))
-            width = 0.25
+            # Color bars by scheduler
+            colors = [self.scheduler_colors.get(sched, 'gray') for sched in schedulers]
 
-            for i, scheduler in enumerate(available_schedulers):
-                offset = (i - 1) * width
-                bars = ax.bar(x + offset, pivot_compile[scheduler], width,
-                             label=scheduler, alpha=0.8,
-                             color=self.scheduler_colors.get(scheduler, f'C{i}'))
+            bars = ax.bar(x, compile_times, alpha=0.8, color=colors)
 
-                for j, (bar, val) in enumerate(zip(bars, pivot_compile[scheduler])):
-                    if not np.isnan(val):
-                        height = bar.get_height()
-                        ax.text(bar.get_x() + bar.get_width()/2., height,
-                               f'{val:.2f}s', ha='center', va='bottom', fontsize=8)
+            # Add value labels on bars
+            for bar, val in zip(bars, compile_times):
+                if not np.isnan(val):
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height,
+                           f'{val:.2f}s', ha='center', va='bottom', fontsize=8)
 
             ax.set_ylabel('Compilation Time (seconds)', fontweight='bold', fontsize=12)
             ax.set_xlabel('Configuration', fontweight='bold', fontsize=12)
-            ax.set_title('Compilation Time by Scheduler and Configuration', fontweight='bold', fontsize=14)
+            ax.set_title('Compilation Time by Configuration', fontweight='bold', fontsize=14)
             ax.set_xticks(x)
-            ax.set_xticklabels(pivot_compile.index, rotation=45, ha='right')
-            ax.legend()
+            ax.set_xticklabels(configs, rotation=45, ha='right')
+
+            # Create legend from unique schedulers
+            unique_schedulers = self.build_metrics['scheduler'].unique()
+            legend_handles = [plt.Rectangle((0,0),1,1, fc=self.scheduler_colors.get(s, 'gray'), alpha=0.8)
+                            for s in unique_schedulers]
+            ax.legend(legend_handles, unique_schedulers)
             ax.grid(True, alpha=0.3, axis='y')
 
             plt.tight_layout()
