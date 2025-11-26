@@ -21,6 +21,8 @@ import os
 import subprocess
 import re
 from typing import Optional, List, Dict, Any
+import plotly.express as px
+import plotly.io as pio
 
 
 class ExperimentVisualizer:
@@ -290,6 +292,63 @@ class ExperimentVisualizer:
                 return fig
         except Exception as e:
             print(f"  ERROR generating binary size overhead plots: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_binary_size_overhead_plotly(self):
+        """Plotly duplicate for `plot_binary_size_overhead`."""
+        if not self.has_binary_size:
+            return None
+
+        try:
+            matrix_sizes_list = sorted(self.build_metrics['matrix_size'].unique())
+            for matrix_size in matrix_sizes_list:
+                size_data = self.build_metrics[self.build_metrics['matrix_size'] == matrix_size].copy()
+                num_blocks_list = sorted(size_data['num_blocks'].unique())
+
+                rows = []
+                for num_blocks in num_blocks_list:
+                    seq_data = size_data[(size_data['num_blocks'] == num_blocks) & (size_data['scheduler'] == 'sequential')]
+                    if len(seq_data) == 0:
+                        continue
+                    seq_size = seq_data.iloc[0]['total_size']
+                    for sched in self.scheduler_order:
+                        sched_data = size_data[(size_data['num_blocks'] == num_blocks) & (size_data['scheduler'] == sched)]
+                        if len(sched_data) > 0:
+                            sched_size = sched_data.iloc[0]['total_size']
+                            pct_change = ((sched_size - seq_size) / seq_size) * 100
+                            rows.append({'num_blocks': str(num_blocks), 'scheduler': sched, 'pct': pct_change})
+
+                if not rows:
+                    continue
+
+                df = pd.DataFrame(rows)
+                fig = px.bar(
+                    df, x='num_blocks', y='pct', color='scheduler', barmode='group',
+                    category_orders={'scheduler': self.scheduler_order},
+                    color_discrete_map=self.scheduler_colors,
+                    labels={'pct': 'Size Change vs Sequential (%)', 'num_blocks': 'Number of Blocks'}
+                )
+                fig.update_layout(title_text=f'Binary Size Overhead - {matrix_size}×{matrix_size}', xaxis={'type': 'category'})
+
+                # Save interactive HTML and optional PNG
+                try:
+                    html_path = self.images_dir / self._make_filename(f'binary_size_overhead_{matrix_size}_plotly.html')
+                    pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                    print(f"  Saved interactive: {html_path}")
+                except Exception:
+                    pass
+                try:
+                    png_path = self.images_dir / self._make_filename(f'binary_size_overhead_{matrix_size}_plotly.png')
+                    pio.write_image(fig, str(png_path))
+                    print(f"  Saved static: {png_path}")
+                except Exception:
+                    pass
+
+                return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly binary size overhead: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -741,7 +800,7 @@ class ExperimentVisualizer:
 
             runtime_stats = pd.DataFrame(runtime_rows)
 
-            # Calculate percentage change relative to sequential
+            # Calculate normalized change relative to sequential (fractional, not percent)
             relative_data = []
             for (matrix_size, num_blocks), group in runtime_stats.groupby(['matrix_size', 'num_blocks']):
                 seq_data = group[group['scheduler'] == 'sequential']
@@ -751,20 +810,20 @@ class ExperimentVisualizer:
                 seq_time = seq_data['wall_time_mean'].values[0]
 
                 for _, row in group.iterrows():
-                    pct_change = ((row['wall_time_mean'] - seq_time) / seq_time) * 100
+                    ratio = (row['wall_time_mean'] / seq_time)
                     relative_data.append({
                         'matrix_size': matrix_size,
                         'num_blocks': num_blocks,
                         'scheduler': row['scheduler'],
-                        'pct_change': pct_change
+                        'ratio': ratio
                     })
 
             runtime_relative_df = pd.DataFrame(relative_data)
             runtime_relative_df = runtime_relative_df.sort_values(['matrix_size', 'num_blocks'])
 
-            # Pivot for plotting
+            # Pivot for plotting (values are multiplicative ratios)
             pivot_pct = runtime_relative_df.pivot_table(
-                index=['matrix_size', 'num_blocks'], columns='scheduler', values='pct_change')
+                index=['matrix_size', 'num_blocks'], columns='scheduler', values='ratio')
 
             # Only use available schedulers
             available_schedulers = [s for s in self.scheduler_order if s in pivot_pct.columns]
@@ -777,8 +836,8 @@ class ExperimentVisualizer:
                 pivot_pct.values,
                 pivot_pct.index,
                 available_schedulers,
-                'Runtime Change vs Sequential (%)',
-                'Runtime Performance Change Relative to Sequential\n(Negative = Faster, Positive = Slower)',
+                'Runtime Ratio vs Sequential',
+                'Runtime Performance Ratio Relative to Sequential\n(Values > 1 = Slower, < 1 = Faster)',
                 'runtime_performance_relative.png'
             )
 
@@ -862,7 +921,7 @@ class ExperimentVisualizer:
 
             memory_stats = pd.DataFrame(memory_rows)
 
-            # Calculate percentage change relative to sequential
+            # Calculate normalized change relative to sequential (fractional, not percent)
             relative_data = []
             for (matrix_size, num_blocks), group in memory_stats.groupby(['matrix_size', 'num_blocks']):
                 seq_data = group[group['scheduler'] == 'sequential']
@@ -872,20 +931,20 @@ class ExperimentVisualizer:
                 seq_memory = seq_data['max_rss_kb_mean'].values[0]
 
                 for _, row in group.iterrows():
-                    pct_change = ((row['max_rss_kb_mean'] - seq_memory) / seq_memory) * 100
+                    ratio = (row['max_rss_kb_mean'] / seq_memory)
                     relative_data.append({
                         'matrix_size': matrix_size,
                         'num_blocks': num_blocks,
                         'scheduler': row['scheduler'],
-                        'pct_change': pct_change
+                        'ratio': ratio
                     })
 
             memory_relative_df = pd.DataFrame(relative_data)
             memory_relative_df = memory_relative_df.sort_values(['matrix_size', 'num_blocks'])
 
-            # Pivot for plotting
+            # Pivot for plotting (values are multiplicative ratios)
             pivot_pct = memory_relative_df.pivot_table(
-                index=['matrix_size', 'num_blocks'], columns='scheduler', values='pct_change')
+                index=['matrix_size', 'num_blocks'], columns='scheduler', values='ratio')
 
             # Only use available schedulers
             available_schedulers = [s for s in self.scheduler_order if s in pivot_pct.columns]
@@ -898,10 +957,288 @@ class ExperimentVisualizer:
                 pivot_pct.values,
                 pivot_pct.index,
                 available_schedulers,
-                'Memory Change vs Sequential (%)',
-                'Memory Usage Change Relative to Sequential\n(Positive = More Memory)',
+                'Memory Ratio vs Sequential',
+                'Memory Usage Ratio Relative to Sequential\n(Values > 1 = More Memory)',
                 'memory_usage_relative.png'
             )
+
+        except Exception as e:
+            print(f"  ERROR generating memory usage relative plot: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    # --- Plotly duplicates for all plots ---
+    def plot_binary_size_grouped_plotly(self):
+        """Plotly duplicate for `plot_binary_size_grouped`."""
+        if not self.has_binary_size:
+            return None
+        try:
+            all_sections = set()
+            plot_rows = []
+            for _, row in self.build_metrics.iterrows():
+                matrix_size = row['matrix_size']
+                num_blocks = row['num_blocks']
+                scheduler = row['scheduler']
+                binary_path = self.get_binary_path(matrix_size, num_blocks, scheduler)
+                if binary_path.exists():
+                    sections = self.get_section_sizes(binary_path)
+                    all_sections.update(sections.keys())
+                    config_label = f"{matrix_size}x{matrix_size}\n{num_blocks}b\n{scheduler}"
+                    for section, size in sections.items():
+                        plot_rows.append({'config_label': config_label, 'section': section, 'size_kb': size / 1024.0})
+
+            if not plot_rows:
+                return None
+            df = pd.DataFrame(plot_rows)
+            fig = px.bar(df, x='config_label', y='size_kb', color='section', labels={'size_kb': 'Size (KB)'} )
+            fig.update_layout(title_text='Binary Size Comparison - Sections (stacked)', xaxis_tickangle=-45)
+            try:
+                html_path = self.images_dir / self._make_filename('binary_size_grouped_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('binary_size_grouped_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly grouped binary size plot: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_compilation_time_plotly(self):
+        """Plotly duplicate for `plot_compilation_time`."""
+        if not self.has_compile_time:
+            return None
+        try:
+            # Group by num_blocks on X and facet by matrix_size to match matplotlib grouping
+            df = self.build_metrics.copy()
+            df['num_blocks_str'] = df['num_blocks'].astype(str)
+            # Ensure scheduler order and numeric ordering of num_blocks (as strings)
+            num_blocks_order = sorted(df['num_blocks_str'].unique(), key=lambda x: int(x))
+            category_orders = {'num_blocks_str': num_blocks_order, 'scheduler': self.scheduler_order}
+            fig = px.bar(
+                df,
+                x='num_blocks_str',
+                y='compile_time',
+                color='scheduler',
+                barmode='group',
+                facet_col='matrix_size',
+                category_orders=category_orders,
+                color_discrete_map=self.scheduler_colors,
+                labels={'compile_time': 'Compilation Time (s)', 'num_blocks_str': 'Number of Blocks'}
+            )
+            fig.update_layout(title_text='Compilation Time by Number of Blocks (faceted by Matrix Size)')
+            try:
+                html_path = self.images_dir / self._make_filename('compilation_time_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('compilation_time_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly compilation time plot: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_runtime_performance_plotly(self):
+        """Plotly duplicate for runtime performance (stacked)."""
+        try:
+            has_init_time = 'init_time' in self.results.columns
+            has_convert_time = 'convert_time' in self.results.columns
+            runtime_rows = []
+            for (matrix_size, num_blocks, scheduler), group in self.results.groupby(['matrix_size', 'num_blocks', 'scheduler']):
+                wall_mean, _, _ = self.bootstrap_ci(group['wall_time'].values, func=np.mean, n_boot=1000)
+                real_mean, _, _ = self.bootstrap_ci(group['real_time'].values, func=np.mean, n_boot=1000)
+                row = {'matrix_size': matrix_size, 'num_blocks': num_blocks, 'scheduler': scheduler, 'wall_time_mean': wall_mean, 'real_time_mean': real_mean}
+                if has_init_time and has_convert_time:
+                    init_mean, _, _ = self.bootstrap_ci(group['init_time'].values, func=np.mean, n_boot=1000)
+                    convert_mean, _, _ = self.bootstrap_ci(group['convert_time'].values, func=np.mean, n_boot=1000)
+                    other = real_mean - wall_mean - init_mean - convert_mean
+                    row.update({'init': init_mean, 'convert': convert_mean, 'other': other, 'compute': wall_mean})
+                else:
+                    setup_mean = real_mean - wall_mean
+                    row.update({'setup': setup_mean, 'compute': wall_mean})
+                runtime_rows.append(row)
+
+            df = pd.DataFrame(runtime_rows)
+            if df.empty:
+                return None
+            # Build config label
+            df['config_label'] = df['matrix_size'].astype(str) + 'x' + df['matrix_size'].astype(str) + '\n' + df['num_blocks'].astype(str) + 'b\n' + df['scheduler']
+            # Melt into long form for stacked bars
+            if 'init' in df.columns:
+                melt = df.melt(id_vars=['config_label'], value_vars=['init','convert','other','compute'], var_name='phase', value_name='time')
+            else:
+                melt = df.melt(id_vars=['config_label'], value_vars=['setup','compute'], var_name='phase', value_name='time')
+            # Ensure phases order and consistent scheduler color mapping if shown
+            fig = px.bar(melt, x='config_label', y='time', color='phase', labels={'time':'Time (s)'})
+            fig.update_layout(title_text='Runtime Performance (stacked)', xaxis_tickangle=-45)
+            try:
+                html_path = self.images_dir / self._make_filename('runtime_performance_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('runtime_performance_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly runtime performance: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_runtime_performance_relative_plotly(self):
+        try:
+            runtime_rows = []
+            for (matrix_size, num_blocks, scheduler), group in self.results.groupby(['matrix_size', 'num_blocks', 'scheduler']):
+                mean, _, _ = self.bootstrap_ci(group['wall_time'].values, func=np.mean, n_boot=1000)
+                runtime_rows.append({'matrix_size':matrix_size,'num_blocks':num_blocks,'scheduler':scheduler,'wall_time_mean':mean})
+            runtime_stats = pd.DataFrame(runtime_rows)
+            relative = []
+            for (matrix_size, num_blocks), group in runtime_stats.groupby(['matrix_size','num_blocks']):
+                seq = group[group['scheduler']=='sequential']
+                if len(seq)==0:
+                    continue
+                seq_time = seq['wall_time_mean'].values[0]
+                for _, row in group.iterrows():
+                    # multiplicative ratio (value / sequential)
+                    ratio = (row['wall_time_mean'] / seq_time)
+                    relative.append({'matrix_size':matrix_size,'num_blocks':num_blocks,'scheduler':row['scheduler'],'ratio':ratio})
+            if not relative:
+                return None
+            df = pd.DataFrame(relative)
+            df['config_label'] = df['matrix_size'].astype(str)+'x'+df['matrix_size'].astype(str)+'\n'+df['num_blocks'].astype(str)+'b'
+            category_orders = {'scheduler': self.scheduler_order}
+            # add text labels (multiplicative ratios) and let Plotly place them outside the bars
+            df['label'] = df['ratio'].apply(lambda v: f'{v:.2f}')
+            fig = px.bar(df, x='config_label', y='ratio', color='scheduler', barmode='group', category_orders=category_orders, color_discrete_map=self.scheduler_colors, text='label')
+            fig.update_traces(textposition='outside')
+            fig.update_layout(title_text='Runtime Ratio vs Sequential', xaxis_tickangle=-45)
+            try:
+                html_path = self.images_dir / self._make_filename('runtime_performance_relative_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('runtime_performance_relative_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly runtime relative: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_memory_usage_plotly(self):
+        try:
+            # Group memory usage by num_blocks (X) and facet by matrix_size
+            memory_rows = []
+            for (matrix_size, num_blocks, scheduler), group in self.results.groupby(['matrix_size','num_blocks','scheduler']):
+                mean, _, _ = self.bootstrap_ci(group['max_rss_kb'].values, func=np.mean, n_boot=1000)
+                memory_rows.append({'matrix_size':matrix_size,'num_blocks':num_blocks,'scheduler':scheduler,'max_rss_kb_mean':mean})
+            df = pd.DataFrame(memory_rows)
+            if df.empty:
+                return None
+            df['num_blocks_str'] = df['num_blocks'].astype(str)
+            df['size_mb'] = df['max_rss_kb_mean']/1024.0
+            category_orders = {'scheduler': self.scheduler_order, 'num_blocks_str': sorted(df['num_blocks_str'].unique(), key=lambda x: int(x))}
+            fig = px.bar(
+                df,
+                x='num_blocks_str',
+                y='size_mb',
+                color='scheduler',
+                barmode='group',
+                facet_col='matrix_size',
+                category_orders=category_orders,
+                color_discrete_map=self.scheduler_colors,
+                labels={'size_mb':'Max RSS (MB)', 'num_blocks_str': 'Number of Blocks'}
+            )
+            fig.update_layout(title_text='Memory Usage by Number of Blocks (faceted by Matrix Size)')
+            try:
+                html_path = self.images_dir / self._make_filename('memory_usage_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('memory_usage_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly memory usage: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def plot_memory_usage_relative_plotly(self):
+        try:
+            memory_rows = []
+            for (matrix_size, num_blocks, scheduler), group in self.results.groupby(['matrix_size','num_blocks','scheduler']):
+                mean, _, _ = self.bootstrap_ci(group['max_rss_kb'].values, func=np.mean, n_boot=1000)
+                memory_rows.append({'matrix_size':matrix_size,'num_blocks':num_blocks,'scheduler':scheduler,'max_rss_kb_mean':mean})
+            mem = pd.DataFrame(memory_rows)
+            relative = []
+            for (matrix_size, num_blocks), group in mem.groupby(['matrix_size','num_blocks']):
+                seq = group[group['scheduler']=='sequential']
+                if len(seq)==0:
+                    continue
+                seq_mem = seq['max_rss_kb_mean'].values[0]
+                for _, row in group.iterrows():
+                    # multiplicative ratio (value / sequential)
+                    ratio = (row['max_rss_kb_mean'] / seq_mem)
+                    relative.append({'matrix_size':matrix_size,'num_blocks':num_blocks,'scheduler':row['scheduler'],'ratio':ratio})
+            if not relative:
+                return None
+            df = pd.DataFrame(relative)
+            df['config_label'] = df['matrix_size'].astype(str)+'x'+df['matrix_size'].astype(str)+'\n'+df['num_blocks'].astype(str)+'b'
+            df['label'] = df['ratio'].apply(lambda v: f'{v:.2f}')
+            fig = px.bar(df, x='config_label', y='ratio', color='scheduler', barmode='group', color_discrete_map=self.scheduler_colors, text='label')
+            fig.update_traces(textposition='outside')
+            fig.update_layout(title_text='Memory Ratio vs Sequential', xaxis_tickangle=-45)
+            try:
+                html_path = self.images_dir / self._make_filename('memory_usage_relative_plotly.html')
+                pio.write_html(fig, file=str(html_path), include_plotlyjs='cdn', full_html=False)
+                print(f"  Saved interactive: {html_path}")
+            except Exception:
+                pass
+            try:
+                png_path = self.images_dir / self._make_filename('memory_usage_relative_plotly.png')
+                pio.write_image(fig, str(png_path))
+                print(f"  Saved static: {png_path}")
+            except Exception:
+                pass
+            return fig
+        except Exception as e:
+            print(f"  ERROR generating Plotly memory relative: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
         except Exception as e:
             print(f"  ERROR generating memory usage relative plot: {e}")
@@ -921,7 +1258,7 @@ class ExperimentVisualizer:
         matrix_group_centers = []
 
         current_x = 0
-        width = 0.25
+        width = 1/len(schedulers)
         group_spacing = 0.5
 
         for matrix_size in matrix_sizes:
@@ -1000,8 +1337,10 @@ class ExperimentVisualizer:
         tick_labels = []
         matrix_group_centers = []
 
+        print(f"schedulers: {len(schedulers)}")
+
         current_x = 0
-        width = 0.25
+        width = 0.1
         group_spacing = 0.5
 
         for matrix_size in matrix_sizes:
@@ -1019,6 +1358,12 @@ class ExperimentVisualizer:
             current_x += group_spacing
 
         x_positions = np.array(x_positions)
+
+        # Compute max deviation from baseline (1.0) for sensible label offsets
+        try:
+            max_dev = float(np.nanmax(np.abs(values - 1.0)))
+        except Exception:
+            max_dev = 0.1
 
         # Plot bars for each scheduler
         for i, scheduler in enumerate(schedulers):
@@ -1038,14 +1383,17 @@ class ExperimentVisualizer:
 
                 # Add value labels on bars
                 for xp, val in zip(valid_x, valid_values):
-                    if abs(val) > 0.5:
-                        y_pos = val + (2 if val >= 0 else -2)
-                        va = 'bottom' if val >= 0 else 'top'
-                        ax.text(xp, y_pos, f'{val:+.0f}%', ha='center', va=va,
+                    # Only label if value is meaningfully different from baseline (1.0)
+                    if abs(val - 1.0) > 0.005:
+                        # place label a small fraction above/below the bar end
+                        offset_val = max(0.005, max_dev * 0.03)
+                        y_pos = val + (offset_val if val >= 1.0 else -offset_val)
+                        va = 'bottom' if val >= 1.0 else 'top'
+                        ax.text(xp, y_pos, f'{val:.2f}', ha='center', va=va,
                                fontsize=8, fontweight='bold')
 
-        # Add reference line at 0%
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=1.5, alpha=0.7)
+        # Add reference line at baseline (ratio == 1.0)
+        ax.axhline(y=1.0, color='black', linestyle='-', linewidth=1.5, alpha=0.7)
 
         # Add vertical separators
         current_x = 0
@@ -1092,8 +1440,10 @@ class ExperimentVisualizer:
         tick_labels = []
         matrix_group_centers = []
 
+        print(f'{len(scheduler)=}')
+
         current_x = 0
-        width = 0.25
+        width = 1/len(schedulers)
         group_spacing = 0.5
 
         for matrix_size in matrix_sizes:
@@ -1197,8 +1547,10 @@ class ExperimentVisualizer:
         tick_labels = []
         matrix_group_centers = []
 
+        print(f"{len(schedulers)=}")
+
         current_x = 0
-        width = 0.25
+        width = 1/len(schedulers)
         group_spacing = 0.5
 
         for matrix_size in matrix_sizes:
@@ -1327,20 +1679,65 @@ class ExperimentVisualizer:
 
         self.load_data()
 
-        # Binary size visualizations
+        # Binary size visualizations (matplotlib + Plotly duplicates)
         self.plot_binary_size_overhead()
+        try:
+            plotly_func = getattr(self, 'plot_binary_size_overhead_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
+
         self.plot_binary_size_grouped()
+        try:
+            plotly_func = getattr(self, 'plot_binary_size_grouped_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
 
-        # Compilation time
+        # Compilation time (matplotlib + Plotly)
         self.plot_compilation_time()
+        try:
+            plotly_func = getattr(self, 'plot_compilation_time_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
 
-        # Runtime performance (absolute and relative)
+        # Runtime performance (absolute and relative) - matplotlib + Plotly
         self.plot_runtime_performance()
-        self.plot_runtime_performance_relative()
+        try:
+            plotly_func = getattr(self, 'plot_runtime_performance_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
 
-        # Memory usage (absolute and relative)
+        self.plot_runtime_performance_relative()
+        try:
+            plotly_func = getattr(self, 'plot_runtime_performance_relative_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
+
+        # Memory usage (absolute and relative) - matplotlib + Plotly
         self.plot_memory_usage()
+        try:
+            plotly_func = getattr(self, 'plot_memory_usage_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
+
         self.plot_memory_usage_relative()
+        try:
+            plotly_func = getattr(self, 'plot_memory_usage_relative_plotly', None)
+            if plotly_func is not None:
+                plotly_func()
+        except Exception:
+            pass
 
         print(f"\n{'='*80}")
         print(f"Visualization complete! Images saved to:")

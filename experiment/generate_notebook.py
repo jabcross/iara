@@ -135,7 +135,7 @@ def create_visualization_notebook(
             "source": [f"### {title}\n"]
         })
 
-        # Add code cell to generate the plot
+        # Add code cell to generate the plot (matplotlib) and a Plotly duplicate if available
         cells.append({
             "cell_type": "code",
             "execution_count": None,
@@ -145,9 +145,25 @@ def create_visualization_notebook(
                 f"# Generate {title}\n",
                 f"fig = visualizer.{plot_method}()\n",
                 "if fig is not None:\n",
-                "    plt.show()\n",
+                "    try:\n",
+                "        import matplotlib.pyplot as plt\n",
+                "        plt.show()\n",
+                "    except Exception:\n",
+                "        pass\n",
                 "else:\n",
-                f'    print("No data available for {title}")\n'
+                f'    print("No data available for {title}")\n',
+                "\n",
+                "# Plotly duplicate (if available)\n",
+                f"plotly_func = getattr(visualizer, '{plot_method}_plotly', None)\n",
+                "if plotly_func is not None:\n",
+                "    plotly_fig = plotly_func()\n",
+                "    if plotly_fig is not None:\n",
+                "        try:\n",
+                "            import plotly.io as pio\n",
+                "            from IPython.display import HTML, display\n",
+                "            display(HTML(pio.to_html(plotly_fig, full_html=False, include_plotlyjs='cdn')))\n",
+                "        except Exception as e:\n",
+                "            print('Could not render Plotly figure:', e)\n"
             ]
         })
 
