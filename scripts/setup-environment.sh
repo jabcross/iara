@@ -63,7 +63,7 @@ sh iara/scripts/generate_env.sh
 . iara/.env
 
 echo Checking for build dependencies:
-for command in cmake ninja g++ mold gdb lldb ccache /usr/bin/time fzf ; do
+for command in cmake ninja g++ mold gdb ccache /usr/bin/time fzf ; do
   if ! which $command; then
     echo "$command not found"
     exit 1
