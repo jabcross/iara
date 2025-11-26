@@ -66,7 +66,7 @@ class CholeskyAdapter(ApplicationAdapter):
         Uses the main IaRa CMakeLists.txt with IARA_BUILD_EXPERIMENTS=ON.
         """
         return [
-            f"-DCMAKE_BUILD_TYPE=ExperimentProf",
+            f"-DCMAKE_BUILD_TYPE=ExperimentPerf",
             "-DIARA_BUILD_TESTS=OFF",  # Don't build tests
             "-DIARA_BUILD_EXPERIMENTS=ON",  # Build experiment instead
         ]

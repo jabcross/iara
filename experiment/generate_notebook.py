@@ -135,14 +135,14 @@ def create_visualization_notebook(
             "source": [f"### {title}\n"]
         })
 
-        # Add code cell to generate the plot (matplotlib) and a Plotly duplicate if available
+        # Add code cell to generate the matplotlib plot
         cells.append({
             "cell_type": "code",
             "execution_count": None,
             "metadata": {},
             "outputs": [],
             "source": [
-                f"# Generate {title}\n",
+                f"# Generate {title} (matplotlib)\n",
                 f"fig = visualizer.{plot_method}()\n",
                 "if fig is not None:\n",
                 "    try:\n",
@@ -151,19 +151,45 @@ def create_visualization_notebook(
                 "    except Exception:\n",
                 "        pass\n",
                 "else:\n",
-                f'    print("No data available for {title}")\n',
+                f'    print("No data available for {title}")\n'
+            ]
+        })
+
+        # Add code cell to display Plotly HTML files (now generates multiple files per matrix size)
+        # Remove 'plot_' prefix from method name to match actual file names
+        plot_file_base = plot_method.replace('plot_', '')
+        cells.append({
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                f"# Display Plotly interactive versions for {title}\n",
+                "from IPython.display import HTML, display\n",
+                "import glob\n",
+                "from pathlib import Path\n",
                 "\n",
-                "# Plotly duplicate (if available)\n",
-                f"plotly_func = getattr(visualizer, '{plot_method}_plotly', None)\n",
-                "if plotly_func is not None:\n",
-                "    plotly_fig = plotly_func()\n",
-                "    if plotly_fig is not None:\n",
+                f"# Find all plotly HTML files for this plot type\n",
+                f"plot_pattern = '../images/{plot_file_base}_*_plotly_{run_timestamp}.html'\n",
+                "plotly_files = sorted(glob.glob(plot_pattern))\n",
+                "\n",
+                "if not plotly_files:\n",
+                f"    # Try without matrix size in filename (for plots that don't split by matrix size)\n",
+                f"    plot_pattern = '../images/{plot_file_base}_plotly_{run_timestamp}.html'\n",
+                "    plotly_files = glob.glob(plot_pattern)\n",
+                "\n",
+                "if plotly_files:\n",
+                "    for html_file in plotly_files:\n",
+                "        file_path = Path(html_file)\n",
+                "        print(f'Loading {{file_path.name}}...')\n",
                 "        try:\n",
-                "            import plotly.io as pio\n",
-                "            from IPython.display import HTML, display\n",
-                "            display(HTML(pio.to_html(plotly_fig, full_html=False, include_plotlyjs='cdn')))\n",
+                "            with open(file_path, 'r') as f:\n",
+                "                html_content = f.read()\n",
+                "            display(HTML(html_content))\n",
                 "        except Exception as e:\n",
-                "            print('Could not render Plotly figure:', e)\n"
+                "            print(f'Could not load {{file_path.name}}: {{e}}')\n",
+                "else:\n",
+                f"    print(f'No Plotly HTML files found for {title}')\n"
             ]
         })
 

@@ -120,7 +120,7 @@ endif()
 
 # Update the build type dropdown in cmake-gui
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-  "Debug" "Release" "CompilerDebug" "TestDebug" "ExperimentSize" "ExperimentPerf")
+  "Debug" "Release" "CompilerDebug" "TestDebug" "ExperimentSize" "ExperimentPerf" "ExperimentProf")
 
 
 # Set LLVM/MLIR paths

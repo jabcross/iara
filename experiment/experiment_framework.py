@@ -561,6 +561,51 @@ class ExperimentRunner:
 
         return build_metrics
 
+    def _parse_measurement_result(self, config: ExperimentConfig, run_number: int,
+                                  stdout: str, stderr: str,
+                                  real_time: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        """Parse measurement output and create result dictionary.
+
+        This method is shared between SLURM and non-SLURM code paths to ensure
+        consistent result parsing and avoid duplication.
+
+        Args:
+            config: The configuration that was run
+            run_number: The run number
+            stdout: Standard output from the program
+            stderr: Standard error from the program
+            real_time: Optional real elapsed time (measured externally)
+
+        Returns:
+            Result dictionary with all metrics, or None if parsing failed
+        """
+        # Parse application-specific output
+        app_metrics = self.app_adapter.parse_program_output(stdout, stderr)
+        if app_metrics is None:
+            self._log(f"ERROR: Failed to parse output for {config.name} run {run_number}")
+            return None
+
+        # Parse time metrics from /usr/bin/time output
+        time_metrics = self.metrics.parse_time_output(stderr)
+
+        # Combine all metrics
+        result = {
+            **config.to_dict(),
+            **app_metrics,
+            **time_metrics,
+            "run_number": run_number,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # Add real_time - use external measurement if provided, otherwise fall back to time_elapsed
+        # This ensures SLURM results also have real_time for visualization
+        if real_time is not None:
+            result["real_time"] = real_time
+        elif "time_elapsed" in time_metrics:
+            result["real_time"] = time_metrics["time_elapsed"]
+
+        return result
+
     def run_single_measurement(self, config: ExperimentConfig, run_number: int) -> Optional[Dict[str, Any]]:
         """Run a single measurement locally. Returns result dict or None on failure."""
         instance_dir = self.instances_dir / config.name
@@ -587,26 +632,8 @@ class ExperimentRunner:
             self._log(f"ERROR: Run {run_number} failed (exit code: {exit_code})")
             return None
 
-        # Parse application-specific output
-        app_metrics = self.app_adapter.parse_program_output(stdout, stderr)
-        if app_metrics is None:
-            self._log(f"ERROR: Failed to parse output for {config.name}")
-            return None
-
-        # Parse time metrics
-        time_metrics = self.metrics.parse_time_output(stderr)
-
-        # Combine all metrics
-        result = {
-            **config.to_dict(),
-            **app_metrics,
-            "real_time": elapsed_real,
-            **time_metrics,
-            "run_number": run_number,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        return result
+        # Use shared parsing method
+        return self._parse_measurement_result(config, run_number, stdout, stderr, elapsed_real)
 
     def run_single_measurement_slurm(self, config: ExperimentConfig,
                                     run_number: int, is_warmup: bool = False) -> Optional[Dict[str, Any]]:
@@ -646,22 +673,8 @@ class ExperimentRunner:
         content = output_file.read_text()
         self._log(f"=== SLURM measurement output for {config.name} run {run_number} ===\n{content}")
 
-        # Parse application output
-        app_metrics = self.app_adapter.parse_program_output(content, content)
-        if app_metrics is None:
-            return None
-
-        time_metrics = self.metrics.parse_time_output(content)
-
-        result = {
-            **config.to_dict(),
-            **app_metrics,
-            **time_metrics,
-            "run_number": run_number,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        return result
+        # Use shared parsing method (SLURM output includes both stdout and stderr in the same file)
+        return self._parse_measurement_result(config, run_number, content, content)
 
     def submit_slurm_jobs_for_config(self, config: ExperimentConfig) -> List[PendingJob]:
         """Submit all SLURM jobs for a configuration and return pending jobs list.
@@ -742,21 +755,11 @@ class ExperimentRunner:
             content = job.output_file.read_text()
             self._log(f"=== SLURM measurement output for {job.config.name} run {job.run_number} ===\n{content}")
 
-            # Parse application output
-            app_metrics = self.app_adapter.parse_program_output(content, content)
-            if app_metrics is None:
+            # Use shared parsing method (SLURM output includes both stdout and stderr in the same file)
+            result = self._parse_measurement_result(job.config, job.run_number, content, content)
+            if result is None:
                 self._log(f"WARNING: Failed to parse output for {job.config.name} run {job.run_number}")
                 continue
-
-            time_metrics = self.metrics.parse_time_output(content)
-
-            result = {
-                **job.config.to_dict(),
-                **app_metrics,
-                **time_metrics,
-                "run_number": job.run_number,
-                "timestamp": datetime.now().isoformat(),
-            }
 
             # Only add to results if not a warmup run
             if not job.is_warmup:

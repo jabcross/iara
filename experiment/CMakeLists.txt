@@ -15,7 +15,7 @@ if(NOT DEFINED ENV{IARA_DIR} OR "$ENV{IARA_DIR}" STREQUAL "")
 endif()
 
 # Find OpenMP (same as test/CMakeLists.txt)
-set(OpenMP_CXX_FLAGS "")
+set(OpenMP_CXX_FLAGS "-fopenmp")
 find_library(OpenMP_CXX_LIBRARY
     NAMES omp libomp
     PATHS
