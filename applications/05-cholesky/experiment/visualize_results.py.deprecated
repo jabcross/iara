@@ -1,0 +1,544 @@
+#!/usr/bin/env python3
+"""
+Visualization system for Cholesky experiment results.
+
+Reads CSV result files and generates various plots for analysis:
+- Runtime performance comparison across schedulers
+- Scaling analysis (strong scaling, weak scaling)
+- Overhead breakdown (stacked bar charts)
+- Memory usage analysis
+- Speedup comparison
+"""
+
+import sys
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+import warnings
+
+warnings.filterwarnings('ignore')
+
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
+
+class ExperimentVisualizer:
+    """Handles visualization of Cholesky experiment results."""
+
+    def __init__(self, csv_file: Path, backend: str = "matplotlib"):
+        """
+        Initialize visualizer with results CSV.
+
+        Args:
+            csv_file: Path to CSV results file
+            backend: 'matplotlib' or 'plotly'
+        """
+        self.csv_file = Path(csv_file)
+        self.backend = backend
+        self.results = None
+        self.output_dir = self.csv_file.parent / "plots"
+
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Load and process data
+        self._load_results()
+        self._process_results()
+
+    def _load_results(self):
+        """Load CSV results file."""
+        if not self.csv_file.exists():
+            raise FileNotFoundError(f"Results file not found: {self.csv_file}")
+
+        self.results = pd.read_csv(self.csv_file)
+        print(f"Loaded {len(self.results)} result rows from {self.csv_file.name}")
+
+    def _process_results(self):
+        """Process results for analysis."""
+        # Convert types
+        self.results['matrix_size'] = self.results['matrix_size'].astype(int)
+        self.results['num_blocks'] = self.results['num_blocks'].astype(int)
+        self.results['run_num'] = self.results['run_num'].astype(int)
+
+        # Compute block_size
+        self.results['block_size'] = (
+            self.results['matrix_size'] // self.results['num_blocks']
+        )
+
+        # Compute speedup (relative to sequential baseline)
+        self._compute_speedup()
+
+    def _compute_speedup(self):
+        """Compute speedup relative to sequential baseline."""
+        self.results['speedup'] = 1.0
+
+        # Group by matrix_size and num_blocks, get sequential baseline
+        for (size, blocks), group in self.results.groupby(['matrix_size', 'num_blocks']):
+            sequential = group[group['scheduler'] == 'sequential']
+            if not sequential.empty:
+                seq_time = sequential[sequential['measurement'] == 'compute_time']['value'].mean()
+                if seq_time > 0:
+                    mask = (self.results['matrix_size'] == size) & (self.results['num_blocks'] == blocks)
+                    self.results.loc[mask, 'speedup'] = seq_time / self.results.loc[mask, 'value']
+
+    def plot_runtime_comparison(self, matrix_size: Optional[int] = None):
+        """
+        Plot runtime performance comparison across schedulers.
+
+        Args:
+            matrix_size: Filter to specific matrix size, or None for all
+        """
+        # Filter data
+        data = self.results[self.results['measurement'] == 'compute_time'].copy()
+        if matrix_size:
+            data = data[data['matrix_size'] == matrix_size]
+
+        if data.empty:
+            print(f"No compute_time data for matrix_size={matrix_size}")
+            return
+
+        # Aggregate by scheduler and num_blocks
+        agg_data = data.groupby(['scheduler', 'num_blocks']).agg({
+            'value': ['mean', 'std'],
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'mean_time', 'std_time']
+
+        if self.backend == "plotly" and PLOTLY_AVAILABLE:
+            self._plot_runtime_comparison_plotly(agg_data, matrix_size)
+        elif self.backend == "matplotlib" and MATPLOTLIB_AVAILABLE:
+            self._plot_runtime_comparison_matplotlib(agg_data, matrix_size)
+        else:
+            print(f"Backend {self.backend} not available")
+
+    def _plot_runtime_comparison_matplotlib(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Matplotlib version of runtime comparison."""
+        plt.figure(figsize=(12, 6))
+
+        # Create grouped bar chart
+        schedulers = agg_data['scheduler'].unique()
+        num_blocks_list = sorted(agg_data['num_blocks'].unique())
+
+        x = np.arange(len(schedulers))
+        width = 0.15
+
+        for i, blocks in enumerate(num_blocks_list):
+            subset = agg_data[agg_data['num_blocks'] == blocks]
+            means = []
+            stds = []
+
+            for sched in schedulers:
+                row = subset[subset['scheduler'] == sched]
+                if not row.empty:
+                    means.append(row['mean_time'].values[0])
+                    stds.append(row['std_time'].values[0])
+                else:
+                    means.append(0)
+                    stds.append(0)
+
+            plt.bar(x + i*width, means, width, label=f'{blocks} blocks',
+                   yerr=stds, capsize=4, alpha=0.8)
+
+        plt.xlabel('Scheduler')
+        plt.ylabel('Compute Time (s)')
+        title = 'Cholesky Runtime Performance'
+        if matrix_size:
+            title += f' (Matrix Size: {matrix_size}×{matrix_size})'
+        plt.title(title)
+        plt.xticks(x + width*1.5, schedulers, rotation=45)
+        plt.legend()
+        plt.tight_layout()
+
+        output_file = self.output_dir / f"runtime_comparison{'_' + str(matrix_size) if matrix_size else ''}.png"
+        plt.savefig(output_file, dpi=150)
+        print(f"Saved: {output_file}")
+        plt.close()
+
+    def _plot_runtime_comparison_plotly(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Plotly version of runtime comparison."""
+        fig = px.bar(
+            agg_data,
+            x='scheduler',
+            y='mean_time',
+            error_y='std_time',
+            color='num_blocks',
+            barmode='group',
+            title='Cholesky Runtime Performance' + (f' (Matrix Size: {matrix_size}×{matrix_size})' if matrix_size else ''),
+            labels={'mean_time': 'Compute Time (s)', 'num_blocks': 'Num Blocks'},
+        )
+
+        output_file = self.output_dir / f"runtime_comparison{'_' + str(matrix_size) if matrix_size else ''}.html"
+        fig.write_html(output_file)
+        print(f"Saved: {output_file}")
+
+    def plot_scaling_analysis(self, matrix_size: Optional[int] = None):
+        """
+        Plot scaling analysis (num_blocks vs time).
+
+        Args:
+            matrix_size: Filter to specific matrix size
+        """
+        data = self.results[self.results['measurement'] == 'compute_time'].copy()
+        if matrix_size:
+            data = data[data['matrix_size'] == matrix_size]
+
+        if data.empty:
+            print(f"No scaling data for matrix_size={matrix_size}")
+            return
+
+        # Aggregate
+        agg_data = data.groupby(['scheduler', 'num_blocks']).agg({
+            'value': ['mean', 'std'],
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'mean_time', 'std_time']
+
+        if self.backend == "plotly" and PLOTLY_AVAILABLE:
+            self._plot_scaling_plotly(agg_data, matrix_size)
+        elif self.backend == "matplotlib" and MATPLOTLIB_AVAILABLE:
+            self._plot_scaling_matplotlib(agg_data, matrix_size)
+
+    def _plot_scaling_matplotlib(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Matplotlib version of scaling plot."""
+        plt.figure(figsize=(10, 6))
+
+        for scheduler in agg_data['scheduler'].unique():
+            subset = agg_data[agg_data['scheduler'] == scheduler].sort_values('num_blocks')
+            plt.plot(subset['num_blocks'], subset['mean_time'],
+                    marker='o', label=scheduler, linewidth=2)
+            plt.fill_between(subset['num_blocks'],
+                            subset['mean_time'] - subset['std_time'],
+                            subset['mean_time'] + subset['std_time'],
+                            alpha=0.2)
+
+        plt.xlabel('Number of Blocks')
+        plt.ylabel('Compute Time (s)')
+        title = 'Strong Scaling Analysis'
+        if matrix_size:
+            title += f' (Matrix Size: {matrix_size}×{matrix_size})'
+        plt.title(title)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        output_file = self.output_dir / f"scaling_analysis{'_' + str(matrix_size) if matrix_size else ''}.png"
+        plt.savefig(output_file, dpi=150)
+        print(f"Saved: {output_file}")
+        plt.close()
+
+    def _plot_scaling_plotly(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Plotly version of scaling plot."""
+        fig = go.Figure()
+
+        for scheduler in sorted(agg_data['scheduler'].unique()):
+            subset = agg_data[agg_data['scheduler'] == scheduler].sort_values('num_blocks')
+            fig.add_trace(go.Scatter(
+                x=subset['num_blocks'],
+                y=subset['mean_time'],
+                error_y=dict(type='data', array=subset['std_time']),
+                mode='lines+markers',
+                name=scheduler,
+            ))
+
+        fig.update_layout(
+            title='Strong Scaling Analysis' + (f' (Matrix Size: {matrix_size}×{matrix_size})' if matrix_size else ''),
+            xaxis_title='Number of Blocks',
+            yaxis_title='Compute Time (s)',
+            hovermode='x unified',
+            height=600,
+        )
+
+        output_file = self.output_dir / f"scaling_analysis{'_' + str(matrix_size) if matrix_size else ''}.html"
+        fig.write_html(output_file)
+        print(f"Saved: {output_file}")
+
+    def plot_time_breakdown(self, matrix_size: Optional[int] = None, num_blocks: Optional[int] = None):
+        """
+        Plot time breakdown (init + conversion + compute) as stacked bar.
+
+        Args:
+            matrix_size: Filter to specific matrix size
+            num_blocks: Filter to specific num_blocks
+        """
+        # Get timing components
+        data = self.results[
+            (self.results['measurement'].isin(['init_time', 'convert_time', 'compute_time'])) &
+            (self.results['unit'] == 's')
+        ].copy()
+
+        if matrix_size:
+            data = data[data['matrix_size'] == matrix_size]
+        if num_blocks:
+            data = data[data['num_blocks'] == num_blocks]
+
+        if data.empty:
+            print(f"No timing breakdown data")
+            return
+
+        # Aggregate
+        breakdown = data.pivot_table(
+            index=['scheduler', 'matrix_size', 'num_blocks'],
+            columns='measurement',
+            values='value',
+            aggfunc='mean'
+        ).reset_index()
+
+        if self.backend == "matplotlib" and MATPLOTLIB_AVAILABLE:
+            self._plot_breakdown_matplotlib(breakdown, matrix_size, num_blocks)
+        elif self.backend == "plotly" and PLOTLY_AVAILABLE:
+            self._plot_breakdown_plotly(breakdown, matrix_size, num_blocks)
+
+    def _plot_breakdown_matplotlib(self, breakdown: pd.DataFrame, matrix_size: Optional[int], num_blocks: Optional[int]):
+        """Matplotlib version of time breakdown."""
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        x = np.arange(len(breakdown))
+        width = 0.6
+
+        components = ['init_time', 'convert_time', 'compute_time']
+        colors = ['#FF6B6B', '#FFA500', '#4ECDC4']
+
+        bottom = np.zeros(len(breakdown))
+
+        for i, component in enumerate(components):
+            if component in breakdown.columns:
+                values = breakdown[component].fillna(0)
+                ax.bar(x, values, width, label=component.replace('_', ' ').title(),
+                       bottom=bottom, color=colors[i], alpha=0.8)
+                bottom += values.values
+
+        ax.set_xlabel('Scheduler')
+        ax.set_ylabel('Time (s)')
+        title = 'Time Breakdown'
+        if matrix_size:
+            title += f' (Matrix Size: {matrix_size}×{matrix_size})'
+        if num_blocks:
+            title += f', {num_blocks} Blocks'
+        ax.set_title(title)
+        ax.set_xticks(x)
+        ax.set_xticklabels(breakdown['scheduler'], rotation=45)
+        ax.legend()
+        plt.tight_layout()
+
+        output_file = self.output_dir / f"time_breakdown{'_' + str(matrix_size) if matrix_size else ''}{'_' + str(num_blocks) if num_blocks else ''}.png"
+        plt.savefig(output_file, dpi=150)
+        print(f"Saved: {output_file}")
+        plt.close()
+
+    def _plot_breakdown_plotly(self, breakdown: pd.DataFrame, matrix_size: Optional[int], num_blocks: Optional[int]):
+        """Plotly version of time breakdown."""
+        components = ['init_time', 'convert_time', 'compute_time']
+
+        fig = go.Figure()
+
+        for component in components:
+            if component in breakdown.columns:
+                fig.add_trace(go.Bar(
+                    x=breakdown['scheduler'],
+                    y=breakdown[component],
+                    name=component.replace('_', ' ').title(),
+                ))
+
+        fig.update_layout(
+            barmode='stack',
+            title='Time Breakdown' + (f' (Matrix Size: {matrix_size}×{matrix_size})' if matrix_size else ''),
+            xaxis_title='Scheduler',
+            yaxis_title='Time (s)',
+            hovermode='x unified',
+            height=600,
+        )
+
+        output_file = self.output_dir / f"time_breakdown{'_' + str(matrix_size) if matrix_size else ''}{'_' + str(num_blocks) if num_blocks else ''}.html"
+        fig.write_html(output_file)
+        print(f"Saved: {output_file}")
+
+    def plot_memory_usage(self, matrix_size: Optional[int] = None):
+        """
+        Plot memory usage analysis.
+
+        Args:
+            matrix_size: Filter to specific matrix size
+        """
+        data = self.results[self.results['measurement'] == 'max_rss_mb'].copy()
+        if matrix_size:
+            data = data[data['matrix_size'] == matrix_size]
+
+        if data.empty:
+            print("No memory usage data available")
+            return
+
+        # Aggregate
+        agg_data = data.groupby(['scheduler', 'num_blocks']).agg({
+            'value': ['mean', 'std'],
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'mean_mem', 'std_mem']
+
+        if self.backend == "matplotlib" and MATPLOTLIB_AVAILABLE:
+            self._plot_memory_matplotlib(agg_data, matrix_size)
+        elif self.backend == "plotly" and PLOTLY_AVAILABLE:
+            self._plot_memory_plotly(agg_data, matrix_size)
+
+    def _plot_memory_matplotlib(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Matplotlib version of memory plot."""
+        plt.figure(figsize=(10, 6))
+
+        schedulers = agg_data['scheduler'].unique()
+        num_blocks_list = sorted(agg_data['num_blocks'].unique())
+
+        x = np.arange(len(schedulers))
+        width = 0.15
+
+        for i, blocks in enumerate(num_blocks_list):
+            subset = agg_data[agg_data['num_blocks'] == blocks]
+            means = []
+            stds = []
+
+            for sched in schedulers:
+                row = subset[subset['scheduler'] == sched]
+                if not row.empty:
+                    means.append(row['mean_mem'].values[0])
+                    stds.append(row['std_mem'].values[0])
+                else:
+                    means.append(0)
+                    stds.append(0)
+
+            plt.bar(x + i*width, means, width, label=f'{blocks} blocks',
+                   yerr=stds, capsize=4, alpha=0.8)
+
+        plt.xlabel('Scheduler')
+        plt.ylabel('Memory Usage (MB)')
+        title = 'Memory Usage'
+        if matrix_size:
+            title += f' (Matrix Size: {matrix_size}×{matrix_size})'
+        plt.title(title)
+        plt.xticks(x + width*1.5, schedulers, rotation=45)
+        plt.legend()
+        plt.tight_layout()
+
+        output_file = self.output_dir / f"memory_usage{'_' + str(matrix_size) if matrix_size else ''}.png"
+        plt.savefig(output_file, dpi=150)
+        print(f"Saved: {output_file}")
+        plt.close()
+
+    def _plot_memory_plotly(self, agg_data: pd.DataFrame, matrix_size: Optional[int]):
+        """Plotly version of memory plot."""
+        fig = px.bar(
+            agg_data,
+            x='scheduler',
+            y='mean_mem',
+            error_y='std_mem',
+            color='num_blocks',
+            barmode='group',
+            title='Memory Usage' + (f' (Matrix Size: {matrix_size}×{matrix_size})' if matrix_size else ''),
+            labels={'mean_mem': 'Memory (MB)', 'num_blocks': 'Num Blocks'},
+        )
+
+        output_file = self.output_dir / f"memory_usage{'_' + str(matrix_size) if matrix_size else ''}.html"
+        fig.write_html(output_file)
+        print(f"Saved: {output_file}")
+
+    def generate_summary_report(self):
+        """Generate a summary statistics report."""
+        report_file = self.output_dir / "summary_report.txt"
+
+        with open(report_file, 'w') as f:
+            f.write("=" * 60 + "\n")
+            f.write("Cholesky Experiment Results Summary\n")
+            f.write("=" * 60 + "\n\n")
+
+            # Data overview
+            f.write("Data Overview:\n")
+            f.write(f"  Total rows: {len(self.results)}\n")
+            f.write(f"  Matrix sizes: {sorted(self.results['matrix_size'].unique())}\n")
+            f.write(f"  Num blocks: {sorted(self.results['num_blocks'].unique())}\n")
+            f.write(f"  Schedulers: {sorted(self.results['scheduler'].unique())}\n")
+            f.write(f"  Measurements: {sorted(self.results['measurement'].unique())}\n\n")
+
+            # Performance summary
+            f.write("Performance Summary (Compute Time):\n")
+            perf_data = self.results[self.results['measurement'] == 'compute_time']
+            for scheduler in sorted(perf_data['scheduler'].unique()):
+                subset = perf_data[perf_data['scheduler'] == scheduler]
+                mean_time = subset['value'].mean()
+                std_time = subset['value'].std()
+                f.write(f"  {scheduler:15s}: {mean_time:8.4f}s ± {std_time:8.4f}s\n")
+
+            f.write("\n")
+
+        print(f"Saved: {report_file}")
+
+
+def main():
+    """Main entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Visualize Cholesky experiment results'
+    )
+    parser.add_argument(
+        'csv_file',
+        help='Path to CSV results file'
+    )
+    parser.add_argument(
+        '--backend',
+        choices=['matplotlib', 'plotly'],
+        default='matplotlib',
+        help='Visualization backend (default: matplotlib)'
+    )
+    parser.add_argument(
+        '--plots',
+        nargs='+',
+        choices=['runtime', 'scaling', 'breakdown', 'memory', 'all'],
+        default=['runtime', 'scaling', 'breakdown'],
+        help='Plots to generate (default: runtime scaling breakdown)'
+    )
+    parser.add_argument(
+        '--matrix-size',
+        type=int,
+        help='Filter to specific matrix size'
+    )
+
+    args = parser.parse_args()
+
+    # Check backends available
+    if args.backend == 'plotly' and not PLOTLY_AVAILABLE:
+        print("ERROR: plotly not installed. Install with: pip install plotly")
+        return 1
+    if args.backend == 'matplotlib' and not MATPLOTLIB_AVAILABLE:
+        print("ERROR: matplotlib not installed. Install with: pip install matplotlib seaborn")
+        return 1
+
+    # Create visualizer
+    viz = ExperimentVisualizer(args.csv_file, backend=args.backend)
+
+    # Generate plots
+    plots = args.plots if args.plots != ['all'] else ['runtime', 'scaling', 'breakdown', 'memory']
+
+    if 'runtime' in plots:
+        viz.plot_runtime_comparison(args.matrix_size)
+    if 'scaling' in plots:
+        viz.plot_scaling_analysis(args.matrix_size)
+    if 'breakdown' in plots:
+        viz.plot_time_breakdown(args.matrix_size)
+    if 'memory' in plots:
+        viz.plot_memory_usage(args.matrix_size)
+
+    # Generate summary report
+    viz.generate_summary_report()
+
+    print(f"\nVisualizations saved to: {viz.output_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

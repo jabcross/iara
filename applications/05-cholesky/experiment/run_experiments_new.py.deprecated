@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""
+Cholesky experiment runner using the generalized experiment framework.
+
+Uses AppExperimentRunner base class for all generic functionality.
+Only implements Cholesky-specific logic:
+- Test directory naming convention
+- Parameter to environment variable mapping
+"""
+
+import sys
+from pathlib import Path
+
+# Add framework to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'experiment-framework'))
+
+from app_runner import AppExperimentRunner
+from base_runner import create_cli_parser
+
+
+class CholekskyRunner(AppExperimentRunner):
+    """Cholesky-specific experiment runner."""
+
+    def create_test_directory(self, params) -> Path:
+        """Create test directory with Cholesky-specific naming convention."""
+        matrix_size = params['matrix_size']
+        num_blocks = params['num_blocks']
+        scheduler = params['scheduler']
+        block_size = params.get('block_size', matrix_size // num_blocks)
+
+        dir_name = f"05-cholesky-{matrix_size}_{num_blocks}_{scheduler}"
+        dir_path = Path('test') / 'Iara' / dir_name
+
+        # Create directory
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Write parameters.sh
+        params_file = dir_path / 'parameters.sh'
+        with open(params_file, 'w') as f:
+            f.write(f"export MATRIX_SIZE={matrix_size}\n")
+            f.write(f"export NUM_BLOCKS={num_blocks}\n")
+            f.write(f"export SCHEDULER={scheduler}\n")
+            f.write(f"export BLOCK_SIZE={block_size}\n")
+
+        # Write CMakeLists.txt
+        cmake_file = dir_path / 'CMakeLists.txt'
+        build_config = self.config.get('application', {}).get('build', {})
+        defines_str = ' '.join([f'-D{d}' for d in build_config.get('defines', [])])
+        linker_args_str = ' '.join(build_config.get('extra_linker_args', []))
+
+        cmake_content = f"""# Build configuration from experiments.yaml
+set(EXTRA_KERNEL_ARGS "{defines_str}" CACHE STRING "Extra kernel compilation arguments")
+set(EXTRA_LINKER_ARGS "{linker_args_str}" CACHE STRING "Extra linker arguments")
+
+# NOTE: Runtime parameters (MATRIX_SIZE, NUM_BLOCKS, SCHEDULER, BLOCK_SIZE)
+# are sourced from parameters.sh by the parent test/CMakeLists.txt
+"""
+
+        with open(cmake_file, 'w') as f:
+            f.write(cmake_content)
+
+        return dir_path
+
+    def get_parameter_exports(self, params) -> dict:
+        """Map Cholesky parameters to environment variables."""
+        return {
+            'MATRIX_SIZE': str(params['matrix_size']),
+            'NUM_BLOCKS': str(params['num_blocks']),
+            'SCHEDULER': params['scheduler'],
+            'BLOCK_SIZE': str(params.get('block_size', 0)),
+        }
+
+
+if __name__ == '__main__':
+    parser = create_cli_parser()
+    args = parser.parse_args()
+
+    try:
+        runner = CholekskyRunner('experiments.yaml', 'cholesky', 'cholesky')
+
+        if args.list:
+            runner.run()
+        else:
+            runner.run(args.experiment_set)
+
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

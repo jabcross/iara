@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""
+Jupyter notebook generator for Cholesky experiment results.
+
+Creates an interactive Jupyter notebook with plotly visualizations
+embedded directly, allowing exploration of results within the notebook.
+Visualization configuration is read from experiments.yaml.
+"""
+
+import sys
+import json
+import yaml
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, Dict, List
+import pandas as pd
+
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
+
+def load_yaml_config(yaml_path: Path) -> dict:
+    """
+    Load and parse the experiments.yaml configuration file.
+
+    Args:
+        yaml_path: Path to experiments.yaml
+
+    Returns:
+        Parsed YAML configuration dictionary
+    """
+    with open(yaml_path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def get_scheduler_order(yaml_config: dict) -> List[str]:
+    """
+    Extract scheduler ordering from YAML configuration.
+
+    Args:
+        yaml_config: Parsed YAML configuration
+
+    Returns:
+        List of scheduler names in definition order
+    """
+    for param in yaml_config.get('parameters', []):
+        if param.get('name') == 'scheduler':
+            return param.get('choices', [])
+    return []
+
+
+def create_notebook(csv_file: Path, output_notebook: Optional[Path] = None,
+                   yaml_config_path: Optional[Path] = None) -> Path:
+    """
+    Create a Jupyter notebook with interactive visualizations.
+
+    Args:
+        csv_file: Path to CSV results file
+        output_notebook: Path to output notebook (defaults to results_analysis.ipynb)
+        yaml_config_path: Optional path to experiments.yaml (defaults to same dir as script)
+
+    Returns:
+        Path to created notebook
+    """
+    if not PLOTLY_AVAILABLE:
+        print("ERROR: plotly not installed. Install with: pip install plotly", file=sys.stderr)
+        sys.exit(1)
+
+    if not csv_file.exists():
+        print(f"ERROR: Results file not found: {csv_file}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load YAML configuration
+    if yaml_config_path is None:
+        yaml_config_path = Path(__file__).parent / "experiments.yaml"
+
+    if not yaml_config_path.exists():
+        print(f"ERROR: experiments.yaml not found at {yaml_config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    yaml_config = load_yaml_config(yaml_config_path)
+    scheduler_order = get_scheduler_order(yaml_config)
+    plot_configs = yaml_config.get('visualization', {}).get('plots', {})
+
+    print(f"Loaded YAML config from {yaml_config_path}")
+    print(f"Scheduler order: {scheduler_order}")
+
+    # Load results
+    results = pd.read_csv(csv_file)
+    print(f"Loaded {len(results)} result rows from {csv_file.name}")
+
+    # Process results
+    results['matrix_size'] = results['matrix_size'].astype(int)
+    results['num_blocks'] = results['num_blocks'].astype(int)
+    results['run_num'] = results['run_num'].astype(int)
+    results['block_size'] = results['matrix_size'] // results['num_blocks']
+
+    # Determine output notebook path
+    if output_notebook is None:
+        output_notebook = csv_file.parent / "results_analysis.ipynb"
+    else:
+        output_notebook = Path(output_notebook)
+
+    # Create notebook structure
+    cells = []
+
+    # Title cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "# Cholesky Experiment Results Analysis\n",
+            f"\n",
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+            f"\n",
+            f"Results file: `{csv_file.name}`\n",
+            f"\n",
+            f"Visualization configuration: `{yaml_config_path.name}`"
+        ]
+    })
+
+    # Setup cell with imports and data loading
+    # Calculate the applications/cholesky directory path
+    apps_cholesky_dir = Path(__file__).parent.absolute()
+
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "import sys\n",
+            "import pandas as pd\n",
+            "\n",
+            "# Add applications/cholesky to path for visualization module\n",
+            f"sys.path.insert(0, '{apps_cholesky_dir}')\n",
+            "from visualization import generate_visualizations, print_statistics\n",
+            "\n",
+            f"csv_file = '{csv_file.absolute()}'\n",
+            f"scheduler_order = {scheduler_order}\n",
+            f"results = pd.read_csv(csv_file)\n",
+            "print(f'Loaded {{len(results)}} measurements from {{csv_file}}')\n",
+            "print(f'Schedulers: {{sorted(results[\"scheduler\"].unique())}}')\n",
+            "print(f'Matrix sizes: {{sorted(results[\"matrix_size\"].unique())}}')\n"
+        ]
+    })
+
+    # Data summary cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "## Data Summary\n",
+            "\n",
+            f"- **Total measurements**: {len(results)}\n",
+            f"- **Schedulers**: {', '.join(sorted(results['scheduler'].unique()))}\n",
+            f"- **Matrix sizes**: {', '.join(map(str, sorted(results['matrix_size'].unique())))}\n",
+            f"- **Num blocks**: {', '.join(map(str, sorted(results['num_blocks'].unique())))}\n",
+            f"- **Measurements**: {', '.join(sorted(results['measurement'].unique()))}"
+        ]
+    })
+
+    # Create visualization cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["## Interactive Visualizations"]
+    })
+
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "generate_visualizations(csv_file, scheduler_order)\n"
+        ]
+    })
+
+    # Statistics cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["## Performance Statistics"]
+    })
+
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": [
+            "print_statistics(results, scheduler_order)\n"
+        ]
+    })
+
+    # Raw data cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["## Raw Data\n", "\nDisplay first 20 measurement rows"]
+    })
+
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": ["results.head(20)"]
+    })
+
+    # Create notebook JSON structure
+    notebook = {
+        "cells": cells,
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3"
+            },
+            "language_info": {
+                "name": "python",
+                "version": "3.9.0"
+            }
+        },
+        "nbformat": 4,
+        "nbformat_minor": 2
+    }
+
+    # Write notebook
+    with open(output_notebook, 'w') as f:
+        json.dump(notebook, f, indent=2)
+
+    print(f"Notebook saved to: {output_notebook}")
+    return output_notebook
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Create interactive Jupyter notebook for experiment analysis'
+    )
+    parser.add_argument('csv_file', help='Path to results CSV file')
+    parser.add_argument('--output', '-o', help='Output notebook path (default: results_analysis.ipynb)')
+    parser.add_argument('--yaml-config', '-y', help='Path to experiments.yaml (default: same dir as script)')
+
+    args = parser.parse_args()
+
+    csv_path = Path(args.csv_file)
+    output_path = Path(args.output) if args.output else None
+    yaml_path = Path(args.yaml_config) if args.yaml_config else None
+
+    try:
+        notebook_path = create_notebook(csv_path, output_path, yaml_path)
+        print(f"\nNotebook created successfully!")
+        print(f"To view: jupyter notebook {notebook_path}")
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

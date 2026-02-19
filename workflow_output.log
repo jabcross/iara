@@ -1,0 +1,10 @@
+[ERROR] Failed to collect binary data
+[INFO] ======================================================================
+[INFO] Experiment Analysis Workflow
+[INFO] ======================================================================
+[INFO] Build directory: /scratch/pedro.ciambra/repos/iara/build_experiments
+[INFO] Application: 05-cholesky
+[INFO] Experiment set: regression
+[INFO] 
+Step 1: Collecting binary data...
+Error: /scratch/pedro.ciambra/repos/iara/build_experiments/05-cholesky/regression does not exist

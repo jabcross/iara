@@ -1,0 +1,17 @@
+setuptools
+ipykernel
+ipython
+jupyter-client
+jupyter-core
+matplotlib
+numpy
+pandas
+pulp
+sympy
+pyyaml
+nbconvert
+plotly
+altair
+gdown
+astropy
+sep

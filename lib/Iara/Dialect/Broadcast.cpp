@@ -1,37 +1,63 @@
 #include "Iara/Dialect/IaraOps.h"
-#include "Iara/Util/CommonTypes.h"
+#include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
+#include <cassert>
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/IR/Builders.h>
-#include <numeric>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
 
 namespace iara::dialect::broadcast {
 
 using namespace iara::util::mlir;
 using namespace iara::util::range;
 
-std::string getBroadcastName(i64 size, Type type, bool reuse_first) {
-  if (reuse_first && size == 1) {
-    llvm_unreachable("Pointless node");
+std::string getBroadcastName(Type input_type,
+                             llvm::SmallVector<Type> output_types,
+                             DataLayout data_layout,
+                             bool force_copy) {
+  std::string name =
+      llvm::formatv("iara_broadcast_{0}", stringifyType(input_type));
+
+  for (auto [i, type] : llvm::enumerate(output_types)) {
+    auto input_type_size = getTypeSize(input_type, data_layout);
+    auto type_size = getTypeSize(type, data_layout);
+    assert(type_size > 0);
+    assert(type_size % input_type_size == 0);
+    if (i == 0 && type_size == input_type_size && !force_copy) {
+      name += "_1io";
+      continue;
+    }
+    name += llvm::formatv("_{0}", type_size / input_type_size);
   }
-  auto type_string = stringifyType(type);
-  if (reuse_first)
-    return llvm::formatv("iara_broadcast_r_{0}x{1}", size, type_string);
-  if (size == 1)
-    return llvm::formatv("iara_copy_{0}", type_string);
-  return llvm::formatv("iara_broadcast_{0}x{1}", size, type_string);
+
+  return name;
 }
 
-LLVM::LLVMFuncOp
-getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
-  std::string name = getBroadcastName(size, value.getType(), reuse_first);
+LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(NodeOp broadcast) {
 
-  // check if exists
+  assert(broadcast.getAllInputs().size() == 1);
 
-  auto module = value.getDefiningOp()->getParentOfType<ModuleOp>();
+  auto input = broadcast.getAllInputs().front();
+
+  assert(llvm::isa<RankedTensorType>(input.getType()));
+
+  auto outputs = broadcast.getAllOutputs();
+
+  for (auto output : outputs) {
+    assert(getTypeSize(output) % getTypeSize(input) == 0);
+  }
+
+  auto module = broadcast->getParentOfType<ModuleOp>();
 
   // broken?
   // if (auto existing = module.lookupSymbol(name)) {
@@ -42,7 +68,7 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
     auto f = llvm::dyn_cast<LLVM::LLVMFuncOp>(&op);
     if (!f)
       continue;
-    if (f.getSymName() == name) {
+    if (f.getSymName() == broadcast.getImpl()) {
       return f;
     }
   }
@@ -55,10 +81,11 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
 
   auto opaque_ptr = LLVM::LLVMPointerType::get(module_builder.getContext());
 
-  auto num_args = size;
+  auto num_args = 1 + outputs.size();
 
-  if (reuse_first == false) {
-    num_args++;
+  if (getTypeSize(outputs.front()) == getTypeSize(input) &&
+      !broadcast.getInout().empty()) {
+    num_args--;
   }
 
   for (auto i = 0; i < num_args; i++) {
@@ -68,8 +95,8 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
   auto impl = CREATE(
       LLVM::LLVMFuncOp,
       module_builder,
-      value.getDefiningOp()->getLoc(),
-      name,
+      broadcast.getLoc(),
+      broadcast.getImpl(),
       LLVM::LLVMFunctionType::get(
           LLVM::LLVMVoidType::get(module_builder.getContext()), arg_types));
   impl.setVisibility(mlir::SymbolTable::Visibility::Public);
@@ -79,14 +106,36 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
   auto impl_builder = OpBuilder(impl);
   impl_builder.setInsertionPointToStart(body);
 
-  auto size_val =
-      getIntConstant(&impl.getFunctionBody().front(), getTypeSize(value));
+  auto size_val = util::mlir::getIntConstant(
+      &impl.getFunctionBody().front(),
+      impl_builder.getI64IntegerAttr(getTypeSize(input)));
 
   auto src = body->getArgument(0);
 
-  for (auto i : body->getArguments().drop_front(1)) {
-    CREATE(
-        LLVM::MemcpyOp, impl_builder, impl->getLoc(), i, src, size_val, true);
+  for (auto [i, argument] :
+       llvm::enumerate(body->getArguments().drop_front(1))) {
+
+    int num_copies = getTypeSize(argument) / getTypeSize(input);
+
+    for (auto offset = 0; offset < num_copies; offset++) {
+      Value dst = argument;
+      if (offset > 0) {
+        dst = CREATE(LLVM::GEPOp,
+                     impl_builder,
+                     impl->getLoc(),
+                     opaque_ptr,
+                     impl_builder.getI8Type(),
+                     dst,
+                     {offset * getTypeSize(input)});
+      }
+      CREATE(LLVM::MemcpyOp,
+             impl_builder,
+             impl->getLoc(),
+             dst,
+             src,
+             size_val,
+             true);
+    }
   }
 
   CREATE(LLVM::ReturnOp, impl_builder, impl->getLoc(), ValueRange{});
@@ -94,12 +143,27 @@ getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first) {
   return impl;
 }
 
-LogicalResult expandToBroadcast(OpResult &value) {
-  OpBuilder builder(value.getOwner());
-  builder.setInsertionPointAfter(value.getOwner());
+NodeOp specializeBroadcast(NodeOp generic_broadcast, bool force_copy) {
+  assert(generic_broadcast.getAllInputs().size() == 1);
+  auto name =
+      getBroadcastName(generic_broadcast.getAllInputs().front().getType(),
+                       generic_broadcast->getResultTypes() | IntoVector(),
+                       DataLayout::closest(generic_broadcast),
+                       force_copy);
+  generic_broadcast.setImpl(name);
+  return generic_broadcast;
+}
 
-  ValueRange in = {};
-  Vec<Value> inout = {value};
+NodeOp insertBroadcast(Value value, bool force_copy) {
+  OpBuilder builder(value.getDefiningOp());
+  builder.setInsertionPointAfter(value.getDefiningOp());
+
+  Vec<Value> in, inout;
+
+  if (force_copy)
+    in.push_back(value);
+  else
+    inout.push_back(value);
 
   // SmallVector<Type> outputs;
 
@@ -108,7 +172,7 @@ LogicalResult expandToBroadcast(OpResult &value) {
   auto uses = value.getUses() | Pointers() | IntoVector();
   Vec<OpOperand *> ordered_uses;
 
-  for (auto &op : value.getOwner()->getParentRegion()->getOps()) {
+  for (auto &op : value.getDefiningOp()->getParentRegion()->getOps()) {
     for (auto use : uses) {
       if (use->getOwner() != &op)
         continue;
@@ -117,24 +181,20 @@ LogicalResult expandToBroadcast(OpResult &value) {
     }
   }
 
+  auto name = getBroadcastName(value.getType(),
+                               SmallVector<Type>(uses.size(), value.getType()),
+                               DataLayout::closest(value.getDefiningOp()),
+                               force_copy);
+
   assert(ordered_uses.size() == uses.size());
 
-  // for (auto use : ordered_uses) {
-  //   use->getOwner()->dump();
-  // }
-
-  auto output_types =
-      uses | Map{[](auto &x) { return x->get().getType(); }} | IntoVector();
-
-  auto impl = getOrCodegenBroadcastImpl(value, uses.size(), true);
-
-  assert(impl);
+  auto output_types = SmallVector<Type>(uses.size(), value.getType());
 
   auto broadcast_op = CREATE(NodeOp,
                              builder,
-                             value.getOwner()->getLoc(),
+                             value.getDefiningOp()->getLoc(),
                              output_types,
-                             impl.getSymName(),
+                             name,
                              {},
                              in,
                              inout);
@@ -149,7 +209,19 @@ LogicalResult expandToBroadcast(OpResult &value) {
   }
 
   assert((value.getUses() | Pointers() | Count()) == 1);
-  return success();
+
+  if (!isa<EdgeOp>(value.getDefiningOp())) {
+    passes::canonicalize::expandImplicitEdge(value);
+  }
+  for (auto output : broadcast_op.getAllOutputs()) {
+    auto users = output.getUsers() | IntoVector();
+    assert(users.size() == 1);
+    if (!isa<EdgeOp>(users.front())) {
+      passes::canonicalize::expandImplicitEdge(output);
+    }
+  }
+
+  return broadcast_op;
 }
 
 } // namespace iara::dialect::broadcast

@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""
+Degridder experiment runner.
+
+Usage:
+  python3 run_experiments --list          # List available experiment sets
+  python3 run_experiments dev             # Run 'dev' experiment set
+  python3 run_experiments small           # Run 'small' experiment set
+  python3 run_experiments full            # Run 'full' experiment set
+  python3 run_experiments chunking        # Run 'chunking' experiment set
+"""
+
+import sys
+from pathlib import Path
+
+# Add framework to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'experiment-framework'))
+
+from app_runner import AppExperimentRunner
+from base_runner import create_cli_parser
+
+
+class DegridderRunner(AppExperimentRunner):
+    """Degridder-specific experiment runner."""
+
+    def create_test_directory(self, params) -> Path:
+        """Create test directory with Degridder-specific naming convention."""
+        num_cores = params['num_cores']
+        num_chunk = params['num_chunk']
+        scheduler = params['scheduler']
+
+        dir_name = f"XX-degridder-{num_cores}cores_{num_chunk}chunks_{scheduler}"
+        dir_path = Path('test') / 'Iara' / dir_name
+
+        # Create directory
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy codegen.sh from app directory if it exists
+        app_dir = Path(__file__).parent.parent
+        codegen_src = app_dir / 'codegen.sh'
+        if codegen_src.exists():
+            import shutil
+            shutil.copy2(codegen_src, dir_path / 'codegen.sh')
+
+        # Write CMakeLists.txt
+        cmake_file = dir_path / 'CMakeLists.txt'
+        build_config = self.config.get('application', {}).get('build', {})
+        defines = list(build_config.get('defines', []))
+
+        # Add parameter defines from this specific test instance
+        defines.extend([
+            f'NUM_CORES={num_cores}',
+            f'NUM_CHUNK={num_chunk}',
+            f'NUM_KERNEL_SUPPORT={params["num_supports"]}',
+            f'GRID_SIZE={params["grid_size"]}',
+        ])
+
+        # Add scheduler define (uppercase version)
+        scheduler_define = f'SCHEDULER_{scheduler.upper().replace("-", "_")}'
+        defines.append(scheduler_define)
+
+        # Format defines as CMake list items (not quoted, separated by semicolons)
+        defines_list_str = ';'.join([f'-D{d}' for d in defines])
+        linker_args_list = ';'.join(build_config.get('extra_linker_args', []))
+
+        cmake_content = f"""# Build configuration from experiments.yaml
+set(EXTRA_KERNEL_ARGS {defines_list_str} CACHE STRING "Extra kernel compilation arguments")
+set(EXTRA_LINKER_ARGS {linker_args_list} CACHE STRING "Extra linker arguments")
+
+# Export parameters as environment variables for codegen.sh
+set(ENV{{NUM_CORES}} {num_cores})
+set(ENV{{NUM_CHUNK}} {num_chunk})
+set(ENV{{NUM_KERNEL_SUPPORT}} {params['num_supports']})
+set(ENV{{GRID_SIZE}} {params['grid_size']})
+"""
+
+        with open(cmake_file, 'w') as f:
+            f.write(cmake_content)
+
+        return dir_path
+
+    def get_parameter_exports(self, params) -> dict:
+        """Map Degridder parameters to environment variables."""
+        return {
+            'NUM_CORES': str(params['num_cores']),
+            'NUM_CHUNK': str(params['num_chunk']),
+            'NUM_KERNEL_SUPPORT': str(params['num_supports']),
+            'GRID_SIZE': str(params['grid_size']),
+            'SCHEDULER': params['scheduler'],
+        }
+
+
+if __name__ == '__main__':
+    parser = create_cli_parser()
+    args = parser.parse_args()
+
+    try:
+        # Pass the directory containing this script
+        runner_dir = Path(__file__).parent
+        runner = DegridderRunner(str(runner_dir / 'experiments.yaml'), 'degridder', 'degridder')
+
+        if args.list:
+            runner.run()
+        else:
+            runner.run(args.experiment_set)
+
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

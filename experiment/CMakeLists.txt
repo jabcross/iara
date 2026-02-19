@@ -37,5 +37,9 @@ get_filename_component(OpenMP_CXX_LIBRARY_DIR "${OpenMP_CXX_LIBRARY}" DIRECTORY)
 
 find_program(BASH_EXECUTABLE bash REQUIRED)
 
-# Add cholesky experiment subdirectory
-add_subdirectory(cholesky)
+# Add experiment subdirectories for applications that have generate_tests: true
+# Applications now have their experiment configurations in applications/*/experiment/
+
+# Note: Experiments are now built by the build_tests.sh script which parses
+# applications/*/experiment/experiments.yaml files and builds the necessary targets
+# This CMakeLists.txt is kept for backward compatibility but is mostly empty

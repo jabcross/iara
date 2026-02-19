@@ -1,0 +1,25 @@
+# This is a Spack Environment file.
+#
+# It describes a set of packages to be installed, along with
+# configuration settings.
+spack:
+  specs:
+  - gcc-runtime@15
+  - fftw@3
+  view: true
+  upstreams:
+    global:
+      install_tree: /export/spack/opt/spack
+  concretizer:
+    unify: true
+    reuse: true
+  packages:
+    gcc:
+      externals:
+      - spec: gcc@14.2.0 languages:='c,c++,fortran'
+        prefix: /opt/ohpc/pub/compiler/gcc/14.2.0
+        extra_attributes:
+          compilers:
+            c: /opt/ohpc/pub/compiler/gcc/14.2.0/bin/gcc
+            cxx: /opt/ohpc/pub/compiler/gcc/14.2.0/bin/g++
+            fortran: /opt/ohpc/pub/compiler/gcc/14.2.0/bin/gfortran

@@ -11,8 +11,8 @@ namespace iara::passes::virtualfifo {
 // insert a copy.
 void breakEdge(EdgeOp edge) {
   auto builder = OpBuilder(edge);
-  LLVM::LLVMFuncOp impl = iara::dialect::broadcast::getOrCodegenBroadcastImpl(
-      edge.getIn(), 1, false);
+  auto bc = broadcast::insertBroadcast(edge.getIn(), true);
+  LLVM::LLVMFuncOp impl = broadcast::getOrCodegenBroadcastImpl(bc);
   auto value_in = edge.getIn();
   DEF_OP(NodeOp,
          copy_op,
@@ -25,7 +25,7 @@ void breakEdge(EdgeOp edge) {
          {value_in},
          {});
   value_in.replaceAllUsesExcept(copy_op->getResult(0), copy_op);
-  canonicalize::expandImplicitEdge(copy_op->getOperand(0));
+  iara::passes::canonicalize::expandImplicitEdge(copy_op->getOperand(0));
 }
 
 void breakLoops(iara::dialect::ActorOp actor) {

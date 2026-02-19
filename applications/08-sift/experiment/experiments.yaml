@@ -1,0 +1,178 @@
+# SIFT Feature Detection Experiment Configuration
+#
+# This file defines all experiments, parameters, measurements, and visualization
+# settings for the SIFT feature detection application.
+
+application:
+  name: 08-sift
+  description: "SIFT feature detection using IaRa dataflow"
+  build:
+    extra_linker_args: ["-lm"]
+
+    # Compile-time defines that are always present
+    defines:
+      - "VERBOSE"
+
+# Metadata for framework integration (environment variables, CSV columns)
+
+parameters:
+  # Image width parameter
+  - name: IMAGE_WIDTH
+    type: int
+    label: "Image Width"
+    description: "Image width in pixels"
+    unit: "px"
+
+  # Image height parameter
+  - name: IMAGE_HEIGHT
+    type: int
+    label: "Image Height"
+    description: "Image height in pixels"
+    unit: "px"
+
+  # Scheduler selection (IaRa virtual FIFO schedulers only)
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-omp         # Virtual FIFO with OpenMP backend
+      - vf-enkits      # Virtual FIFO with EnkiTS backend
+
+# Computed parameters (derived from other parameters)
+computed_parameters: []
+
+# Constraints on parameter combinations
+constraints:
+  # image_width must be positive
+  - expression: "IMAGE_WIDTH > 0"
+    description: "Image width must be positive"
+
+  # image_height must be positive
+  - expression: "IMAGE_HEIGHT > 0"
+    description: "Image height must be positive"
+
+# Measurement definitions
+measurements:
+  # Wall time measurement
+  - name: wall_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Wall time:\s+(\d+\.?\d*)'
+      group: 1
+    unit: s
+    required: true
+    description: "Total wall clock execution time"
+
+  # Memory measurement (from GNU time -v output)
+  - name: max_rss_mb
+    type: float
+    parser:
+      type: regex
+      pattern: 'Maximum resident set size.*:\s+(\d+)'
+      group: 1
+      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
+    unit: MB
+    required: false
+    description: "Maximum memory usage (converted from kbytes to MB)"
+
+  # Verification result
+  - name: keypoints_found
+    type: int
+    parser:
+      type: regex
+      pattern: 'Keypoints found:\s+(\d+)'
+      group: 1
+    unit: count
+    required: false
+    description: "Number of keypoints detected"
+
+# Experiment sets for different use cases
+experiment_sets:
+  # Regression test
+  - name: regression
+    description: "Quick regression test for SIFT with virtual FIFO schedulers"
+    generate_tests: true
+    parameters:
+      IMAGE_WIDTH: [800]
+      IMAGE_HEIGHT: [640]
+      scheduler: [vf-omp, vf-enkits]
+
+  # Small scale testing
+  - name: small
+    description: "Small-scale experiments with quick execution"
+    generate_tests: false
+    parameters:
+      IMAGE_WIDTH: [512, 800]
+      IMAGE_HEIGHT: [512, 640]
+      scheduler: [vf-omp, vf-enkits]
+
+  # Full scale experiments
+  - name: full
+    description: "Full-scale experiments with various image sizes"
+    generate_tests: false
+    parameters:
+      IMAGE_WIDTH: [512, 768, 1024, 1536, 2048]
+      IMAGE_HEIGHT: [512, 768, 1024, 1536, 2048]
+      scheduler: [vf-omp, vf-enkits]
+
+# Visualization configuration
+visualization:
+  defaults:
+    backend: plotly
+    figsize: [14, 8]
+
+  # Declarative plot specifications
+  plots:
+    # Runtime performance: grouped bars
+    runtime_performance:
+      title: "SIFT Runtime Performance"
+      type: grouped_bars
+      y_axis:
+        metric: wall_time
+      x_axis:
+        image_size: separate_plots
+      scheduler: ordered_within_group
+      error_bars: std_dev
+      description: "Execution time across different image sizes and schedulers"
+
+    # Memory usage: grouped bars
+    memory_usage:
+      title: "SIFT Peak Memory Usage"
+      type: grouped_bars
+      y_axis:
+        metric: max_rss_mb
+      x_axis:
+        image_size: separate_plots
+      scheduler: ordered_within_group
+      error_bars: std_dev
+      description: "Peak memory usage by image size and scheduler"
+
+    # Keypoints found: line plot to show trend
+    keypoints_trend:
+      title: "SIFT Keypoints Found vs Image Size"
+      type: line_plot
+      y_axis:
+        metric: keypoints_found
+      x_axis:
+        image_size: x_axis
+      scheduler: separate_lines
+      description: "Number of keypoints detected for each image size"
+
+# Execution configuration
+execution:
+  # Number of times to run each configuration
+  repetitions: 5
+
+  # Number of warmup runs (not included in measurements)
+  warmup: 1
+
+  # Timeout for each run (seconds)
+  timeout: 300
+
+  # Environment variables to set for all runs
+  environment:
+    OMP_NUM_THREADS: "8"
+    OMP_PROC_BIND: "spread"
+    OMP_PLACES: "threads"

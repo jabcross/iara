@@ -1,0 +1,50 @@
+application:
+  name: 10-multi-rate
+  description: "Multi-rate dataflow test"
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "10-multi-rate-{scheduler}"
+  description: "Multi-rate test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+measurements: []
+
+experiment_sets:
+
+  - name: regression
+    description: "Regression test with all schedulers"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+    generate_tests: true
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

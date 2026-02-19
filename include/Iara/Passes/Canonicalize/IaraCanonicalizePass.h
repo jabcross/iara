@@ -24,7 +24,7 @@
 
 namespace iara::passes::canonicalize {
 
-void expandImplicitEdge(Value val);
+EdgeOp expandImplicitEdge(Value val);
 
 struct IaraCanonicalizePass
     : public PassWrapper<IaraCanonicalizePass,

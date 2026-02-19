@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""
+Generic experiment runner for all applications.
+
+The runner reads configuration from experiments.yaml, which should include:
+- test_directory_format: Template for test directory name (e.g., "test-{matrix_size}_{num_blocks}_{scheduler}")
+- parameter_exports: Mapping of parameters to environment variables
+- application: Build configuration (defines, linker args, etc.)
+
+Usage:
+  python3 run_experiments --list          # List available experiment sets
+  python3 run_experiments <experiment_set>  # Run specified experiment set
+"""
+
+import sys
+import os
+from pathlib import Path
+from typing import Dict, Any
+
+# Add framework to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from app_runner import AppExperimentRunner
+from base_runner import create_cli_parser
+
+
+class GenericAppRunner(AppExperimentRunner):
+    """Generic experiment runner that reads configuration from experiments.yaml."""
+
+    def __init__(self, yaml_config_path: str, app_name: str, app_filter: str, experiment_set: str = None):
+        """Initialize runner with optional experiment set for test name generation."""
+        super().__init__(yaml_config_path, app_name, app_filter)
+        self.experiment_set = experiment_set
+
+    def get_test_name_from_params(self, params: Dict[str, Any]) -> str:
+        """
+        Generate test name that matches CMake NAME format.
+        Format: {app_name}_{experiment_set}_{scheduler}_{param1}_{value1}...
+
+        Note: scheduler is added as just its value (not "scheduler_value")
+        Other parameters are added as "name_value" pairs in parameter definition order.
+        """
+        # Get app name from config or use app_filter as fallback
+        app_name = self.config.get('application', {}).get('name', self.app_filter)
+
+        # Build the test name components
+        name_parts = [app_name]
+
+        # Add experiment set if available
+        if self.experiment_set:
+            name_parts.append(self.experiment_set)
+
+        # Add scheduler first if it exists (just the value, not "scheduler=value")
+        if 'scheduler' in params:
+            name_parts.append(str(params['scheduler']))
+
+        # Get parameter order from config
+        param_order = [p['name'] for p in self.config.get('parameters', [])
+                      if isinstance(p, dict)]
+
+        # Add remaining parameters in definition order (excluding scheduler)
+        for param_name in param_order:
+            if param_name != 'scheduler' and param_name in params:
+                name_parts.append(param_name)
+                name_parts.append(str(params[param_name]))
+
+        return '_'.join(name_parts)
+
+    def create_test_directory(self, params) -> Path:
+        """Create test directory using configuration from experiments.yaml."""
+        # Get configuration from YAML
+        config = self.config
+
+        # Build directory name from parameters using unified format
+        # Format: {app_name}-{scheduler}_{param1}_{value1}_{param2}_{value2}...
+        app_name = config.get('application', {}).get('name', self.app_filter)
+
+        param_parts = []
+        for param_name in sorted(params.keys()):
+            param_parts.append(f"{param_name}_{params[param_name]}")
+
+        dir_name = f"{app_name}-" + "_".join(param_parts)
+        dir_path = Path('test') / 'Iara' / dir_name
+
+        # Create directory
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy codegen.sh from app directory if it exists
+        # __file__ points to the symlink in experiment/ directory
+        runner_dir = Path(__file__).parent  # experiment directory
+        app_dir = runner_dir.parent  # application directory
+        codegen_src = app_dir / 'codegen.sh'
+        if codegen_src.exists():
+            import shutil
+            shutil.copy2(codegen_src, dir_path / 'codegen.sh')
+
+        # Write CMakeLists.txt
+        cmake_file = dir_path / 'CMakeLists.txt'
+        build_config = config.get('application', {}).get('build', {})
+        defines = list(build_config.get('defines', []))
+
+        # Build parameter info map from parameters list
+        param_info = {}
+        for param_entry in config.get('parameters', []):
+            if isinstance(param_entry, dict):
+                param_name = param_entry.get('name')
+                if param_name:
+                    param_info[param_name] = param_entry
+
+        # Add parameter-based defines from export_as metadata
+        for param_name, param_value in params.items():
+            if param_name in param_info:
+                export_as = param_info[param_name].get('export_as')
+                if export_as:
+                    defines.append(f'{export_as}={param_value}')
+
+        # Format defines as CMake list items (not quoted, separated by semicolons)
+        defines_list_str = ';'.join([f'-D{d}' for d in defines])
+        linker_args_list = ';'.join(build_config.get('extra_linker_args', []))
+
+        cmake_content = f"""# Build configuration from experiments.yaml
+set(EXTRA_KERNEL_ARGS {defines_list_str} CACHE STRING "Extra kernel compilation arguments")
+set(EXTRA_LINKER_ARGS {linker_args_list} CACHE STRING "Extra linker arguments")
+
+# Export parameters as environment variables for codegen.sh
+"""
+
+        # Add environment variable exports for all parameters
+        for param_name, param_value in params.items():
+            # Look for export_as in parameter definition
+            env_var = None
+            if param_name in param_info:
+                env_var = param_info[param_name].get('export_as')
+
+            # Fallback to uppercase parameter name if no export_as defined
+            if not env_var:
+                env_var = param_name.upper()
+
+            cmake_content += f"set(ENV{{{env_var}}} {param_value})\n"
+
+        with open(cmake_file, 'w') as f:
+            f.write(cmake_content)
+
+        return dir_path
+
+    def get_parameter_exports(self, params) -> dict:
+        """Map parameters to environment variables based on YAML configuration."""
+        exports = {}
+
+        # Build parameter info map from parameters list
+        param_info = {}
+        for param_entry in self.config.get('parameters', []):
+            if isinstance(param_entry, dict):
+                param_name = param_entry.get('name')
+                if param_name:
+                    param_info[param_name] = param_entry
+
+        # For each parameter, export it as an environment variable
+        for param_name, param_value in params.items():
+            # Look for export_as in parameter definition
+            env_var = None
+            if param_name in param_info:
+                env_var = param_info[param_name].get('export_as')
+
+            # Fallback to uppercase parameter name if no export_as defined
+            if not env_var:
+                env_var = param_name.upper()
+
+            exports[env_var] = str(param_value)
+
+        return exports
+
+    def run(self, experiment_set_name: str = None) -> None:
+        """Override run to set experiment_set before processing."""
+        if experiment_set_name:
+            self.experiment_set = experiment_set_name
+        super().run(experiment_set_name)
+
+
+if __name__ == '__main__':
+    parser = create_cli_parser()
+    args = parser.parse_args()
+
+    try:
+        # Get the application directory (where this runner is located)
+        # Path: applications/<app_name>/experiment/run_experiments (symlink)
+        # __file__ points to the symlink, which is in experiment/ directory
+        runner_dir = Path(__file__).parent  # experiment directory
+        app_dir = runner_dir.parent  # application directory
+        app_name = app_dir.name  # Get app directory name (e.g., "05-cholesky")
+
+        # Create runner with generic class
+        # Pass experiment_set so test name generation includes it
+        runner = GenericAppRunner(str(runner_dir / 'experiments.yaml'),
+                                   app_name, app_name,
+                                   experiment_set=args.experiment_set if hasattr(args, 'experiment_set') and args.experiment_set else None)
+
+        if args.list:
+            runner.run()
+        else:
+            runner.run(args.experiment_set)
+
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

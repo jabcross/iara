@@ -1,0 +1,5 @@
+# MCP Dispatcher Requirements
+# Install with: pip install -r requirements.txt
+
+fastmcp
+httpx>=0.27.0

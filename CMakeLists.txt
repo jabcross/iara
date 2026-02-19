@@ -26,16 +26,17 @@ if(IARA_USE_PRESBURGER_BUFFER_CALC)
   add_compile_definitions(IARA_USE_PRESBURGER_BUFFER_CALC)
 endif()
 
-# Option to build tests (default: ON)
+# Option to build tests via experiment framework (default: OFF)
+# When ON, generates tests from experiments.yaml files and builds them
 option(IARA_BUILD_TESTS
-  "Build IaRa tests"
-  ON)
-
-# Option to build experiments (default: OFF)
-# When ON, builds experiment configurations instead of tests
-option(IARA_BUILD_EXPERIMENTS
-  "Build experiment configurations"
+  "Generate and build tests from experiment framework (via generate_experiments.py)"
   OFF)
+
+# Filters for test generation (only used when IARA_BUILD_TESTS=ON)
+# IARA_EXPERIMENTS_FILTER: Filter applications by name pattern (e.g., "05-cholesky")
+# IARA_EXPERIMENT_SETS_FILTER: Filter experiment sets by name (e.g., "regression_test")
+set(IARA_EXPERIMENTS_FILTER "" CACHE STRING "Filter applications by name pattern")
+set(IARA_EXPERIMENT_SETS_FILTER "" CACHE STRING "Filter experiment sets by name")
 
 # Set compilers from environment BEFORE project() command
 # This ensures CMake uses the correct compilers during compiler detection
@@ -53,61 +54,26 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_COMPILER_LAUNCHER ccache)
 set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
 
-# Define custom build types
+# Define simplified build types
 # Available build types:
-#   Debug               - Standard debug build with symbols
-#   Release             - Standard optimized release build
-#   CompilerDebug       - For iara-opt: Debug with -ftime-trace enabled
-#   TestDebug           - For tests: Debug build for testing
-#   ExperimentSize      - For experiments: Optimize for minimal binary size
-#   ExperimentPerf      - For experiments: Optimize for maximum performance
+#   Debug          - Maximum debug information for development and debugging
+#   Release        - Optimized for maximum performance (experiments, production)
+#   RelWithDebInfo - Optimized with debug symbols for profiling
 
-# CompilerDebug: Debug build with profiling for iara-opt
-set(CMAKE_CXX_FLAGS_COMPILERDEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ftime-trace" CACHE STRING "Compiler Debug CXX flags" FORCE)
-set(CMAKE_C_FLAGS_COMPILERDEBUG "${CMAKE_C_FLAGS_DEBUG}" CACHE STRING "Compiler Debug C flags" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_COMPILERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}" CACHE STRING "Compiler Debug linker flags" FORCE)
+# Debug: Maximum debug info, no optimization
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -gdwarf" CACHE STRING "Debug CXX flags" FORCE)
+set(CMAKE_C_FLAGS_DEBUG "-O0 -g -gdwarf" CACHE STRING "Debug C flags" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG "" CACHE STRING "Debug linker flags" FORCE)
 
-# TestDebug: Debug build for tests
-set(CMAKE_CXX_FLAGS_TESTDEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -gdwarf" CACHE STRING "Test Debug CXX flags" FORCE)
-set(CMAKE_C_FLAGS_TESTDEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g -gdwarf" CACHE STRING "Test Debug C flags" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_TESTDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}" CACHE STRING "Test Debug linker flags" FORCE)
+# Release: Maximum performance, no debug info
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -mtune=native -fno-rtti -fno-exceptions -flto" CACHE STRING "Release CXX flags" FORCE)
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -mtune=native -flto" CACHE STRING "Release C flags" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-flto" CACHE STRING "Release linker flags" FORCE)
 
-# ExperimentSize: Optimize for minimal binary size
-set(CMAKE_CXX_FLAGS_EXPERIMENTSIZE "-Os -DNDEBUG -fvisibility=hidden -fno-rtti -fno-exceptions -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections" CACHE STRING "Experiment Size CXX flags" FORCE)
-set(CMAKE_C_FLAGS_EXPERIMENTSIZE "-Os -DNDEBUG -fvisibility=hidden -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections" CACHE STRING "Experiment Size C flags" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTSIZE "-Wl,--gc-sections -flto" CACHE STRING "Experiment Size linker flags" FORCE)
-
-# ExperimentPerf: Optimize for maximum performance
-set(CMAKE_CXX_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -fno-rtti -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
-set(CMAKE_C_FLAGS_EXPERIMENTPERF "-O3 -DNDEBUG -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPERF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
-
-# # ExperimentPerf: Enable debug data for profiling
-# set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_CXX_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
-# set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O3 ${CMAKE_C_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
-# set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPROF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
-
-# ExperimentPerf: Enable debug data for profiling
-set(CMAKE_CXX_FLAGS_EXPERIMENTPROF "-O0 ${CMAKE_CXX_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "Experiment Perf CXX flags" FORCE)
-set(CMAKE_C_FLAGS_EXPERIMENTPROF "-O0 ${CMAKE_C_FLAGS_DEBUG} -g -gdwarf -march=native -mtune=native -flto" CACHE STRING "Experiment Perf C flags" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPROF "-flto" CACHE STRING "Experiment Perf linker flags" FORCE)
-
-
-# Mark custom build types as advanced
-mark_as_advanced(
-  CMAKE_CXX_FLAGS_COMPILERDEBUG
-  CMAKE_C_FLAGS_COMPILERDEBUG
-  CMAKE_EXE_LINKER_FLAGS_COMPILERDEBUG
-  CMAKE_CXX_FLAGS_TESTDEBUG
-  CMAKE_C_FLAGS_TESTDEBUG
-  CMAKE_EXE_LINKER_FLAGS_TESTDEBUG
-  CMAKE_CXX_FLAGS_EXPERIMENTSIZE
-  CMAKE_C_FLAGS_EXPERIMENTSIZE
-  CMAKE_EXE_LINKER_FLAGS_EXPERIMENTSIZE
-  CMAKE_CXX_FLAGS_EXPERIMENTPERF
-  CMAKE_C_FLAGS_EXPERIMENTPERF
-  CMAKE_EXE_LINKER_FLAGS_EXPERIMENTPERF
-)
+# RelWithDebInfo: Optimized build with debug symbols for profiling
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -gdwarf -DNDEBUG -march=native -mtune=native -fno-exceptions -flto" CACHE STRING "RelWithDebInfo CXX flags" FORCE)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g -gdwarf -DNDEBUG -march=native -mtune=native -flto" CACHE STRING "RelWithDebInfo C flags" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "-flto" CACHE STRING "RelWithDebInfo linker flags" FORCE)
 
 # Set build type from environment or default to Debug
 if(NOT CMAKE_BUILD_TYPE)
@@ -120,7 +86,7 @@ endif()
 
 # Update the build type dropdown in cmake-gui
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-  "Debug" "Release" "CompilerDebug" "TestDebug" "ExperimentSize" "ExperimentPerf" "ExperimentProf")
+  "Debug" "Release" "RelWithDebInfo")
 
 
 # Set LLVM/MLIR paths
@@ -208,14 +174,22 @@ if(MLIR_ENABLE_BINDINGS_PYTHON)
   add_subdirectory(python)
 endif()
 
-if(IARA_BUILD_TESTS)
-  add_subdirectory(test)
-endif()
-
-if(IARA_BUILD_EXPERIMENTS)
-  add_subdirectory(experiment)
-endif()
-
+# Build iara-opt compiler (always included)
 add_subdirectory(iara-opt)
+
+# Include pre-generated test CMakeLists.txt files from applications
+# (These are generated by scripts/generate_experiments.py during build_tests.sh Step 1)
+if(IARA_BUILD_TESTS)
+  message(STATUS "Including pre-generated experiment tests...")
+
+  file(GLOB app_cmakelists_files RELATIVE "${CMAKE_SOURCE_DIR}"
+    "${CMAKE_SOURCE_DIR}/applications/*/experiment/CMakeLists.txt"
+  )
+
+  foreach(cmake_file ${app_cmakelists_files})
+    message(STATUS "Including generated tests: ${cmake_file}")
+    include(${CMAKE_SOURCE_DIR}/${cmake_file})
+  endforeach()
+endif()
 
 string(REPLACE "-fno-lifetime-dse" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

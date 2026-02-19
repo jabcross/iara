@@ -1,0 +1,279 @@
+# Degridder Experiment Configuration
+#
+# This file defines all experiments, parameters, measurements, and visualization
+# settings for the Radio Astronomy Degridder application using IaRa dataflow.
+
+application:
+  name: 13-degridder
+  description: "Radio Astronomy Degridding using IaRa dataflow"
+  build:
+    # Linker args: casacore libraries from pkg-config, math library, FFTW
+    extra_linker_args: ["-lm", "-lcasa_casa", "-lcasa_tables", "-lcasa_scimath",
+     "-lcasa_measures", "-lcasa_fits", "-lcasa_ms", "-lcasa_coordinates", "-lcasa_images", "-lfftw3f"]
+
+    # Compile-time constants - fixed for all degridder instances
+    defines:
+      - "VERBOSE"
+      # Fixed radio astronomy parameters
+      - "NUM_KERNELS=17"                   # Number of W-projection kernels (fixed)
+      - "OVERSAMPLING_FACTOR=16"           # FFT oversampling factor (fixed)
+      # Size-dependent parameters are now computed per-instance in computed_parameters below.
+
+parameters:
+  # Dataset size (determines grid size and visibility count via computed_parameters)
+  - name: SIZE
+    type: str
+    label: "Dataset Size"
+    description: "Dataset size (small/medium/large) determines grid size and visibility count"
+    choices:
+      - small
+      - medium
+      - large
+
+  # Number of CPU cores parameter
+  - name: NUM_CORES
+    type: int
+    label: "CPU Cores"
+    description: "Number of CPU cores for OpenMP parallelization"
+    unit: ""
+
+  # Chunk count parameter
+  - name: NUM_CHUNK
+    type: int
+    label: "Chunks"
+    description: "Chunking parameter for dataflow task parallelization"
+    unit: ""
+
+  # Kernel support size parameter
+  - name: NUM_KERNEL_SUPPORT
+    type: int
+    label: "Kernel Support"
+    description: "Support size for convolution kernels in degridding"
+    unit: ""
+
+  # Scheduler selection
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-omp          # Virtual FIFO with OpenMP backend
+      - vf-enkits       # Virtual FIFO with EnkiTS backend
+      - vf-sequential   # Virtual FIFO without OpenMP for debugging
+
+# Computed parameters (derived from SIZE, NUM_KERNEL_SUPPORT, NUM_CHUNK)
+# These replace the hardcoded _add_degridder_defines() from the old generator.py.
+computed_parameters:
+  - name: GRID_SIZE
+    type: int
+    expression: "{'small': 2560, 'medium': 3840, 'large': 5120}[SIZE]"
+    description: "FFT grid size in pixels (2560/3840/5120 for small/medium/large)"
+
+  - name: NUM_VISIBILITIES
+    type: int
+    expression: "{'small': 3924480, 'medium': 5886720, 'large': 7848960}[SIZE]"
+    description: "Total number of visibility samples"
+
+  - name: NUM_SCENARIO
+    type: int
+    expression: "{'small': 1, 'medium': 2, 'large': 3}[SIZE]"
+    description: "Scenario index for data file selection"
+
+  - name: NUMBER_SAMPLE_IN_KERNEL
+    type: int
+    expression: "(NUM_KERNEL_SUPPORT + 1) * 16 * (NUM_KERNEL_SUPPORT + 1) * 16"
+    description: "Number of oversampled samples per kernel"
+
+  - name: TOTAL_KERNELS_SAMPLES
+    type: int
+    expression: "17 * NUMBER_SAMPLE_IN_KERNEL"
+    description: "Total kernel samples across all 17 W-projection kernels"
+
+  - name: NUM_VISIB_D_N_CHUNK
+    type: int
+    expression: "NUM_VISIBILITIES // NUM_CHUNK"
+    description: "Visibilities per chunk (NUM_VISIBILITIES must divide evenly by NUM_CHUNK)"
+
+# Constraints on parameter combinations
+constraints:
+  - expression: "NUM_CORES > 0"
+    description: "Number of cores must be positive"
+
+  - expression: "NUM_CHUNK > 0"
+    description: "Number of chunks must be positive"
+
+  - expression: "NUM_KERNEL_SUPPORT > 0"
+    description: "Kernel support size must be positive"
+
+  - expression: "NUM_VISIBILITIES % NUM_CHUNK == 0"
+    description: "Total visibilities must be divisible by chunk count"
+
+# Measurement definitions
+measurements:
+  # Wall time measurement
+  - name: wall_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Wall time:\s+(\d+\.?\\d*)'
+      group: 1
+    unit: s
+    required: true
+    description: "Total wall clock execution time"
+
+  # Memory measurement (from GNU time -v output)
+  - name: max_rss_mb
+    type: float
+    parser:
+      type: regex
+      pattern: 'Maximum resident set size.*:\s+(\d+)'
+      group: 1
+      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
+    unit: MB
+    required: false
+    description: "Maximum memory usage (converted from kbytes to MB)"
+
+  # Verification result (if applicable)
+  - name: verification_passed
+    type: bool
+    parser:
+      type: regex
+      pattern: 'Verification:\s+(PASSED|FAILED)'
+      group: 1
+      converter: "lambda x: x == 'PASSED'"
+    unit: ""
+    required: false
+    description: "Whether the computation was correct"
+
+# Named experiment sets for different purposes
+experiment_sets:
+  # Regression test
+  - name: regression
+    description: "Quick test for regression testing"
+    parameters:
+      SIZE: [small]
+      NUM_CORES: [1]
+      NUM_CHUNK: [1]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp]
+    generate_tests: true
+
+  # Sequential debug test
+  - name: debug-sequential
+    description: "Sequential execution for debugging"
+    parameters:
+      SIZE: [small]
+      NUM_CORES: [1]
+      NUM_CHUNK: [1]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-sequential]
+    generate_tests: true
+
+  # Small scale testing
+  - name: small
+    description: "Small-scale experiments with quick execution"
+    parameters:
+      SIZE: [small]
+      NUM_CORES: [1, 4, 8]
+      NUM_CHUNK: [1, 8, 32]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp, vf-enkits]
+    generate_tests: false
+
+  # Full scale experiments
+  - name: full
+    description: "Full-scale experiments with production grid size"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1, 4, 8]
+      NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp, vf-enkits]
+    generate_tests: false
+
+  # Chunking study
+  - name: chunking
+    description: "Study effect of chunk size on performance"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [8]
+      NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp]
+    generate_tests: false
+
+# Execution configuration
+execution:
+  # Number of times to run each configuration
+  repetitions: 5
+
+  # Number of warmup runs (not included in measurements)
+  warmup: 1
+
+  # Timeout for each run (seconds)
+  timeout: 600
+
+  # Environment variables to set for all runs
+  environment:
+    OMP_NUM_THREADS: "8"
+    OMP_PROC_BIND: "spread"
+    OMP_PLACES: "threads"
+
+# Visualization configuration
+visualization:
+  enabled: true
+
+  defaults:
+    backend: plotly
+    figsize: [14, 8]
+
+  # Declarative plot specifications
+  plots:
+    # Runtime performance: grouped bars
+    runtime_performance:
+      title: "Degridder Runtime Performance"
+      type: grouped_bars
+      y_axis:
+        metric: wall_time
+      x_axis:
+        NUM_CHUNK: separate_plots
+        NUM_CORES: group_by
+      scheduler: ordered_within_group
+      error_bars: std_dev
+      description: "Execution time across different chunk sizes and core counts"
+
+    # Memory usage: grouped bars
+    memory_usage:
+      title: "Degridder Peak Memory Usage"
+      type: grouped_bars
+      y_axis:
+        metric: max_rss_mb
+      x_axis:
+        NUM_CHUNK: separate_plots
+        NUM_CORES: group_by
+      scheduler: ordered_within_group
+      error_bars: std_dev
+      description: "Peak memory usage by chunk size and core count"
+
+    # Chunking effect: line plot
+    chunking_effect:
+      title: "Effect of Chunking on Performance"
+      type: line_plot
+      y_axis:
+        metric: wall_time
+      x_axis:
+        NUM_CHUNK: x_axis
+      scheduler: separate_lines
+      NUM_CORES: separate_plots
+      description: "How chunk size affects runtime for different core counts"
+
+# Output configuration
+output:
+  # Where to store experiment results
+  results_dir: "applications/13-degridder/experiment/results"
+
+  # Timestamped CSV file with all measurements
+  csv_file: "results_{timestamp}.csv"
+
+  # Generated plots directory
+  plots_dir: "applications/13-degridder/experiment/images"

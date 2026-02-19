@@ -1,0 +1,156 @@
+Found 11 experiments.yaml file(s)
+Processing applications/03-two-nodes/experiment/experiments.yaml
+  -> Generated applications/03-two-nodes/experiment/CMakeLists.txt
+Processing applications/04-multithread/experiment/experiments.yaml
+  -> Generated applications/04-multithread/experiment/CMakeLists.txt
+Processing applications/05-cholesky/experiment/experiments.yaml
+  -> Generated applications/05-cholesky/experiment/CMakeLists.txt
+Processing applications/06-broadcast/experiment/experiments.yaml
+  -> Generated applications/06-broadcast/experiment/CMakeLists.txt
+Processing applications/07-ownership/experiment/experiments.yaml
+  -> Generated applications/07-ownership/experiment/CMakeLists.txt
+Processing applications/08-sift/experiment/experiments.yaml
+  -> Generated applications/08-sift/experiment/CMakeLists.txt
+Processing applications/09-hierarchy/experiment/experiments.yaml
+  -> Generated applications/09-hierarchy/experiment/CMakeLists.txt
+Processing applications/10-multi-rate/experiment/experiments.yaml
+  -> Generated applications/10-multi-rate/experiment/CMakeLists.txt
+Processing applications/11-forward-delay/experiment/experiments.yaml
+  -> Generated applications/11-forward-delay/experiment/CMakeLists.txt
+Processing applications/12-average3/experiment/experiments.yaml
+  -> Generated applications/12-average3/experiment/CMakeLists.txt
+Processing applications/13-degridder/experiment/experiments.yaml
+  -> Generated applications/13-degridder/experiment/CMakeLists.txt
+Successfully generated 11 CMakeLists.txt file(s)
+-- Using Spack view at: /scratch/pedro.ciambra/repos/iara/spack/var/spack/environments/iara_env/.spack-env/view
+-- Using MLIRConfig.cmake in: /scratch/pedro.ciambra/repos/clangir/build/lib/cmake/mlir
+-- Using LLVMConfig.cmake in: /scratch/pedro.ciambra/repos/llvm-install/lib/cmake/llvm
+CMake Warning at /scratch/pedro.ciambra/repos/llvm-install/lib/cmake/llvm/HandleLLVMOptions.cmake:88 (message):
+  Job pooling is only available with Ninja generators.
+Call Stack (most recent call first):
+  CMakeLists.txt:142 (include)
+
+
+-- Building with -fPIC
+-- Including pre-generated experiment tests...
+-- Including generated tests: applications/03-two-nodes/experiment/CMakeLists.txt
+-- Including generated tests: applications/04-multithread/experiment/CMakeLists.txt
+-- Including generated tests: applications/05-cholesky/experiment/CMakeLists.txt
+-- Including generated tests: applications/06-broadcast/experiment/CMakeLists.txt
+-- Including generated tests: applications/07-ownership/experiment/CMakeLists.txt
+-- Including generated tests: applications/08-sift/experiment/CMakeLists.txt
+-- Including generated tests: applications/09-hierarchy/experiment/CMakeLists.txt
+-- Including generated tests: applications/10-multi-rate/experiment/CMakeLists.txt
+-- Including generated tests: applications/11-forward-delay/experiment/CMakeLists.txt
+-- Including generated tests: applications/12-average3/experiment/CMakeLists.txt
+-- Including generated tests: applications/13-degridder/experiment/CMakeLists.txt
+-- Configuring done (0.3s)
+-- Generating done (0.9s)
+-- Build files have been written to: /scratch/pedro.ciambra/repos/iara/build_experiments
+UpdateCTestConfiguration  from :/scratch/pedro.ciambra/repos/iara/build_experiments/DartConfiguration.tcl
+Parse Config file:/scratch/pedro.ciambra/repos/iara/build_experiments/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/scratch/pedro.ciambra/repos/iara/build_experiments/DartConfiguration.tcl
+Parse Config file:/scratch/pedro.ciambra/repos/iara/build_experiments/DartConfiguration.tcl
+Test project /scratch/pedro.ciambra/repos/iara/build_experiments
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 109
+    Start 109: build-08-sift_regression_vf-omp_image_size_512
+
+109: Test command: /scratch/pedro.ciambra/repos/iara/spack/opt/spack/linux-cascadelake/cmake-3.31.9-zfivaefmiwq4zmpc3aat2wq3qbfbdgch/bin/cmake "--build" "/scratch/pedro.ciambra/repos/iara/build_experiments" "--target" "build-08-sift_regression_vf-omp_image_size_512"
+109: Working Directory: /scratch/pedro.ciambra/repos/iara/build_experiments
+109: Test timeout computed to be: 600
+109: Building build-08-sift_regression_vf-omp_image_size_512
+109: Built target build-08-sift_regression_vf-omp_image_size_512_phony
+109: [  0%] Running codegen for run-08-sift_regression_vf-omp_image_size_512
+109: Generating SIFT topology from DIF
+109: IMAGE_SIZE = 
+109: Error: topology.dif not found at /scratch/pedro.ciambra/repos/iara/applications/08-sift/src/experiment/topology.dif
+109: gmake[7]: *** [CMakeFiles/run-08-sift_regression_vf-omp_image_size_512.dir/build.make:90: 08-sift/regression/08-sift_regression_vf-omp_image_size_512/codegen.stamp] Error 1
+109: gmake[6]: *** [CMakeFiles/Makefile2:6991: CMakeFiles/run-08-sift_regression_vf-omp_image_size_512.dir/all] Error 2
+109: gmake[5]: *** [CMakeFiles/Makefile2:6999: CMakeFiles/run-08-sift_regression_vf-omp_image_size_512.dir/rule] Error 2
+109: gmake[4]: *** [Makefile:2767: run-08-sift_regression_vf-omp_image_size_512] Error 2
+109: gmake[3]: *** [CMakeFiles/build-08-sift_regression_vf-omp_image_size_512.dir/build.make:71: CMakeFiles/build-08-sift_regression_vf-omp_image_size_512] Error 2
+109: gmake[2]: *** [CMakeFiles/Makefile2:7056: CMakeFiles/build-08-sift_regression_vf-omp_image_size_512.dir/all] Error 2
+109: gmake[1]: *** [CMakeFiles/Makefile2:7063: CMakeFiles/build-08-sift_regression_vf-omp_image_size_512.dir/rule] Error 2
+109: gmake: *** [Makefile:2793: build-08-sift_regression_vf-omp_image_size_512] Error 2
+1/2 Test #109: build-08-sift_regression_vf-omp_image_size_512 ......***Failed    0.26 sec
+test 111
+    Start 111: build-08-sift_regression_vf-enkits_image_size_512
+
+111: Test command: /scratch/pedro.ciambra/repos/iara/spack/opt/spack/linux-cascadelake/cmake-3.31.9-zfivaefmiwq4zmpc3aat2wq3qbfbdgch/bin/cmake "--build" "/scratch/pedro.ciambra/repos/iara/build_experiments" "--target" "build-08-sift_regression_vf-enkits_image_size_512"
+111: Working Directory: /scratch/pedro.ciambra/repos/iara/build_experiments
+111: Test timeout computed to be: 600
+111: Building build-08-sift_regression_vf-enkits_image_size_512
+111: Built target build-08-sift_regression_vf-enkits_image_size_512_phony
+111: [  0%] Running codegen for run-08-sift_regression_vf-enkits_image_size_512
+111: Generating SIFT topology from DIF
+111: IMAGE_SIZE = 
+111: Error: topology.dif not found at /scratch/pedro.ciambra/repos/iara/applications/08-sift/src/experiment/topology.dif
+111: gmake[7]: *** [CMakeFiles/run-08-sift_regression_vf-enkits_image_size_512.dir/build.make:90: 08-sift/regression/08-sift_regression_vf-enkits_image_size_512/codegen.stamp] Error 1
+111: gmake[6]: *** [CMakeFiles/Makefile2:7087: CMakeFiles/run-08-sift_regression_vf-enkits_image_size_512.dir/all] Error 2
+111: gmake[5]: *** [CMakeFiles/Makefile2:7095: CMakeFiles/run-08-sift_regression_vf-enkits_image_size_512.dir/rule] Error 2
+111: gmake[4]: *** [Makefile:2806: run-08-sift_regression_vf-enkits_image_size_512] Error 2
+111: gmake[3]: *** [CMakeFiles/build-08-sift_regression_vf-enkits_image_size_512.dir/build.make:71: CMakeFiles/build-08-sift_regression_vf-enkits_image_size_512] Error 2
+111: gmake[2]: *** [CMakeFiles/Makefile2:7152: CMakeFiles/build-08-sift_regression_vf-enkits_image_size_512.dir/all] Error 2
+111: gmake[1]: *** [CMakeFiles/Makefile2:7159: CMakeFiles/build-08-sift_regression_vf-enkits_image_size_512.dir/rule] Error 2
+111: gmake: *** [Makefile:2832: build-08-sift_regression_vf-enkits_image_size_512] Error 2
+2/2 Test #111: build-08-sift_regression_vf-enkits_image_size_512 ...***Failed    0.25 sec
+
+0% tests passed, 2 tests failed out of 2
+
+Total Test time (real) =   0.51 sec
+
+The following tests FAILED:
+	109 - build-08-sift_regression_vf-omp_image_size_512 (Failed)
+	111 - build-08-sift_regression_vf-enkits_image_size_512 (Failed)
+Errors while running CTest
+Output from these tests are in: /scratch/pedro.ciambra/repos/iara/build_experiments/Testing/Temporary/LastTest.log
+Use "--rerun-failed --output-on-failure" to re-run the failed cases verbosely.
+[ERROR] Some tests failed to build (this may be expected if some schedulers are not implemented)
+[ERROR] Failed to collect binary data
+[INFO] Using IARA_DIR: /scratch/pedro.ciambra/repos/iara
+[INFO] ======================================================================
+[INFO] IaRa Experiment Workflow
+[INFO] ======================================================================
+[INFO] Application: 08-sift
+[INFO] Experiment set: regression
+[INFO] Build directory: /scratch/pedro.ciambra/repos/iara/build_experiments
+[INFO] 
+======================================================================
+[INFO] Step 1: Generating CMakeLists.txt from experiments.yaml
+[INFO] ======================================================================
+[INFO] 
+======================================================================
+[INFO] Step 2: Cleaning build directory for full rebuilds
+[INFO] ======================================================================
+[INFO] Removing: /scratch/pedro.ciambra/repos/iara/build_experiments/08-sift
+[SUCCESS] Cleaned /scratch/pedro.ciambra/repos/iara/build_experiments/08-sift
+[INFO] 
+======================================================================
+[INFO] Step 3: Configuring CMake
+[INFO] ======================================================================
+[INFO] Running: CMake configure
+[INFO]   Command: cmake -S /scratch/pedro.ciambra/repos/iara -B /scratch/pedro.ciambra/repos/iara/build_experiments -DCMAKE_BUILD_TYPE=Release -DIARA_BUILD_TESTS=ON -DIARA_DIR=/scratch/pedro.ciambra/repos/iara
+[SUCCESS] CMake configure completed
+[INFO] 
+======================================================================
+[INFO] Step 4: Building test instances
+[INFO] ======================================================================
+[INFO] Building all 08-sift_regression tests
+[INFO] Tests will be built sequentially (one at a time) for accurate timing
+[INFO] 
+Building tests via ctest...
+[INFO] 
+======================================================================
+[INFO] Step 5: Collecting measurements and generating analysis
+[INFO] ======================================================================
+[INFO] 
+Collecting binary data...
+Skipping 08-sift_regression_vf-enkits_image_size_512: executable not found
+Skipping 08-sift_regression_vf-omp_image_size_512: executable not found
+No binary data collected

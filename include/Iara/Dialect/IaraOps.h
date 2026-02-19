@@ -9,23 +9,27 @@
 #ifndef IARA_IARAOPS_H
 #define IARA_IARAOPS_H
 
-#include "Iara/Dialect/AttrAccessor.h"
-#include "Iara/Dialect/IaraDialect.h"
-#include "Iara/Util/CommonTypes.h"
-#include "Iara/Util/CompilerTypes.h"
-#include "Iara/Util/rational.h"
-#include "mlir/Bytecode/BytecodeOpInterface.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/RegionKindInterface.h"
-#include "mlir/IR/SymbolTable.h"
-#include "mlir/Interfaces/InferTypeOpInterface.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
+// Suppress spurious "unused includes" diagnostics (compilers / linters vary).
+// Place this before the include list in the header. If desired, restore
+// diagnostics after the includes with a matching diagnostic pop.
+
+#include "Iara/Dialect/AttrAccessor.h"                   // IWYU pragma: keep
+#include "Iara/Dialect/IaraDialect.h"                    // IWYU pragma: keep
+#include "Iara/Util/CommonTypes.h"                       // IWYU pragma: keep
+#include "Iara/Util/CompilerTypes.h"                     // IWYU pragma: keep
+#include "Iara/Util/rational.h"                          // IWYU pragma: keep
+#include "mlir/Bytecode/BytecodeOpInterface.h"           // IWYU pragma: keep
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h" // IWYU pragma: keep
+#include "mlir/Dialect/Func/IR/FuncOps.h"                // IWYU pragma: keep
+#include "mlir/IR/BuiltinAttributes.h"                   // IWYU pragma: keep
+#include "mlir/IR/BuiltinTypes.h"                        // IWYU pragma: keep
+#include "mlir/IR/Dialect.h"                             // IWYU pragma: keep
+#include "mlir/IR/OpDefinition.h"                        // IWYU pragma: keep
+#include "mlir/IR/Operation.h"                           // IWYU pragma: keep
+#include "mlir/IR/RegionKindInterface.h"                 // IWYU pragma: keep
+#include "mlir/IR/SymbolTable.h"                         // IWYU pragma: keep
+#include "mlir/Interfaces/InferTypeOpInterface.h"        // IWYU pragma: keep
+#include "mlir/Interfaces/SideEffectInterfaces.h"        // IWYU pragma: keep
 
 #define GET_OP_CLASSES
 #include "Iara/Dialect/IaraOps.h.inc"

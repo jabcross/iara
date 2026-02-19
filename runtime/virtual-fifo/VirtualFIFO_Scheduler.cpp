@@ -53,29 +53,62 @@ extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 #endif
 }
 
-extern "C" void iara_runtime_run_iteration(i64 graph_iteration) {
+extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
+                                           int wait_for_tasks) {
 
-  for (auto &node : iara_runtime_nodes) {
-    if (node.needs_priming()) {
-      for (i64 i = graph_iteration * node.static_info.total_iter_firings,
-               e = i + node.static_info.total_iter_firings;
-           i < e;
-           i++) {
-        auto node_ptr = &node;
-        iara_submit_task([=]() { node_ptr->prime(i); });
+  if (wait_for_tasks) {
+#pragma omp taskgroup
+    {
+      for (auto &node : iara_runtime_nodes) {
+        if (node.needs_priming()) {
+          for (i64 i = graph_iteration * node.static_info.total_iter_firings,
+                   e = i + node.static_info.total_iter_firings;
+               i < e;
+               i++) {
+            auto node_ptr = &node;
+            iara_submit_task([=]() { node_ptr->prime(i); });
+          }
+        }
+      }
+    }
+  } else {
+    for (auto &node : iara_runtime_nodes) {
+      if (node.needs_priming()) {
+        for (i64 i = graph_iteration * node.static_info.total_iter_firings,
+                 e = i + node.static_info.total_iter_firings;
+             i < e;
+             i++) {
+          auto node_ptr = &node;
+          iara_submit_task([=]() { node_ptr->prime(i); });
+        }
       }
     }
   }
 }
 
-extern "C" void iara_runtime_wait() { iara_task_wait(); }
+// NOTE: This must be a simple inline implementation because taskwait
+// needs to be directly at the call site to see tasks in the current context
+#define IARA_WAIT_FOR_TASKS()                                                  \
+  do {                                                                         \
+    _Pragma("omp taskwait")                                                    \
+  } while (0)
+
+extern "C" void iara_runtime_wait() { IARA_WAIT_FOR_TASKS(); }
 
 extern "C" void iara_runtime_exec(void (*exec)()) {
 
   auto &nodes = iara_runtime_nodes;
   auto &edges = iara_runtime_edges;
 
-  iara_parallel_single([&]() { exec(); });
+  // Use pragmas directly so OpenMP compiler sees the structure
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      exec();
+    }
+#pragma omp taskwait
+  }
 }
 
 // Global storage for I/O sources and sinks

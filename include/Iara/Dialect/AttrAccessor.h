@@ -1,9 +1,11 @@
 #ifndef IARA_DIALECT_ATTR_ACCESSOR_H
 #define IARA_DIALECT_ATTR_ACCESSOR_H
 
+#include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/Mlir.h"
 #include <mlir/IR/OpDefinition.h>
 
+using namespace mlir;
 namespace iara::dialect {
 
 class AttrAccessor {

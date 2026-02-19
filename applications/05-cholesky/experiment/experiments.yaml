@@ -1,0 +1,318 @@
+# Cholesky Decomposition Experiment Configuration
+#
+# This file defines all experiments, parameters, measurements, and visualization
+# settings for the Cholesky decomposition application.
+
+application:
+  name: 05-cholesky
+  description: "Block-based Cholesky decomposition using BLAS/LAPACK"
+  build:
+    extra_linker_args: ["-lopenblas"]
+
+    defines:
+      - "VERBOSE"
+
+
+parameters:
+  # Matrix size parameter
+  - name: MATRIX_SIZE
+    type: int
+    label: "Matrix Size"
+    description: "Total size of the matrix (N x N)"
+    unit: ""
+
+  # Number of blocks parameter
+  - name: NUM_BLOCKS
+    type: int
+    label: "Number of Blocks"
+    description: "Number of blocks to divide matrix into"
+    unit: ""
+
+  # Scheduler selection
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - sequential
+      - omp-for
+      - omp-task
+      - enkits-task
+      - vf-sequential  # Virtual FIFO without OpenMP for debugging
+      - vf-omp         # Virtual FIFO with OpenMP backend
+      - vf-enkits      # Virtual FIFO with EnkiTS backend
+
+# Computed parameters (derived from other parameters)
+computed_parameters:
+  - name: BLOCK_SIZE
+    type: int
+    label: "Block Size"
+    expression: "MATRIX_SIZE // NUM_BLOCKS"
+    description: "Size of each block"
+    unit: ""
+
+# Constraints on parameter combinations
+constraints:
+  # num_blocks must divide matrix_size evenly
+  - expression: "MATRIX_SIZE % NUM_BLOCKS == 0"
+    description: "Matrix size must be divisible by number of blocks"
+
+  # num_blocks must be at least 1
+  - expression: "NUM_BLOCKS >= 1"
+    description: "Must have at least one block"
+
+  # matrix_size must be positive
+  - expression: "MATRIX_SIZE > 0"
+    description: "Matrix size must be positive"
+
+  # Block size should be reasonable for BLAS performance
+  - expression: "BLOCK_SIZE >= 32"
+    description: "Block size should be at least 32 for efficient BLAS operations"
+
+# Measurement definitions
+measurements:
+  # Simple timing measurements extracted from program output
+  - name: init_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Initialization time:\s+(\d+\.?\d*)'
+      group: 1
+    unit: s
+    required: false
+    description: "Matrix initialization and allocation time"
+
+  - name: convert_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Block conversion time:\s+(\d+\.?\d*)'
+      group: 1
+    unit: s
+    required: false
+    description: "Time to convert matrix to block format"
+
+  - name: compute_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Wall time:\s+(\d+\.?\d*)'
+      group: 1
+    unit: s
+    required: true
+    description: "Pure Cholesky decomposition time"
+
+  - name: wall_time
+    type: float
+    composite:
+      components: [init_time, convert_time, compute_time]
+      operation: sum
+    unit: s
+    required: true
+    description: "Total wall clock time (init + convert + compute)"
+
+  # Memory measurement (from GNU time -v output)
+  - name: max_rss_mb
+    type: float
+    parser:
+      type: regex
+      pattern: 'Maximum resident set size.*:\s+(\d+)'
+      group: 1
+      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
+    unit: MB
+    required: true
+    description: "Maximum memory usage (converted from kbytes to MB)"
+
+  # Verification result
+  - name: verification_passed
+    type: bool
+    parser:
+      type: regex
+      pattern: 'Verification:\s+(PASSED|FAILED)'
+      group: 1
+      converter: "lambda x: x == 'PASSED'"
+    required: false
+    description: "Whether the factorization was correct"
+
+  # Composite measurements for hierarchical analysis
+  - name: overhead_time
+    type: float
+    composite:
+      components: [init_time, convert_time]
+      operation: sum
+    unit: s
+    required: false
+    description: "Overhead time (init + conversion)"
+
+  - name: binary_compilation_time
+    type: float
+    parser:
+      type: regex
+      pattern: 'Binary compilation time:\s+(\d+\.?\d*)'
+      group: 1
+    unit: s
+    required: false
+    description: "Time taken to compile the binary for this configuration (only available during build)"
+
+# Named experiment sets for different purposes
+experiment_sets:
+  # Regression test
+  - name: regression
+    description: "Comprehensive regression test with multiple schedulers and parameters"
+    parameters:
+      MATRIX_SIZE: [2048, 4096]
+      NUM_BLOCKS: [1, 2, 4]
+      scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
+    generate_tests: true  # Generate CTest instances for regression testing
+
+  # Baseline comparison (non-IaRa schedulers)
+  - name: baseline
+    description: "Baseline schedulers without IaRa runtime"
+    parameters:
+      MATRIX_SIZE: [5040, 10080, 15120]
+      NUM_BLOCKS: [4, 8, 12]
+      scheduler: [sequential, omp-for, omp-task, enkits-task]
+    generate_tests: false
+
+  # IaRa scheduler evaluation
+  - name: iara
+    description: "IaRa virtual FIFO schedulers with different backends"
+    parameters:
+      MATRIX_SIZE: [5040, 10080, 15120]
+      NUM_BLOCKS: [4, 8, 12]
+      scheduler: [vf-omp, vf-enkits]
+    generate_tests: false
+
+  # Scaling study
+  - name: scaling
+    description: "Strong scaling study with fixed matrix size"
+    parameters:
+      MATRIX_SIZE: [20160]  # Fixed size, vary blocks
+      NUM_BLOCKS: [4, 6, 8, 10, 12, 14, 16, 18, 20]
+      scheduler: [sequential, omp-task, vf-omp]
+    generate_tests: false
+
+  # Full comparison
+  - name: all_schedulers
+    description: "Complete comparison of all schedulers and sizes"
+    parameters:
+      MATRIX_SIZE: [10080]
+      NUM_BLOCKS: [4]
+      scheduler: [sequential, omp-for, omp-task, enkits-task, vf-omp, vf-enkits]
+    generate_tests: false
+
+  # Compact comparison with small values
+  - name: compact_schedulers
+    description: "Compact comparison of key schedulers with regression test sizes"
+    parameters:
+      MATRIX_SIZE: [2048, 4096]
+      NUM_BLOCKS: [2, 4]
+      scheduler: [sequential, omp-task, vf-omp]
+    generate_tests: false
+
+  # Quick test with single virtual FIFO instance
+  - name: quick
+    description: "Quick test with one virtual FIFO instance for debugging"
+    parameters:
+      MATRIX_SIZE: [2048]
+      NUM_BLOCKS: [2]
+      scheduler: [vf-omp]
+    generate_tests: false
+
+# Execution configuration
+execution:
+  # Number of times to run each configuration
+  repetitions: 1
+
+  # Number of warmup runs (not included in measurements)
+  warmup: 1
+
+  # Timeout for each run (seconds)
+  timeout: 300
+
+  # Environment variables to set for all runs
+  environment:
+    OMP_NUM_THREADS: "8"
+    OMP_PROC_BIND: "spread"
+    OMP_PLACES: "threads"
+
+# Visualization configuration
+visualization:
+  # Default plot settings
+  defaults:
+    backend: plotly
+    figsize: [14, 8]
+
+  # Declarative plot specifications
+  plots:
+    # Runtime performance: grouped stacked bars
+    # One plot per matrix_size, grouped by num_blocks, stacked by time components
+    runtime_performance:
+      title: "Cholesky Runtime Performance (Stacked Time Components)"
+      type: grouped_stacked_bars
+      y_axis:
+        metric: value
+        measurements: [init_time, convert_time, compute_time]
+      x_axis:
+        MATRIX_SIZE: separate_plots
+        NUM_BLOCKS: group_by
+      scheduler: ordered_within_group
+      stack_by: measurement
+      error_bars: std_dev
+      show_values: true
+
+    # Compute time only
+    compute_time_only:
+      title: "Cholesky Compute Time"
+      type: grouped_bars
+      y_axis:
+        metric: compute_time
+      x_axis:
+        MATRIX_SIZE: separate_plots
+        NUM_BLOCKS: group_by
+      scheduler: ordered_within_group
+      error_bars: std_dev
+
+    # Memory usage: grouped bars
+    # One plot per matrix_size, grouped by num_blocks, bars by scheduler
+    memory_usage:
+      title: "Peak Memory Usage"
+      type: grouped_bars
+      y_axis:
+        metric: max_rss_mb
+      x_axis:
+        MATRIX_SIZE: separate_plots
+        NUM_BLOCKS: group_by
+      scheduler: ordered_within_group
+      error_bars: std_dev
+
+    # Binary compilation time
+    binary_compilation_time:
+      title: "Binary Compilation Time"
+      type: grouped_bars
+      y_axis:
+        metric: binary_compilation_time
+      x_axis:
+        MATRIX_SIZE: separate_plots
+        NUM_BLOCKS: group_by
+      scheduler: ordered_within_group
+      description: "Time taken to compile each scheduler variant"
+
+      # Binary size breakdown
+    binary_size_breakdown:
+      title: "Binary Size Breakdown by Section"
+      type: stacked_bar
+      y_axis:
+        metric: value
+        filter: "section is not null"
+      x_axis:
+        MATRIX_SIZE: separate_plots
+        NUM_BLOCKS: group_by
+      scheduler: ordered_within_group
+      stack_by: section
+      description: "ELF section size analysis of compiled binaries"
+
+# Output configuration
+output:
+  # Directories and files are computed dynamically based on application name
+  # from the directory structure, so no hardcoding needed

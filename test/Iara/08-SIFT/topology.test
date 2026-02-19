@@ -1,8 +1,0 @@
-// RUN: export SCHEDULER_MODE=$SCHEDULER_MODE
-// RUN: pwd >&2
-// RUN: export EXTRA_OBJ_DIRS=build/CMakeFiles/extract.dir/src
-// RUN: build-single-test.sh .
-// RUN: pwd >&2
-// RUN: ls build >&2
-// RUN: ./build/a.out > ./build/output.txt
-// RUN: FileCheck %s < ./build/output.txt

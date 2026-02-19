@@ -1,0 +1,531 @@
+"""
+Visualization module for Cholesky experiment results.
+
+Provides functions to generate interactive Plotly visualizations from experiment CSV results.
+"""
+
+from pathlib import Path
+from typing import Optional
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
+
+def generate_visualizations(csv_path: str, scheduler_order: list) -> None:
+    """
+    Generate and display all interactive Plotly visualizations.
+
+    Loads results from CSV and generates visualizations:
+    - Runtime Performance: Grouped stacked bars by matrix size
+    - Compute Time Only: Pure compute time comparison
+    - Memory Usage: Memory consumption by matrix size
+    - Binary Compilation Time: Build time per scheduler
+    - Binary Size Breakdown: ELF section sizes (if in CSV)
+
+    Args:
+        csv_path: Path to results CSV file
+        scheduler_order: Ordered list of scheduler names
+    """
+    # Load results
+    results = pd.read_csv(csv_path)
+
+    # Generate runtime performance plot
+    _plot_runtime_performance(results, scheduler_order)
+
+    # Generate compute time only plot
+    _plot_compute_time(results, scheduler_order)
+
+    # Generate memory usage plot
+    _plot_memory_usage(results, scheduler_order)
+
+    # Generate binary compilation time plot if available
+    if 'binary_compilation_time' in results['measurement'].values:
+        _plot_compilation_time(results, scheduler_order)
+
+    # Generate binary size plot if binary size data in CSV
+    if 'section' in results.columns:
+        _plot_binary_sizes(results, scheduler_order)
+
+
+def _plot_runtime_performance(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Plot runtime performance as grouped stacked bars.
+
+    One subplot per matrix size, with bars grouped by num_blocks and stacked by component.
+    """
+    # Filter timing data
+    timing_data = results[results['measurement'].isin(['init_time', 'convert_time', 'compute_time'])].copy()
+    # Convert value to numeric for calculations
+    timing_data['value'] = pd.to_numeric(timing_data['value'], errors='coerce')
+    # Drop rows with non-numeric values
+    timing_data = timing_data.dropna(subset=['value'])
+
+    matrix_sizes = sorted(timing_data['matrix_size'].unique())
+    available_schedulers = [s for s in scheduler_order if s in timing_data['scheduler'].unique()]
+
+    if not available_schedulers or matrix_sizes is None or len(matrix_sizes) == 0:
+        print('No timing data available')
+        return
+
+    # Create subplots - one per matrix_size
+    num_plots = len(matrix_sizes)
+    fig = make_subplots(
+        rows=1, cols=num_plots,
+        subplot_titles=[f'Matrix Size: {size}' for size in matrix_sizes],
+        x_title='Number of Blocks',
+        y_title='Time (s)',
+        horizontal_spacing=0.08
+    )
+
+    component_colors = {
+        'init_time': '#636EFA',
+        'convert_time': '#EF553B',
+        'compute_time': '#00CC96'
+    }
+    component_order = ['init_time', 'convert_time', 'compute_time']
+
+    for col_idx, matrix_size in enumerate(matrix_sizes, start=1):
+        size_data = timing_data[timing_data['matrix_size'] == matrix_size]
+        num_blocks_values = sorted(size_data['num_blocks'].unique())
+        agg_data = size_data.groupby(['scheduler', 'num_blocks', 'measurement']).agg({
+            'value': ['mean', 'std']
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'measurement', 'mean_time', 'std_time']
+
+        bar_width = 0.8 / len(available_schedulers)
+
+        for component_idx, component in enumerate(component_order):
+            for sched_idx, scheduler in enumerate(available_schedulers):
+                scheduler_data = agg_data[
+                    (agg_data['scheduler'] == scheduler) & (agg_data['measurement'] == component)
+                ].sort_values('num_blocks')
+
+                if scheduler_data.empty:
+                    continue
+
+                x_positions = [
+                    nb + (sched_idx - len(available_schedulers)/2 + 0.5) * bar_width
+                    for nb in scheduler_data['num_blocks']
+                ]
+
+                if component == 'init_time':
+                    base = None
+                else:
+                    prev_components = component_order[:component_idx]
+                    base_vals = []
+                    for nb in scheduler_data['num_blocks']:
+                        base_sum = 0
+                        for prev_comp in prev_components:
+                            prev_data = agg_data[
+                                (agg_data['scheduler'] == scheduler) &
+                                (agg_data['num_blocks'] == nb) &
+                                (agg_data['measurement'] == prev_comp)
+                            ]
+                            if not prev_data.empty:
+                                base_sum += prev_data['mean_time'].values[0]
+                        base_vals.append(base_sum)
+                    base = base_vals
+
+                show_legend = (col_idx == 1)
+                legend_group = f'{scheduler}_{component}'
+
+                fig.add_trace(
+                    go.Bar(
+                        x=x_positions,
+                        y=scheduler_data['mean_time'],
+                        base=base,
+                        name=f'{scheduler} - {component}',
+                        marker_color=component_colors[component],
+                        width=bar_width * 0.9,
+                        showlegend=show_legend,
+                        legendgroup=legend_group,
+                        hovertemplate=(
+                            '<b>' + scheduler + '</b><br>' + component + '<br>'
+                            'Num Blocks: %{customdata[0]}<br>Time: %{y:.4f}s<extra></extra>'
+                        ),
+                        customdata=[[nb] for nb in scheduler_data['num_blocks']]
+                    ),
+                    row=1, col=col_idx
+                )
+
+        # Update x-axis for this subplot to show num_blocks values
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=num_blocks_values,
+            ticktext=[str(nb) for nb in num_blocks_values],
+            row=1, col=col_idx
+        )
+
+    fig.update_layout(
+        title='Cholesky Runtime Performance',
+        height=600,
+        barmode='overlay',
+        template='plotly_white',
+        hovermode='closest'
+    )
+
+    fig.show()
+
+
+def _plot_memory_usage(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Plot memory usage as grouped bars with error bars.
+
+    One subplot per matrix size, with bars grouped by num_blocks and ordered by scheduler.
+    """
+    memory_data = results[results['measurement'] == 'max_rss_mb'].copy()
+    # Convert value to numeric for calculations
+    memory_data['value'] = pd.to_numeric(memory_data['value'], errors='coerce')
+    # Drop rows with non-numeric values
+    memory_data = memory_data.dropna(subset=['value'])
+
+    if memory_data.empty:
+        print('No memory data available')
+        return
+
+    matrix_sizes = sorted(memory_data['matrix_size'].unique())
+    available_schedulers = [s for s in scheduler_order if s in memory_data['scheduler'].unique()]
+
+    num_plots = len(matrix_sizes)
+    fig = make_subplots(
+        rows=1, cols=num_plots,
+        subplot_titles=[f'Matrix Size: {size}' for size in matrix_sizes],
+        x_title='Number of Blocks',
+        y_title='Memory (MB)',
+        horizontal_spacing=0.08
+    )
+
+    colors = px.colors.qualitative.Plotly
+    scheduler_colors = {scheduler: colors[i % len(colors)] for i, scheduler in enumerate(available_schedulers)}
+
+    for col_idx, matrix_size in enumerate(matrix_sizes, start=1):
+        size_data = memory_data[memory_data['matrix_size'] == matrix_size]
+        num_blocks_values = sorted(size_data['num_blocks'].unique())
+        agg_data = size_data.groupby(['scheduler', 'num_blocks']).agg({
+            'value': ['mean', 'std']
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'mean_memory', 'std_memory']
+
+        bar_width = 0.8 / len(available_schedulers)
+
+        for sched_idx, scheduler in enumerate(available_schedulers):
+            scheduler_data = agg_data[agg_data['scheduler'] == scheduler].sort_values('num_blocks')
+
+            if scheduler_data.empty:
+                continue
+
+            x_positions = [
+                nb + (sched_idx - len(available_schedulers)/2 + 0.5) * bar_width
+                for nb in scheduler_data['num_blocks']
+            ]
+
+            show_legend = (col_idx == 1)
+
+            fig.add_trace(
+                go.Bar(
+                    x=x_positions,
+                    y=scheduler_data['mean_memory'],
+                    error_y=dict(
+                        type='data',
+                        array=scheduler_data['std_memory']
+                    ),
+                    name=scheduler,
+                    marker_color=scheduler_colors[scheduler],
+                    width=bar_width * 0.9,
+                    showlegend=show_legend,
+                    legendgroup=scheduler,
+                    hovertemplate=(
+                        '<b>' + scheduler + '</b><br>'
+                        'Num Blocks: %{customdata[0]}<br>'
+                        'Memory: %{y:.1f} MB<extra></extra>'
+                    ),
+                    customdata=[[nb] for nb in scheduler_data['num_blocks']]
+                ),
+                row=1, col=col_idx
+            )
+
+        # Update x-axis for this subplot
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=num_blocks_values,
+            ticktext=[str(nb) for nb in num_blocks_values],
+            row=1, col=col_idx
+        )
+
+    fig.update_layout(
+        title='Peak Memory Usage',
+        height=600,
+        template='plotly_white',
+        hovermode='closest'
+    )
+
+    fig.show()
+
+
+def _plot_compute_time(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Plot compute time only (pure Cholesky decomposition time).
+
+    One subplot per matrix size, with bars grouped by num_blocks and ordered by scheduler.
+    """
+    compute_data = results[results['measurement'] == 'compute_time'].copy()
+    # Convert value to numeric for calculations
+    compute_data['value'] = pd.to_numeric(compute_data['value'], errors='coerce')
+    # Drop rows with non-numeric values
+    compute_data = compute_data.dropna(subset=['value'])
+
+    if compute_data.empty:
+        print('No compute time data available')
+        return
+
+    matrix_sizes = sorted(compute_data['matrix_size'].unique())
+    available_schedulers = [s for s in scheduler_order if s in compute_data['scheduler'].unique()]
+
+    num_plots = len(matrix_sizes)
+    fig = make_subplots(
+        rows=1, cols=num_plots,
+        subplot_titles=[f'Matrix Size: {size}' for size in matrix_sizes],
+        x_title='Number of Blocks',
+        y_title='Time (s)',
+        horizontal_spacing=0.08
+    )
+
+    colors = px.colors.qualitative.Plotly
+    scheduler_colors = {scheduler: colors[i % len(colors)] for i, scheduler in enumerate(available_schedulers)}
+
+    for col_idx, matrix_size in enumerate(matrix_sizes, start=1):
+        size_data = compute_data[compute_data['matrix_size'] == matrix_size]
+        num_blocks_values = sorted(size_data['num_blocks'].unique())
+        agg_data = size_data.groupby(['scheduler', 'num_blocks']).agg({
+            'value': ['mean', 'std']
+        }).reset_index()
+        agg_data.columns = ['scheduler', 'num_blocks', 'mean_time', 'std_time']
+
+        bar_width = 0.8 / len(available_schedulers)
+
+        for sched_idx, scheduler in enumerate(available_schedulers):
+            scheduler_data = agg_data[agg_data['scheduler'] == scheduler].sort_values('num_blocks')
+
+            if scheduler_data.empty:
+                continue
+
+            x_positions = [
+                nb + (sched_idx - len(available_schedulers)/2 + 0.5) * bar_width
+                for nb in scheduler_data['num_blocks']
+            ]
+
+            show_legend = (col_idx == 1)
+
+            fig.add_trace(
+                go.Bar(
+                    x=x_positions,
+                    y=scheduler_data['mean_time'],
+                    error_y=dict(
+                        type='data',
+                        array=scheduler_data['std_time']
+                    ),
+                    name=scheduler,
+                    marker_color=scheduler_colors[scheduler],
+                    width=bar_width * 0.9,
+                    showlegend=show_legend,
+                    legendgroup=scheduler,
+                    hovertemplate=(
+                        '<b>' + scheduler + '</b><br>'
+                        'Num Blocks: %{customdata[0]}<br>'
+                        'Time: %{y:.4f}s<extra></extra>'
+                    ),
+                    customdata=[[nb] for nb in scheduler_data['num_blocks']]
+                ),
+                row=1, col=col_idx
+            )
+
+        # Update x-axis for this subplot
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=num_blocks_values,
+            ticktext=[str(nb) for nb in num_blocks_values],
+            row=1, col=col_idx
+        )
+
+    fig.update_layout(
+        title='Cholesky Compute Time',
+        height=600,
+        template='plotly_white',
+        hovermode='closest'
+    )
+
+    fig.show()
+
+
+def _plot_compilation_time(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Plot binary compilation time grouped by scheduler.
+    """
+    compile_data = results[results['measurement'] == 'binary_compilation_time'].copy()
+    compile_data['value'] = pd.to_numeric(compile_data['value'], errors='coerce')
+    compile_data = compile_data.dropna(subset=['value'])
+
+    if compile_data.empty:
+        print('No compilation time data available')
+        return
+
+    available_schedulers = [s for s in scheduler_order if s in compile_data['scheduler'].unique()]
+
+    # Get unique compilation times per scheduler (should be same for all configs)
+    agg_data = compile_data.drop_duplicates('scheduler')[['scheduler', 'value']].copy()
+    agg_data.columns = ['scheduler', 'compile_time']
+
+    # Reorder by scheduler_order
+    agg_data['scheduler'] = pd.Categorical(
+        agg_data['scheduler'],
+        categories=available_schedulers,
+        ordered=True
+    )
+    agg_data = agg_data.sort_values('scheduler')
+
+    colors = px.colors.qualitative.Plotly
+    scheduler_colors = {scheduler: colors[i % len(colors)] for i, scheduler in enumerate(available_schedulers)}
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=agg_data['scheduler'],
+        y=agg_data['compile_time'],
+        name='Compilation Time',
+        marker_color=[scheduler_colors[s] for s in agg_data['scheduler']],
+        hovertemplate='<b>%{x}</b><br>Time: %{y:.2f}s<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title='Binary Compilation Time',
+        xaxis_title='Scheduler',
+        yaxis_title='Time (s)',
+        height=600,
+        template='plotly_white',
+        hovermode='closest',
+        showlegend=False
+    )
+
+    fig.show()
+
+
+def _plot_binary_sizes(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Plot binary size breakdown as stacked bars.
+
+    Shows ELF section sizes for each configuration (matrix size x num blocks x scheduler).
+    Extracts binary size data from results CSV (rows where 'section' column is present).
+    """
+    # Extract binary size data
+    binary_sizes = results[['scheduler', 'matrix_size', 'num_blocks', 'section', 'size_kb']].dropna()
+
+    if binary_sizes.empty:
+        print('No binary size data available')
+        return
+
+    # Pivot table to get sections as columns
+    binary_pivot = binary_sizes.pivot_table(
+        index=['scheduler', 'matrix_size', 'num_blocks'],
+        columns='section',
+        values='size_kb',
+        aggfunc='first'
+    ).reset_index()
+
+    # Order schedulers
+    available_schedulers = [s for s in scheduler_order if s in binary_pivot['scheduler'].unique()]
+    binary_pivot['scheduler'] = pd.Categorical(
+        binary_pivot['scheduler'],
+        categories=available_schedulers,
+        ordered=True
+    )
+    binary_pivot = binary_pivot.sort_values(['matrix_size', 'num_blocks', 'scheduler'])
+
+    # Create config labels
+    binary_pivot['config'] = binary_pivot.apply(
+        lambda r: f"{int(r['matrix_size'])}x{int(r['num_blocks'])} {r['scheduler']}",
+        axis=1
+    )
+
+    # Get all sections and sort by total size
+    sections = [col for col in binary_pivot.columns if col not in
+                ['scheduler', 'matrix_size', 'num_blocks', 'config']]
+    section_totals = {s: binary_pivot[s].sum() for s in sections}
+    sorted_sections = sorted(sections, key=lambda s: section_totals[s], reverse=True)
+
+    # Create stacked bar chart with per-section hover information
+    fig = go.Figure()
+
+    # Calculate base (cumulative sum) for stacking
+    for section_idx, section in enumerate(sorted_sections):
+        # Calculate base: sum of all previous sections
+        if section_idx == 0:
+            base_vals = [0] * len(binary_pivot)
+        else:
+            base_vals = []
+            for idx in range(len(binary_pivot)):
+                base_sum = 0
+                for prev_section in sorted_sections[:section_idx]:
+                    base_sum += binary_pivot.iloc[idx][prev_section]
+                base_vals.append(base_sum)
+
+        fig.add_trace(go.Bar(
+            x=binary_pivot['config'],
+            y=binary_pivot[section],
+            base=base_vals,
+            name=section,
+            hovertemplate=(
+                '<b>%{fullData.name}</b><br>'
+                'Size: %{y:.0f} KB<extra></extra>'
+            )
+        ))
+
+    fig.update_layout(
+        barmode='overlay',
+        title='Binary Size Breakdown by ELF Section',
+        xaxis_title='Configuration (Matrix Size x Num Blocks - Scheduler)',
+        yaxis_title='Size (KB)',
+        height=600,
+        template='plotly_white',
+        hovermode='closest'
+    )
+    fig.show()
+
+
+def print_statistics(results: pd.DataFrame, scheduler_order: list) -> None:
+    """
+    Print performance statistics and speedup analysis.
+
+    Args:
+        results: DataFrame with all measurement results
+        scheduler_order: Ordered list of scheduler names
+    """
+    compute_data = results[results['measurement'] == 'compute_time'].copy()
+    # Convert value to numeric (handles both numeric strings and non-numeric values)
+    compute_data['value'] = pd.to_numeric(compute_data['value'], errors='coerce')
+    # Remove NaN values (non-numeric rows)
+    compute_data = compute_data.dropna(subset=['value'])
+
+    compute_stats = compute_data.groupby('scheduler')['value'].agg([
+        'mean', 'std', 'min', 'max', 'count'
+    ]).round(4)
+
+    # Reorder by scheduler_order
+    available_schedulers = [s for s in scheduler_order if s in compute_stats.index]
+    compute_stats = compute_stats.reindex(available_schedulers)
+
+    print('\n=== Compute Time Statistics (ordered by scheduler definition) ===')
+    print(compute_stats)
+
+    # Speedup analysis
+    print('\n=== Speedup vs Sequential ===')
+    seq_data = results[(results['scheduler'] == 'sequential') & (results['measurement'] == 'compute_time')].copy()
+    seq_data['value'] = pd.to_numeric(seq_data['value'], errors='coerce')
+    seq_time = seq_data['value'].mean()
+
+    for scheduler in available_schedulers:
+        sched_data = results[(results['scheduler'] == scheduler) & (results['measurement'] == 'compute_time')].copy()
+        sched_data['value'] = pd.to_numeric(sched_data['value'], errors='coerce')
+        sched_time = sched_data['value'].mean()
+        speedup = seq_time / sched_time if sched_time > 0 else 0
+        print(f'{scheduler:15} : {speedup:6.2f}x')

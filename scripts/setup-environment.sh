@@ -30,30 +30,33 @@ fi
 
 JOBS=$(nproc 2>/dev/null || echo 1)
 
-# Create or update Spack environment from spack.yaml in project root
-if [ -f "$PROJECTS_DIR/iara/spack.yaml" ]; then
-  echo "Setting up Spack environment from spack.yaml..."
-  
+# Create or update Spack environment from sorgan_spack.yaml
+if [ -f "$PROJECTS_DIR/iara/sorgan_spack.yaml" ]; then
+  echo "Setting up Spack environment from sorgan_spack.yaml..."
+
   # Try to create the environment (will fail if it already exists)
-  if spack env create iara_env "$PROJECTS_DIR/iara/spack.yaml" 2>/dev/null; then
+  if spack env create iara_env "$PROJECTS_DIR/iara/sorgan_spack.yaml" 2>/dev/null; then
     echo "Created new Spack environment 'iara_env'"
   else
     echo "Environment 'iara_env' already exists, activating it..."
   fi
-  
+
+  # Keep spack.yaml as a symlink to sorgan_spack.yaml for convenience
+  ln -sf "$PROJECTS_DIR/iara/sorgan_spack.yaml" "$PROJECTS_DIR/iara/spack.yaml"
+
   # Activate the environment
   spack env activate iara_env
-  
+
   # Concretize and install packages
   echo "Installing Spack packages (this may take a while)..."
   spack concretize -f
   spack install -j "$JOBS"
-  
+
   # Regenerate the view
   echo "Regenerating environment view..."
   spack env view regenerate
 else
-  echo "Warning: No spack.yaml found in project root"
+  echo "Warning: No sorgan_spack.yaml found in project root"
 fi
 
 source $PROJECTS_DIR/iara/spack/share/spack/setup-env.sh

@@ -6,10 +6,10 @@
 // C++ interface (only available when compiling as C++)
 #ifdef __cplusplus
 
-#include "enkiTS/TaskScheduler.h"
-#include <functional>
-#include <mutex>
-#include <vector>
+  #include "enkiTS/TaskScheduler.h"
+  #include <functional>
+  #include <mutex>
+  #include <vector>
 
 namespace iara_enkits {
 // Global EnkiTS scheduler instance
@@ -45,14 +45,15 @@ template <typename Func> inline void iara_parallel_exec(Func &&func) { func(); }
 template <typename Func> inline void iara_single_exec(Func &&func) { func(); }
 
 // Parallel region with single thread (common pattern)
-template <typename Func> inline void iara_parallel_single(Func &&func) {
+template <typename Func>
+inline void iara_parallel_single_taskgroup(Func &&func) {
   func();
 }
 
 // Task synchronization: wait for all pending tasks
 inline void iara_task_wait() {
   // Copy task pool to local vector (to avoid holding mutex during wait)
-  std::vector<enki::TaskSet*> tasks_to_wait;
+  std::vector<enki::TaskSet *> tasks_to_wait;
   {
     std::lock_guard<std::mutex> lock(iara_enkits::g_task_pool_mutex);
     tasks_to_wait = iara_enkits::g_task_pool;
@@ -107,9 +108,9 @@ inline void iara_parallelism_shutdown() {
 extern "C" {
 #endif
 
-typedef void (*iara_task_func)(void*);
+typedef void (*iara_task_func)(void *);
 
-void iara_submit_task_c(iara_task_func func, void* data);
+void iara_submit_task_c(iara_task_func func, void *data);
 void iara_task_wait_c(void);
 void iara_parallelism_init_c(void);
 void iara_parallelism_shutdown_c(void);

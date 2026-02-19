@@ -23,6 +23,7 @@ cache_env() {
     EPOCHSECONDS FUNCNAME GROUPS PIPESTATUS SHELLOPTS BASH_COMMAND BASH_XTRACEFD
     PWD OLDPWD SHLVL _ RANDOM SECONDS LINENO PPID UID EUID TMPDIR HOSTNAME
     HISTCMD HISTFILE HISTFILESIZE HISTSIZE MAILCHECK OPTARG OPTIND REPLY
+    SPACK_ENV SPACK_ENV_VIEW SPACK_ROOT
     script_dir repo_root outfile tmpfile timestamp skip_vars skip_lookup skip_funcs
     skip_func_lookup key fn var
   )
@@ -51,6 +52,10 @@ cache_env() {
     while IFS= read -r line; do
       fn="${line##* }"
       if [[ -n "${skip_func_lookup[$fn]:-}" ]]; then
+        continue
+      fi
+      # Skip bash completion functions (start with _) to avoid extglob issues
+      if [[ "${fn}" == _* ]]; then
         continue
       fi
       declare -f "${fn}"

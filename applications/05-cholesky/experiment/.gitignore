@@ -1,0 +1,18 @@
+# Large profiling data files
+*.data
+*.data.*
+*.hs
+*.Rdata
+
+# Profiling artifacts
+*.AppImage
+
+# Jupyter notebook outputs and caches
+*.ipynb_checkpoints/
+__pycache__/
+*.pyc
+*.pyo
+
+# Results can grow large, but keep CSV and ipynb files
+results/
+profiling/

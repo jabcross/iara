@@ -24,3 +24,9 @@ _junk/
 node_modules
 experiment/*/*/*
 experiment/degridder/Code/data
+build_test/
+build_experiments/
+logs/*
+.aider*
+applications/*/experiment/CMakeLists.txt
+applications/*/experiment/*.hash

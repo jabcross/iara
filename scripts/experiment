@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Backward compatibility wrapper for IaRa Experiment Framework
+# Deprecated: Use 'python3 -m tools.experiment_framework' instead
+
+echo "Note: scripts/experiment is deprecated. Use 'python3 -m tools.experiment_framework' instead." >&2
+exec python3 -m tools.experiment_framework "$@"

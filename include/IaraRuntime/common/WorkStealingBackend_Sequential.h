@@ -1,31 +1,23 @@
 #ifndef IARA_RUNTIME_WORKSTEALINGBACKEND_SEQUENTIAL_H
 #define IARA_RUNTIME_WORKSTEALINGBACKEND_SEQUENTIAL_H
 
-// Sequential (no parallelism) backend implementation for VirtualFIFO parallelism abstraction
+// Sequential (no parallelism) backend implementation for VirtualFIFO
+// parallelism abstraction
 
 #include <functional>
 
 // Task submission: execute immediately
-template<typename Func>
-inline void iara_submit_task(Func&& func) {
-  func();
-}
+template <typename Func> inline void iara_submit_task(Func &&func) { func(); }
 
 // Parallel region: execute sequentially
-template<typename Func>
-inline void iara_parallel_exec(Func&& func) {
-  func();
-}
+template <typename Func> inline void iara_parallel_exec(Func &&func) { func(); }
 
 // Single thread: execute immediately
-template<typename Func>
-inline void iara_single_exec(Func&& func) {
-  func();
-}
+template <typename Func> inline void iara_single_exec(Func &&func) { func(); }
 
 // Parallel single: execute immediately
-template<typename Func>
-inline void iara_parallel_single(Func&& func) {
+template <typename Func>
+inline void iara_parallel_single_taskgroup(Func &&func) {
   func();
 }
 
@@ -35,9 +27,7 @@ inline void iara_task_wait() {
 }
 
 // Get number of threads: always 1
-inline int iara_get_num_threads() {
-  return 1;
-}
+inline int iara_get_num_threads() { return 1; }
 
 // Initialize parallelism runtime: no-op
 inline void iara_parallelism_init() {

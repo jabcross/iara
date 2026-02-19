@@ -22,7 +22,7 @@ namespace iara::passes::canonicalize {
 using namespace iara::util::mlir;
 using namespace iara::util::range;
 
-void expandImplicitEdge(Value val) {
+EdgeOp expandImplicitEdge(Value val) {
   auto prod_node = dyn_cast<NodeOp>(val.getDefiningOp());
   assert(prod_node);
   auto users = val.getUsers() | IntoVector();
@@ -38,6 +38,7 @@ void expandImplicitEdge(Value val) {
              val.getType(),
              val);
   val.replaceAllUsesExcept(new_edge.getOut(), {new_edge});
+  return new_edge;
 }
 
 void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
@@ -46,8 +47,20 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
     for (auto result : op->getResults()) {
       auto uses = result.getUses() | Pointers() | IntoVector();
       if (uses.size() > 1) {
-        auto _ = iara::dialect::broadcast::expandToBroadcast(result);
+        auto _ = iara::dialect::broadcast::insertBroadcast(result, false);
       }
+    }
+  }
+
+  for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
+    if (node.getImpl() == "iara_broadcast") {
+      broadcast::specializeBroadcast(node, false);
+    }
+  }
+
+  for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
+    if (node.getImpl().starts_with("iara_broadcast")) {
+      broadcast::getOrCodegenBroadcastImpl(node);
     }
   }
 

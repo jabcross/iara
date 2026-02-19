@@ -8,8 +8,7 @@ namespace iara::passes::virtualfifo::sdf::canon {
 
 LogicalResult canonicalizeTypes(ActorOp actor);
 LogicalResult expandImplicitEdgesAndBroadcasts(ActorOp actor);
-LLVM::LLVMFuncOp
-getOrCodegenBroadcastImpl(Value value, i64 size, bool reuse_first = true);
+LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(NodeOp broadcast);
 
 LogicalResult expandToBroadcast(OpResult &value);
 

@@ -25,7 +25,7 @@ EXTERNC void iara_runtime_set_io(int num_io_ports, ...);
 // Initializes the runtime.
 EXTERNC void iara_runtime_init();
 
-EXTERNC void iara_runtime_run_iteration(int64_t graph_iteration);
+EXTERNC void iara_runtime_run_iteration(int64_t graph_iteration, int wait_for_tasks);
 
 // Waits for all tasks to finish.
 EXTERNC void iara_runtime_wait();

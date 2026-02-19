@@ -1,0 +1,507 @@
+#!/usr/bin/env python3
+"""
+Experiment runner for Cholesky decomposition.
+
+Reads experiment sets from experiments.yaml and runs all parameter combinations
+for a specified experiment set. Uses Spinner fork components for parameter/measurement handling.
+"""
+
+import sys
+import os
+import glob
+import subprocess
+import csv
+import yaml
+import itertools
+import argparse
+import time
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Any, Tuple
+
+# Add spinner-fork to sys.path
+# Spinner is a sibling directory at /scratch/pedro.ciambra/repos/spinner-fork
+spinner_path = Path(__file__).parent.parent.parent.parent / 'spinner-fork'
+sys.path.insert(0, str(spinner_path))
+
+from spinner.config_loader import load_config
+
+
+def load_yaml_config(yaml_path: Path) -> Dict[str, Any]:
+    """Load and parse the experiments.yaml file."""
+    with open(yaml_path, 'r') as file:
+        return yaml.safe_load(file)
+
+
+def get_computed_params(config: Dict[str, Any]) -> Dict[str, str]:
+    """Extract computed parameter expressions."""
+    computed = {}
+    for param in config.get('computed_parameters', []):
+        computed[param['name']] = param['expression']
+    return computed
+
+
+def validate_combination(params: Dict[str, Any], constraints: List[Dict[str, str]]) -> bool:
+    """Check if a parameter combination satisfies all constraints."""
+    for constraint in constraints:
+        expression = constraint['expression']
+        try:
+            if not eval(expression, {}, params):
+                return False
+        except Exception as e:
+            print(f"Error evaluating constraint '{expression}': {e}", file=sys.stderr)
+            return False
+    return True
+
+
+def compute_derived_params(combo: Dict[str, Any], computed_params: Dict[str, str]) -> Dict[str, Any]:
+    """Compute derived parameters based on expressions."""
+    derived = {}
+    for param_name, expression in computed_params.items():
+        try:
+            value = eval(expression, {}, combo)
+            derived[param_name] = value
+        except Exception as e:
+            print(f"Error computing {param_name}: {e}", file=sys.stderr)
+    return derived
+
+
+def generate_combinations(exp_set: Dict[str, Any], constraints: List[Dict[str, str]], computed_params: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Generate all valid parameter combinations for an experiment set."""
+    params = exp_set['parameters']
+    param_names = list(params.keys())
+    param_values = [params[name] for name in param_names]
+
+    combinations = []
+    for combo_tuple in itertools.product(*param_values):
+        combo = dict(zip(param_names, combo_tuple))
+
+        # Compute derived parameters before validating constraints
+        derived = compute_derived_params(combo, computed_params)
+        combo.update(derived)
+
+        # Validate against constraints
+        if validate_combination(combo, constraints):
+            combinations.append(combo)
+
+    return combinations
+
+
+def create_test_directory(params: Dict[str, Any]) -> Path:
+    """Create test directory with parameters.sh and CMakeLists.txt for parameter configuration."""
+    matrix_size = params['matrix_size']
+    num_blocks = params['num_blocks']
+    scheduler = params['scheduler']
+    block_size = params.get('block_size', matrix_size // num_blocks)
+
+    dir_name = f"05-cholesky-{matrix_size}_{num_blocks}_{scheduler}"
+    dir_path = Path('test') / 'Iara' / dir_name
+
+    # Create directory
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+    # Write parameters.sh that CMake build system expects
+    params_file = dir_path / 'parameters.sh'
+    with open(params_file, 'w') as f:
+        f.write(f"export MATRIX_SIZE={matrix_size}\n")
+        f.write(f"export NUM_BLOCKS={num_blocks}\n")
+        f.write(f"export SCHEDULER={scheduler}\n")
+        f.write(f"export BLOCK_SIZE={block_size}\n")
+
+    # Write CMakeLists.txt with build configuration
+    cmake_file = dir_path / 'CMakeLists.txt'
+    cmake_content = f"""# Build configuration for Cholesky experiment
+# Parameters: matrix_size={matrix_size}, num_blocks={num_blocks}, scheduler={scheduler}
+
+set(EXTRA_KERNEL_ARGS "-DVERBOSE -DSCHEDULER_IARA" CACHE STRING "Extra kernel compilation arguments")
+set(EXTRA_LINKER_ARGS "-lopenblas" CACHE STRING "Extra linker arguments")
+"""
+
+    with open(cmake_file, 'w') as f:
+        f.write(cmake_content)
+
+    return dir_path
+
+
+def setup_cmake_build(build_dir='build_experiments'):
+    """Configure and build all test instances."""
+    if os.path.exists(os.path.join(build_dir, 'CMakeCache.txt')):
+        print(f"Build directory {build_dir} already configured.")
+        return True
+
+    print(f"Configuring CMake in {build_dir}...")
+    try:
+        subprocess.run(
+            ['cmake', '-B', build_dir, '-DCMAKE_BUILD_TYPE=Release',
+             '-DIARA_BUILD_TESTS=ON', '.'],
+            check=True,
+            timeout=600
+        )
+        print("Building test instances...")
+        subprocess.run(
+            ['cmake', '--build', build_dir, '--parallel'],
+            check=True,
+            timeout=1800
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Build failed: {e}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return False
+
+
+def find_executable(test_name, build_dir):
+    """Find the compiled executable for a test instance."""
+    pattern = os.path.join(build_dir, 'test', 'Iara', f'{test_name}*', 'build-*', 'a.out')
+    matches = glob.glob(pattern)
+
+    if matches:
+        return matches[0]
+
+    raise FileNotFoundError(f"Executable for {test_name} not found (searched: {pattern})")
+
+
+def get_section_sizes(binary_path):
+    """
+    Run 'size -A' on binary and parse ELF section sizes.
+
+    Returns:
+        Dictionary mapping section names to sizes in bytes
+    """
+    try:
+        result = subprocess.run(
+            ['size', '-A', str(binary_path)],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return {}
+
+        section_sizes = {}
+        for line in result.stdout.splitlines():
+            import re
+            m = re.match(r'\s*(\S+)\s+(\d+)', line)
+            if m:
+                section = m.group(1)
+                size = int(m.group(2))
+                # Skip header and total line
+                if section not in ['section', 'Total']:
+                    section_sizes[section] = size
+        return section_sizes
+    except Exception:
+        return {}
+
+
+def run_executable(exe_path, env_vars, timeout):
+    """Run an executable with time -v and capture output."""
+    try:
+        env = os.environ.copy()
+        env.update(env_vars)
+
+        result = subprocess.run(
+            ['/usr/bin/time', '-v', exe_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env
+        )
+
+        return result.returncode == 0, result.stdout + result.stderr
+
+    except subprocess.TimeoutExpired:
+        print(f"ERROR: {exe_path} timed out after {timeout}s", file=sys.stderr)
+        return False, ""
+    except Exception as e:
+        print(f"ERROR running {exe_path}: {e}", file=sys.stderr)
+        return False, str(e)
+
+
+def get_measurement_unit(config, meas_name):
+    """Extract unit for a measurement from config."""
+    for meas in config.measurements.measurements:
+        if meas.name == meas_name:
+            return meas.unit
+    return ""
+
+
+def main():
+    """Main entry point."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='Run experiments from a specified experiment set',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  python3 run_experiments.py --experiment-set dev
+  python3 run_experiments.py --experiment-set full
+  python3 run_experiments.py -e baseline
+  python3 run_experiments.py --list  # List available experiment sets
+        '''
+    )
+    parser.add_argument('-e', '--experiment-set',
+                        dest='experiment_set',
+                        help='Name of the experiment set to run')
+    parser.add_argument('--list', action='store_true',
+                        help='List available experiment sets and exit')
+
+    args = parser.parse_args()
+
+    # Load configuration
+    try:
+        spinner_config = load_config('applications/cholesky/experiment/experiments.yaml')
+    except Exception as e:
+        print(f"ERROR loading config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load YAML config for experiment set lookup
+    try:
+        yaml_config = load_yaml_config(Path('applications/cholesky/experiment/experiments.yaml'))
+    except Exception as e:
+        print(f"ERROR loading YAML config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # List experiment sets if requested
+    exp_sets = {s['name']: s for s in yaml_config.get('experiment_sets', [])}
+    if args.list:
+        print("Available experiment sets:")
+        for name, exp_set in exp_sets.items():
+            desc = exp_set.get('description', 'No description')
+            print(f"  {name:15s} - {desc}")
+        sys.exit(0)
+
+    # Check if experiment set is specified
+    if not args.experiment_set:
+        print("ERROR: --experiment-set is required", file=sys.stderr)
+        print("\nAvailable experiment sets:")
+        for name in sorted(exp_sets.keys()):
+            print(f"  {name}")
+        print(f"\nUsage: python3 run_experiments.py --experiment-set <name>")
+        sys.exit(1)
+
+    # Find specified experiment set
+    exp_set = exp_sets.get(args.experiment_set)
+    if not exp_set:
+        print(f"ERROR: Unknown experiment set '{args.experiment_set}'", file=sys.stderr)
+        print(f"\nAvailable sets: {', '.join(sorted(exp_sets.keys()))}")
+        sys.exit(1)
+
+    print(f"Running experiment set: {args.experiment_set}")
+    print(f"Description: {exp_set.get('description', 'No description')}")
+    print()
+
+    # Generate parameter combinations from experiment set
+    constraints = yaml_config.get('constraints', [])
+    computed_params = get_computed_params(yaml_config)
+    combinations = generate_combinations(exp_set, constraints, computed_params)
+
+    if not combinations:
+        print("ERROR: No valid parameter combinations for this experiment set", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Generated {len(combinations)} parameter combinations\n")
+
+    # Generate test directories for all parameter combinations
+    print("Creating test directories...")
+    for combo_idx, combo in enumerate(combinations, 1):
+        test_dir = create_test_directory(combo)
+        if combo_idx % 10 == 0 or combo_idx == len(combinations):
+            print(f"  Created {combo_idx}/{len(combinations)} test directories")
+
+    print()
+
+    # Setup CMake build with environment filter for cholesky only
+    print("Setting up CMake build (cholesky only)...")
+    build_start_time = time.time()
+    try:
+        env = os.environ.copy()
+        env['IARA_TEST_FILTER'] = 'cholesky'
+
+        subprocess.run(
+            ['cmake', '-B', 'build_experiments', '-DCMAKE_BUILD_TYPE=Release',
+             '-DIARA_BUILD_TESTS=ON', '.'],
+            check=True,
+            timeout=600,
+            env=env
+        )
+        print("Building test instances...")
+        subprocess.run(
+            ['cmake', '--build', 'build_experiments', '--parallel'],
+            check=True,
+            timeout=1800
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Build failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    build_time = time.time() - build_start_time
+
+    print()
+
+    # Run experiments
+    all_results = []
+
+    # Add binary compilation time as a measurement for each combination
+    for combo_idx, combo in enumerate(combinations, 1):
+        matrix_size = combo.get('matrix_size')
+        num_blocks = combo.get('num_blocks')
+        scheduler = combo.get('scheduler')
+
+        all_results.append({
+            'test_name': f"05-cholesky-{matrix_size}_{num_blocks}_{scheduler}",
+            'scheduler': scheduler,
+            'matrix_size': matrix_size,
+            'num_blocks': num_blocks,
+            'run_num': 0,  # Binary compilation is not per-run
+            'measurement': 'binary_compilation_time',
+            'value': build_time,
+            'unit': 's'
+        })
+
+    for combo_idx, combo in enumerate(combinations, 1):
+        matrix_size = combo.get('matrix_size')
+        num_blocks = combo.get('num_blocks')
+        scheduler = combo.get('scheduler')
+
+        # Create a test name for identification
+        test_name = f"05-cholesky-{matrix_size}_{num_blocks}_{scheduler}"
+
+        # Find executable for this combination
+        try:
+            exe = find_executable(test_name, 'build_experiments')
+        except FileNotFoundError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            continue
+
+        print(f"[{combo_idx}/{len(combinations)}] Running {test_name}...")
+
+        # Warmup runs (not recorded)
+        for w in range(spinner_config.execution.get('warmup', 1)):
+            run_executable(exe, spinner_config.execution.get('environment', {}), spinner_config.execution.get('timeout', 300))
+
+        # Actual runs
+        repetitions = spinner_config.execution.get('repetitions', 5)
+        timeout = spinner_config.execution.get('timeout', 300)
+        env_vars = spinner_config.execution.get('environment', {})
+
+        for run_num in range(1, repetitions + 1):
+            success, output = run_executable(exe, env_vars, timeout)
+
+            if not success:
+                print(f"  Run {run_num} failed", file=sys.stderr)
+                continue
+
+            # Extract measurements using Spinner
+            try:
+                measurements = spinner_config.measurements.extract_all(output)
+            except Exception as e:
+                print(f"  Error extracting measurements from run {run_num}: {e}", file=sys.stderr)
+                continue
+
+            # Save results
+            for meas_name, meas_value in measurements.items():
+                unit = get_measurement_unit(spinner_config, meas_name)
+                all_results.append({
+                    'test_name': test_name,
+                    'scheduler': scheduler,
+                    'matrix_size': matrix_size,
+                    'num_blocks': num_blocks,
+                    'run_num': run_num,
+                    'measurement': meas_name,
+                    'value': meas_value,
+                    'unit': unit
+                })
+
+            print(f"  Run {run_num}/{repetitions} completed")
+
+        print()
+
+    # Collect binary sizes from compiled executables
+    print("Collecting binary size data...")
+    try:
+        build_dir = Path('build_experiments')
+        for test_name, scheduler, matrix_size, num_blocks in set(
+            (r['test_name'], r['scheduler'], r['matrix_size'], r['num_blocks'])
+            for r in all_results
+        ):
+            exe_path = find_executable(test_name, build_dir)
+            sections = get_section_sizes(exe_path)
+
+            for section, size_bytes in sections.items():
+                all_results.append({
+                    'test_name': test_name,
+                    'scheduler': scheduler,
+                    'matrix_size': matrix_size,
+                    'num_blocks': num_blocks,
+                    'run_num': 0,  # Binary size is not per-run
+                    'measurement': 'section',
+                    'value': section,
+                    'unit': 'bytes',
+                    'section': section,
+                    'size_kb': size_bytes / 1024
+                })
+    except Exception as e:
+        print(f"Warning: Could not collect binary sizes: {e}", file=sys.stderr)
+
+    # Save results to CSV
+    if all_results:
+        output_dir = Path('applications/cholesky/experiment/results')
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        csv_file = output_dir / f'results_{timestamp}.csv'
+
+        with open(csv_file, 'w', newline='') as f:
+            fieldnames = [
+                'test_name', 'scheduler', 'matrix_size', 'num_blocks', 'run_num',
+                'measurement', 'value', 'unit', 'section', 'size_kb'
+            ]
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(all_results)
+
+        print(f"Results saved to: {csv_file}")
+        print(f"Total measurements: {len(all_results)}")
+
+        # Automatically generate interactive notebook
+        print("\n" + "="*80)
+        print("Generating interactive Jupyter notebook...")
+        print("="*80)
+
+        try:
+            # Generate notebook (use same timestamp as CSV)
+            notebook_path = output_dir / f'analysis_{timestamp}.ipynb'
+            cmd = [
+                'python3',
+                str(Path(__file__).parent / 'visualize_notebook.py'),
+                str(csv_file),
+                '--output', str(notebook_path)
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+            if result.returncode == 0:
+                print(result.stdout)
+                print(f"\n✓ Notebook generated: {notebook_path}")
+                print(f"\nTo view results:")
+                print(f"  source .env.cached")
+                print(f"  jupyter notebook {notebook_path}")
+            else:
+                print(f"Warning: Could not generate notebook", file=sys.stderr)
+                print(f"Error: {result.stderr}", file=sys.stderr)
+                print(f"You can generate it manually with:")
+                print(f"  python3 applications/cholesky/visualize_notebook.py {csv_file}")
+        except Exception as e:
+            print(f"Warning: Could not generate notebook: {e}", file=sys.stderr)
+            print(f"You can generate it manually with:")
+            print(f"  python3 applications/cholesky/visualize_notebook.py {csv_file}")
+    else:
+        print("ERROR: No results collected.", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

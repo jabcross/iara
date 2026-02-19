@@ -1,0 +1,50 @@
+application:
+  name: 04-multithread
+  description: "Multi-threaded dataflow test"
+
+  sources:
+    - 04-multithread.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "04-multithread-{scheduler}"
+  description: "Multi-thread test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+measurements: []
+
+experiment_sets:
+
+  - name: regression
+    description: "Regression test with all schedulers"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+    generate_tests: true
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"
