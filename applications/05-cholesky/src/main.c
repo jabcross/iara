@@ -542,6 +542,6 @@ int main(int argc, char *argv[]) {
 
   printf("Initialization time: %lf s\n", init_time);
   printf("Block conversion time: %lf s\n", convert_time);
-  printf("Wall time: %lf s\n", wall_time);
+  printf("Compute time: %lf s\n", wall_time);
   return 0;
 }

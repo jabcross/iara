@@ -71,8 +71,8 @@ constraints:
     description: "Block size should be at least 32 for efficient BLAS operations"
 
 # Measurement definitions
+# wall_time and max_rss_mb are standard — collected automatically by the framework.
 measurements:
-  # Simple timing measurements extracted from program output
   - name: init_time
     type: float
     parser:
@@ -97,32 +97,20 @@ measurements:
     type: float
     parser:
       type: regex
-      pattern: 'Wall time:\s+(\d+\.?\d*)'
+      pattern: 'Compute time:\s+(\d+\.?\d*)'
       group: 1
     unit: s
-    required: true
-    description: "Pure Cholesky decomposition time"
+    required: false
+    description: "Blocked Cholesky decomposition time"
 
-  - name: wall_time
+  - name: overhead_time
     type: float
     composite:
-      components: [init_time, convert_time, compute_time]
+      components: [init_time, convert_time]
       operation: sum
     unit: s
-    required: true
-    description: "Total wall clock time (init + convert + compute)"
-
-  # Memory measurement (from GNU time -v output)
-  - name: max_rss_mb
-    type: float
-    parser:
-      type: regex
-      pattern: 'Maximum resident set size.*:\s+(\d+)'
-      group: 1
-      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
-    unit: MB
-    required: true
-    description: "Maximum memory usage (converted from kbytes to MB)"
+    required: false
+    description: "Overhead time (init + conversion)"
 
   # Verification result
   - name: verification_passed
@@ -134,26 +122,6 @@ measurements:
       converter: "lambda x: x == 'PASSED'"
     required: false
     description: "Whether the factorization was correct"
-
-  # Composite measurements for hierarchical analysis
-  - name: overhead_time
-    type: float
-    composite:
-      components: [init_time, convert_time]
-      operation: sum
-    unit: s
-    required: false
-    description: "Overhead time (init + conversion)"
-
-  - name: binary_compilation_time
-    type: float
-    parser:
-      type: regex
-      pattern: 'Binary compilation time:\s+(\d+\.?\d*)'
-      group: 1
-    unit: s
-    required: false
-    description: "Time taken to compile the binary for this configuration (only available during build)"
 
 # Named experiment sets for different purposes
 experiment_sets:

@@ -30,3 +30,6 @@ logs/*
 .aider*
 applications/*/experiment/CMakeLists.txt
 applications/*/experiment/*.hash
+applications/*/experiment/results
+applications/13*/data
+*.hs

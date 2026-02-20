@@ -54,30 +54,8 @@ constraints:
     description: "Image height must be positive"
 
 # Measurement definitions
+# wall_time and max_rss_mb are standard — collected automatically by the framework.
 measurements:
-  # Wall time measurement
-  - name: wall_time
-    type: float
-    parser:
-      type: regex
-      pattern: 'Wall time:\s+(\d+\.?\d*)'
-      group: 1
-    unit: s
-    required: true
-    description: "Total wall clock execution time"
-
-  # Memory measurement (from GNU time -v output)
-  - name: max_rss_mb
-    type: float
-    parser:
-      type: regex
-      pattern: 'Maximum resident set size.*:\s+(\d+)'
-      group: 1
-      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
-    unit: MB
-    required: false
-    description: "Maximum memory usage (converted from kbytes to MB)"
-
   # Verification result
   - name: keypoints_found
     type: int

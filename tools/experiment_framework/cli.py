@@ -446,22 +446,32 @@ def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         logger.error(f"Configuration load error: {e}", exc_info=True)
         return 2
 
-    # Generate Vega-Lite plots
+    # Generate Vega-Lite plots (always — standard plots are injected by the visualizer)
     vegalite_files = []
-    if "visualization" in config and "plots" in config.get("visualization", {}):
-        try:
-            vegalite_files = generate_vegalite_json(config, results_json, results_dir)
-            print(f"  ✓ Generated {len(vegalite_files)} plot(s)")
-            logger.info(f"Generated {len(vegalite_files)} Vega-Lite files")
-        except Exception as e:
-            print(f"ERROR: Visualization generation failed: {e}", file=sys.stderr)
-            logger.error(f"Visualization error: {e}", exc_info=True)
-            return 2
+    try:
+        vegalite_files = generate_vegalite_json(config, results_json, results_dir)
+        print(f"  ✓ Generated {len(vegalite_files)} plot(s)")
+        logger.info(f"Generated {len(vegalite_files)} Vega-Lite files")
+    except Exception as e:
+        print(f"ERROR: Visualization generation failed: {e}", file=sys.stderr)
+        logger.error(f"Visualization error: {e}", exc_info=True)
+        return 2
 
     # Generate Jupyter notebook
     try:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        notebook_path = results_dir / f"analysis_{timestamp}.ipynb"
+        # Derive timestamp from results JSON so all output files share the same timestamp
+        import json as _json
+        try:
+            with open(results_json, 'r') as _f:
+                _exp_ts = _json.load(_f).get("experiment", {}).get("timestamp", "")
+            if _exp_ts:
+                # Convert ISO to filename format: 2026-02-20T08:58:44.123+00:00 → 2026-02-20T08-58-44Z
+                ts_str = _exp_ts.replace(':', '-').replace('+', 'Z').split('.')[0] + 'Z'
+            else:
+                ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        except Exception:
+            ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        notebook_path = results_dir / f"analysis_{ts_str}.ipynb"
 
         # Pass absolute paths for notebook to use
         generate_notebook(config, results_json, vegalite_files, notebook_path)

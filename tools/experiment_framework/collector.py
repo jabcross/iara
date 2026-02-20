@@ -28,6 +28,39 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Standard measurements always collected for every experiment.
+# These are injected into stdout by execute_single_run() from GNU time output,
+# so no per-app yaml configuration is required.
+STANDARD_MEASUREMENTS = [
+    {
+        "name": "wall_time",
+        "type": "float",
+        "parser": {
+            "type": "regex",
+            "pattern": r"GNU Wall time:\s+(\d+\.?\d*)",
+            "group": 1
+        },
+        "unit": "s",
+        "required": True,
+        "description": "Total wall clock execution time (from GNU time)"
+    },
+    # NOTE: no "unit" key — converter already yields MB;
+    # adding "unit": "MB" would trigger a second bytes conversion on top.
+    {
+        "name": "max_rss_mb",
+        "type": "float",
+        "parser": {
+            "type": "regex",
+            "pattern": r"Maximum resident set size.*:\s+(\d+)",
+            "group": 1,
+            "converter": "lambda x: float(x) / 1024"
+        },
+        "required": False,
+        "description": "Peak resident set size in MB"
+    }
+]
+
+
 def log_subprocess_call(
     cmd: List[str],
     cwd: Optional[Path] = None,
@@ -112,8 +145,10 @@ def execute_single_run(
             time_file_path = Path(time_file.name)
 
         try:
-            # Construct command: /usr/bin/time -v <executable>
-            cmd = ['/usr/bin/time', '-v', str(executable)]
+            # Construct command: /usr/bin/time -v -o <file> <executable>
+            # Using -o writes GNU time output to a separate file, keeping it out of
+            # the program's stderr. This mirrors the old run_instance.sh approach.
+            cmd = ['/usr/bin/time', '-v', '-o', str(time_file_path), str(executable)]
 
             logger.info(f"Executing run {run_number}/{timeout}s timeout")
             log_subprocess_call(cmd, cwd=Path.cwd(), env=env_vars if env_vars else None)
@@ -128,20 +163,24 @@ def execute_single_run(
                 cwd=executable.parent
             )
 
-            # Separate stdout (app output) from stderr (time output)
-            # GNU time writes its output to stderr
+            # stdout/stderr are now clean program output; GNU time goes to time_file_path
             stdout = result.stdout
             stderr = result.stderr
 
-            # Write time output to temp file for parsing
-            time_file_path.write_text(stderr)
-
-            # Parse GNU time output
+            # Parse GNU time output from the -o file
             gnu_time = parse_time_output(time_file_path)
 
             logger.info(f"Run {run_number} completed with return code {result.returncode}")
             logger.debug(f"Stdout length: {len(stdout)} bytes")
             logger.debug(f"GNU time data: {json.dumps(gnu_time, indent=2)}")
+
+            # Inject structured metrics into stdout so regex parsers can find them.
+            # GNU time output goes to a separate -o file, not combined_output.
+            if 'wall_time_s' in gnu_time:
+                stdout = f"GNU Wall time: {gnu_time['wall_time_s']:.6f}\n" + stdout
+            if 'max_rss_bytes' in gnu_time:
+                kbytes = gnu_time['max_rss_bytes'] // 1024
+                stdout = f"Maximum resident set size (kbytes): {kbytes}\n" + stdout
 
             return {
                 "run_number": run_number,
@@ -920,7 +959,13 @@ def collect_all_measurements(
     final_repetitions = repetitions or exec_config.get('repetitions', 5)
     final_timeout = timeout or exec_config.get('timeout', 300)
     env_vars = exec_config.get('environment', {})
-    measurements = config.get('measurements', [])
+    # Standard measurements always precede app-specific ones.
+    # Apps must not redefine wall_time or max_rss_mb in their yaml.
+    app_measurements = [
+        m for m in config.get('measurements', [])
+        if m.get('name') not in {'wall_time', 'max_rss_mb'}
+    ]
+    measurements = STANDARD_MEASUREMENTS + app_measurements
 
     logger.info(f"Execution config: repetitions={final_repetitions}, timeout={final_timeout}s")
 

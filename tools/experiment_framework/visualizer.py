@@ -67,6 +67,47 @@ TIME_SCALES = [
 ]
 
 
+def _default_plot_specs(app_name: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Standard plots generated for every app that has no visualization section.
+
+    Covers the four base measurements always collected by the framework:
+    wall_time, max_rss_mb, compilation time, and binary size by section.
+    """
+    title_prefix = app_name or "Application"
+    return {
+        "wall_time": {
+            "title": f"{title_prefix} — Wall Time",
+            "type": "grouped_bars",
+            "y_axis": {"metric": "wall_time"},
+            "x_axis": {},
+            "description": "Total wall clock execution time per instance",
+        },
+        "max_rss": {
+            "title": f"{title_prefix} — Peak Memory",
+            "type": "grouped_bars",
+            "y_axis": {"metric": "max_rss_mb"},
+            "x_axis": {},
+            "description": "Peak resident set size per instance",
+        },
+        "compilation_time": {
+            "title": f"{title_prefix} — Compilation Time",
+            "type": "grouped_bars",
+            "y_axis": {"metric": "binary_compilation_time"},
+            "x_axis": {},
+            "description": "Time to compile and link the binary",
+        },
+        "binary_size": {
+            "title": f"{title_prefix} — Binary Size Breakdown",
+            "type": "stacked_bar",
+            "y_axis": {"metric": "binary_size_breakdown"},
+            "x_axis": {},
+            "stack_by": "section",
+            "description": "Binary size split by text/data/bss sections",
+        },
+    }
+
+
 def load_plot_specs(yaml_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """
     Extract plot specifications from complete YAML config.
@@ -171,7 +212,7 @@ def translate_plotly_to_vegalite(
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "title": plotly_spec.get("title", plot_name),
         "width": 800,
-        "height": 500,
+        "height": {"step": 30},
         "data": {
             "url": "PLACEHOLDER",
             "format": {"type": "json", "property": "instances"}
@@ -263,11 +304,12 @@ def _build_grouped_bars_encoding(
         "axis": {"labelLimit": 300}
     }
 
-    # X encoding: metric value
+    # X encoding: metric value — always starts at zero (all tracked metrics are non-negative)
     x_encoding = {
         "field": _get_metric_field(metric),
         "type": "quantitative",
-        "title": _get_metric_title(metric)
+        "title": _get_metric_title(metric),
+        "scale": {"domainMin": 0}
     }
 
     # Add SI unit formatting for byte-based metrics
@@ -283,30 +325,12 @@ def _build_grouped_bars_encoding(
         "title": "Scheduler"
     }
 
-    # yOffset for grouped bars (offset bars within each group)
-    # Need to transform scheduler names to numeric offsets for proper positioning
+    # yOffset for grouped bars: use ordinal scheduler field so Vega-Lite automatically
+    # subdivides each band. With 1 scheduler it fills the full band; with N it splits equally.
     if group_param and group_param != "instance":
-        # Add transform to create numeric offset based on scheduler
-        # This ensures bars are positioned correctly within each group
-        if "transform" not in vl_spec:
-            vl_spec["transform"] = []
-
-        # Create a rank transform to assign numeric positions to each scheduler
-        vl_spec["transform"].append({
-            "window": [{"op": "rank", "as": "scheduler_rank"}],
-            "groupby": [f"parameters.{group_param}"],
-            "sort": [{"field": "parameters.scheduler"}]
-        })
-
-        # Convert rank to offset (-0.25 to +0.25 range, scaled based on rank)
-        vl_spec["transform"].append({
-            "calculate": "(datum.scheduler_rank - 2) * 0.15",
-            "as": "scheduler_offset"
-        })
-
         vl_spec["encoding"]["yOffset"] = {
-            "field": "scheduler_offset",
-            "type": "quantitative"
+            "field": "parameters.scheduler",
+            "type": "ordinal"
         }
 
     # Tooltip encoding
@@ -368,7 +392,8 @@ def _build_stacked_bar_encoding(
             "field": "value",
             "type": "quantitative",
             "title": "Binary Section Size",
-            "axis": {"format": ".2s"}
+            "axis": {"format": ".2s"},
+            "scale": {"domainMin": 0}
         }
 
         # Color encoding: section type
@@ -376,26 +401,6 @@ def _build_stacked_bar_encoding(
             "field": "section_type",
             "type": "nominal",
             "title": "Section"
-        }
-
-        # Add transform to create offsets for multiple instances within each num_blocks group
-        # This ensures each instance gets its own stacked bar
-        vl_spec["transform"].append({
-            "window": [{"op": "rank", "as": "instance_rank"}],
-            "groupby": ["parameters.num_blocks"],
-            "sort": [{"field": "short_name"}]
-        })
-
-        # Convert rank to offset for positioning multiple bars per group
-        vl_spec["transform"].append({
-            "calculate": "(datum.instance_rank - 1) * 0.25 - 0.375",
-            "as": "instance_offset"
-        })
-
-        # yOffset encoding: position each instance separately within num_blocks group
-        vl_spec["encoding"]["yOffset"] = {
-            "field": "instance_offset",
-            "type": "quantitative"
         }
     else:
         # Standard X encoding: metric value
@@ -457,23 +462,6 @@ def _build_grouped_stacked_bars_encoding(
         "axis": {"labelLimit": 300}
     }
 
-    # Add transform for numeric scheduler offsets (used for positioning bars within groups)
-    if group_param and group_param != "instance":
-        if "transform" not in vl_spec:
-            vl_spec["transform"] = []
-
-        # Create a rank transform to assign numeric positions to each scheduler
-        vl_spec["transform"].append({
-            "window": [{"op": "rank", "as": "scheduler_rank"}],
-            "groupby": [f"parameters.{group_param}"],
-            "sort": [{"field": "parameters.scheduler"}]
-        })
-
-        # Convert rank to offset (-0.25 to +0.25 range, scaled based on rank)
-        vl_spec["transform"].append({
-            "calculate": "(datum.scheduler_rank - 2) * 0.15",
-            "as": "scheduler_offset"
-        })
 
     # X encoding: metric value
     # For grouped_stacked_bars, we're often stacking measurements
@@ -538,11 +526,11 @@ def _build_grouped_stacked_bars_encoding(
             "title": "Scheduler"
         }
 
-    # yOffset for grouped bars (offset bars within each group)
+    # yOffset: ordinal scheduler field so Vega-Lite auto-subdivides the band
     if group_param and group_param != "instance":
         vl_spec["encoding"]["yOffset"] = {
-            "field": "scheduler_offset",
-            "type": "quantitative"
+            "field": "parameters.scheduler",
+            "type": "ordinal"
         }
 
     # Tooltip encoding
@@ -1145,12 +1133,10 @@ def generate_vegalite_json(
         - Missing output dir: Create it
         - File write error: Raise IOError
     """
-    # Step 1: Load plot specs
-    specs = load_plot_specs(yaml_config)
-
-    if not specs:
-        logger.info("No plot specifications found, skipping visualization generation")
-        return []
+    # Step 1: Build plot specs — standard plots always first, yaml-defined plots added on top.
+    app_name = yaml_config.get("application", {}).get("name", "")
+    specs = _default_plot_specs(app_name)
+    specs.update(load_plot_specs(yaml_config))
 
     # Step 2: Load results data (for unit conversion)
     results = {}
@@ -1175,11 +1161,13 @@ def generate_vegalite_json(
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.debug(f"Output directory: {output_dir}")
 
-    # Step 4: Get timestamp
-    timestamp = results.get("experiment", {}).get("timestamp", "")
-    if not timestamp:
-        # Generate timestamp if not in results
-        timestamp = datetime.now(timezone.utc).isoformat().replace(":", "-").split(".")[0]
+    # Step 4: Get timestamp (sanitized for use in filenames: YYYY-MM-DDTHH-MM-SSZ)
+    _raw_ts = results.get("experiment", {}).get("timestamp", "")
+    if _raw_ts:
+        # Convert ISO to filename format: 2026-02-20T08:58:44.123+00:00 → 2026-02-20T08-58-44Z
+        timestamp = _raw_ts.replace(':', '-').replace('+', 'Z').split('.')[0] + 'Z'
+    else:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
         logger.debug(f"Generated timestamp: {timestamp}")
 
     # Step 5: Initialize generated files list

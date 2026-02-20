@@ -148,6 +148,9 @@ function(iara_map_scheduler scheduler iara_opt_var runtime_backend_var scheduler
         set(SCHEDULER_FLAG "-DSCHEDULER_OMP_TASK")
     elseif("${scheduler}" STREQUAL "enkits-task")
         set(SCHEDULER_FLAG "-DSCHEDULER_ENKITS_TASK")
+    elseif("${scheduler}" STREQUAL "preesm")
+        # Preesm baseline: no iara-opt, Preesm-generated C code provides scheduling
+        set(SCHEDULER_FLAG "-DSCHEDULER_PREESM=1")
     endif()
 
     set(${iara_opt_var} ${IARA_OPT_SCHEDULER} PARENT_SCOPE)
@@ -161,7 +164,8 @@ function(iara_is_baseline_scheduler scheduler out_var)
     if("${scheduler}" STREQUAL "sequential" OR
        "${scheduler}" STREQUAL "omp-task" OR
        "${scheduler}" STREQUAL "omp-for" OR
-       "${scheduler}" STREQUAL "enkits-task")
+       "${scheduler}" STREQUAL "enkits-task" OR
+       "${scheduler}" STREQUAL "preesm")
         set(is_baseline TRUE)
     endif()
     set(${out_var} ${is_baseline} PARENT_SCOPE)
@@ -319,6 +323,21 @@ function(iara_add_application)
         elseif(APP_TEST_SRC_DIR AND EXISTS "${APP_TEST_SRC_DIR}/codegen.sh")
             set(codegen_script "${APP_TEST_SRC_DIR}/codegen.sh")
         endif()
+    endif()
+
+    # Preesm scheduler: detect preesm-codegen.sh and glob generated sources
+    if("${scheduler}" STREQUAL "preesm")
+        if(EXISTS "${APP_APP_SRC_DIR}/preesm-codegen.sh")
+            set(codegen_script "${APP_APP_SRC_DIR}/preesm-codegen.sh")
+        endif()
+
+        # Exclude IaRa main.cpp — Preesm generates its own main
+        list(FILTER cpp_sources EXCLUDE REGEX "main\\.cpp$")
+
+        # Glob Preesm-generated C files (CONFIGURE_DEPENDS triggers reconfigure
+        # when setup-* creates new files before lower-* calls cmake --build)
+        file(GLOB preesm_generated_c CONFIGURE_DEPENDS "${build_subdir}/generated/*.c")
+        list(APPEND c_sources ${preesm_generated_c})
     endif()
 
     # Always add scheduler flag (for both codegen and non-codegen applications)
@@ -544,6 +563,17 @@ function(iara_add_application)
         endforeach()
     endif()
 
+    # Preesm needs generated/ in build dir + preesm.h from Preesm repo
+    if("${scheduler}" STREQUAL "preesm")
+        list(APPEND test_include_dirs "${build_subdir}/generated")
+        # preesm.h lives in the Preesm repo's include dir
+        if(DEFINED ENV{PREESM_DEGRIDDER_REPO})
+            list(APPEND test_include_dirs "$ENV{PREESM_DEGRIDDER_REPO}/Code/include")
+        elseif(DEFINED ENV{IARA_DIR})
+            list(APPEND test_include_dirs "$ENV{IARA_DIR}/../degridder/Code/include")
+        endif()
+    endif()
+
     # Find casacore if available (for degridder application)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
@@ -747,14 +777,25 @@ function(iara_add_test_instance)
     # setup-* (only when codegen_script exists for this application)
     # --------------------------------------------------------------------------
     set(_codegen_script "")
-    foreach(_cs
-            "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/codegen.sh"
-            "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/src/codegen.sh")
-        if(EXISTS "${_cs}")
-            set(_codegen_script "${_cs}")
-            break()
-        endif()
-    endforeach()
+    if("${TEST_SCHEDULER}" STREQUAL "preesm")
+        # Preesm uses its own codegen script
+        foreach(_cs "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/preesm-codegen.sh")
+            if(EXISTS "${_cs}")
+                set(_codegen_script "${_cs}")
+                break()
+            endif()
+        endforeach()
+    else()
+        # Standard codegen.sh for IaRa and other schedulers
+        foreach(_cs
+                "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/codegen.sh"
+                "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/src/codegen.sh")
+            if(EXISTS "${_cs}")
+                set(_codegen_script "${_cs}")
+                break()
+            endif()
+        endforeach()
+    endif()
 
     if(_codegen_script)
         set(_setup_cmake "${TEST_BUILD_DIR}/setup-${instance_name}.cmake")

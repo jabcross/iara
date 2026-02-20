@@ -61,6 +61,7 @@ parameters:
       - vf-omp          # Virtual FIFO with OpenMP backend
       - vf-enkits       # Virtual FIFO with EnkiTS backend
       - vf-sequential   # Virtual FIFO without OpenMP for debugging
+      - preesm          # Preesm dataflow compiler baseline
 
 # Computed parameters (derived from SIZE, NUM_KERNEL_SUPPORT, NUM_CHUNK)
 # These replace the hardcoded _add_degridder_defines() from the old generator.py.
@@ -110,30 +111,8 @@ constraints:
     description: "Total visibilities must be divisible by chunk count"
 
 # Measurement definitions
+# wall_time and max_rss_mb are standard — collected automatically by the framework.
 measurements:
-  # Wall time measurement
-  - name: wall_time
-    type: float
-    parser:
-      type: regex
-      pattern: 'Wall time:\s+(\d+\.?\\d*)'
-      group: 1
-    unit: s
-    required: true
-    description: "Total wall clock execution time"
-
-  # Memory measurement (from GNU time -v output)
-  - name: max_rss_mb
-    type: float
-    parser:
-      type: regex
-      pattern: 'Maximum resident set size.*:\s+(\d+)'
-      group: 1
-      converter: "lambda x: float(x) / 1024"  # Convert from kbytes to MB
-    unit: MB
-    required: false
-    description: "Maximum memory usage (converted from kbytes to MB)"
-
   # Verification result (if applicable)
   - name: verification_passed
     type: bool
@@ -202,6 +181,17 @@ experiment_sets:
       scheduler: [vf-omp]
 
 
+  # IaRa vs Preesm head-to-head comparison
+  - name: vs-preesm
+    description: "Compare IaRa vf-omp vs Preesm scheduling"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1, 8]
+      NUM_CHUNK: [1]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp, preesm]
+
+
 # Execution configuration
 execution:
   # Number of times to run each configuration
@@ -254,18 +244,6 @@ visualization:
       scheduler: ordered_within_group
       error_bars: std_dev
       description: "Peak memory usage by chunk size and core count"
-
-    # Chunking effect: line plot
-    chunking_effect:
-      title: "Effect of Chunking on Performance"
-      type: line_plot
-      y_axis:
-        metric: wall_time
-      x_axis:
-        NUM_CHUNK: x_axis
-      scheduler: separate_lines
-      NUM_CORES: separate_plots
-      description: "How chunk size affects runtime for different core counts"
 
 # Output configuration
 output:

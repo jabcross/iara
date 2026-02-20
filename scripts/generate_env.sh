@@ -1,4 +1,8 @@
 #!/bin/sh
+# DEPRECATED: Environment variables are now defined directly in sorgan_env.sh.
+# This script and the .env file it generates are no longer used.
+# Regenerate the fast-startup cache with: source sorgan_env.sh && source scripts/cache-environment.sh
+exit 0
 
 cd "$(dirname "$(readlink -f "$0")")/../.."
 echo -n 'Projects dir: '

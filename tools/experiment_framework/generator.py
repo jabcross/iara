@@ -118,6 +118,8 @@ def _get_scheduler_define(scheduler: str) -> str:
             return 'SCHEDULER_OMP_TASK=1'
         else:
             return 'SCHEDULER_OMP_FOR=1'
+    elif scheduler == 'preesm':
+        return 'SCHEDULER_PREESM=1'
     else:
         # Unknown scheduler, try to infer
         logger.warning(f"Unknown scheduler '{scheduler}', assuming SCHEDULER_IARA")
