@@ -1,6 +1,7 @@
 application:
   name: 06-broadcast
   description: "Broadcast operation dataflow test"
+  app_type: regression_test
 
   sources:
     - kernels.cpp
@@ -30,14 +31,13 @@ measurements: []
 
 experiment_sets:
 
-  - name: regression
-    description: "Regression test with all schedulers"
+  - name: tests
+    description: "Tests with all schedulers"
     parameters:
       scheduler:
         - vf-sequential
         - vf-omp
         - vf-enkits
-    generate_tests: true
 
 execution:
   repetitions: 1

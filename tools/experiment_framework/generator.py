@@ -107,21 +107,21 @@ def _get_scheduler_define(scheduler: str) -> str:
         CMake define name (e.g., "SCHEDULER_IARA", "SCHEDULER_SEQUENTIAL")
     """
     if scheduler.startswith('vf-'):
-        return 'SCHEDULER_IARA'
+        return 'SCHEDULER_IARA=1'
     elif scheduler.startswith('enkits-'):
-        return 'SCHEDULER_ENKITS'
+        return 'SCHEDULER_ENKITS=1'
     elif scheduler == 'sequential':
-        return 'SCHEDULER_SEQUENTIAL'
+        return 'SCHEDULER_SEQUENTIAL=1'
     elif scheduler.startswith('omp-'):
         # Distinguish between omp-for and omp-task
         if 'task' in scheduler:
-            return 'SCHEDULER_OMP_TASK'
+            return 'SCHEDULER_OMP_TASK=1'
         else:
-            return 'SCHEDULER_OMP_FOR'
+            return 'SCHEDULER_OMP_FOR=1'
     else:
         # Unknown scheduler, try to infer
         logger.warning(f"Unknown scheduler '{scheduler}', assuming SCHEDULER_IARA")
-        return 'SCHEDULER_IARA'
+        return 'SCHEDULER_IARA=1'
 
 
 def generate_cmake_instance(
@@ -359,6 +359,8 @@ def generate_cmakelists(
         "set(PROJECT_SOURCE_DIR \"${REPO_ROOT}\")",
         "",
         "include(${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/IaRaApplications.cmake)",
+        "",
+        "enable_testing()",
         "",
     ]
 

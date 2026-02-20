@@ -6,12 +6,13 @@
 application:
   name: 08-sift
   description: "SIFT feature detection using IaRa dataflow"
+  app_type: experiment
   build:
     extra_linker_args: ["-lm"]
 
     # Compile-time defines that are always present
     defines:
-      - "VERBOSE"
+      - "VERBOSE=1"
 
 # Metadata for framework integration (environment variables, CSV columns)
 
@@ -90,10 +91,9 @@ measurements:
 
 # Experiment sets for different use cases
 experiment_sets:
-  # Regression test
-  - name: regression
-    description: "Quick regression test for SIFT with virtual FIFO schedulers"
-    generate_tests: true
+  # Standard test
+  - name: standard
+    description: "Standard SIFT test with virtual FIFO schedulers"
     parameters:
       IMAGE_WIDTH: [800]
       IMAGE_HEIGHT: [640]
@@ -102,7 +102,7 @@ experiment_sets:
   # Small scale testing
   - name: small
     description: "Small-scale experiments with quick execution"
-    generate_tests: false
+
     parameters:
       IMAGE_WIDTH: [512, 800]
       IMAGE_HEIGHT: [512, 640]
@@ -111,7 +111,7 @@ experiment_sets:
   # Full scale experiments
   - name: full
     description: "Full-scale experiments with various image sizes"
-    generate_tests: false
+
     parameters:
       IMAGE_WIDTH: [512, 768, 1024, 1536, 2048]
       IMAGE_HEIGHT: [512, 768, 1024, 1536, 2048]

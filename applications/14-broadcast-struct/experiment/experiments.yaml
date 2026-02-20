@@ -1,10 +1,10 @@
 application:
-  name: 04-multithread
-  description: "Multi-threaded dataflow test"
+  name: 14-broadcast-struct
+  description: "Regression test: broadcast of struct types (element size > pointer size)"
   app_type: regression_test
 
   sources:
-    - 04-multithread.cpp
+    - kernels.cpp
 
   build:
     extra_linker_args: []
@@ -12,8 +12,8 @@ application:
 
 
 test_naming:
-  template: "04-multithread-{scheduler}"
-  description: "Multi-thread test naming pattern"
+  template: "14-broadcast-struct-{scheduler}"
+  description: "Broadcast struct test naming pattern"
 
 parameters:
   - name: scheduler

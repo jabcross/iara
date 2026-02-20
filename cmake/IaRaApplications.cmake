@@ -697,50 +697,177 @@ function(iara_add_test_instance)
         CODEGEN_ENV ${codegen_env_list}
     )
 
-    # Create build-* custom target that forces a full rebuild
-    # This allows timing the entire compilation (not just linking) during the test
-    # We clean build artifacts to force recompilation of all source files
-    # CRITICAL: To prevent CMake from caching this target, we make it depend on a PHONY target
-    # This forces CMake to ALWAYS rebuild because the phony target never produces output
+    # ===========================================================================
+    # CTest integration — 4 independent tests per instance.
+    #
+    # Each test clears its own outputs on rerun; downstream tests do not
+    # retrigger upstream ones as long as upstream outputs already exist.
+    #
+    # Debugger-friendly tests (direct executable COMMAND):
+    #   build-*  — runs iara-opt directly → schedule.mlir
+    #   run-*    — runs a.out directly
+    #
+    # Script-wrapper tests (cmake -P):
+    #   setup-*  — runs codegen.sh (omitted when no codegen script)
+    #   lower-*  — deletes schedule.ll/schedule.o/a.out, then cmake --build
+    # ===========================================================================
 
-    # Create phony target that never completes (forces parent to always rebuild)
-    add_custom_target(${build_target_name}_phony
-        COMMAND ${CMAKE_COMMAND} -E echo "Building ${build_target_name}"
-    )
+    # Collect the iara-opt invocation used by iara_add_application so that the
+    # build-* CTest test mirrors it exactly.
+    # (Re-derive the same variables that iara_add_application uses.)
+    set(_test_scheduler "${TEST_SCHEDULER}")
+    iara_map_scheduler("${TEST_SCHEDULER}" _test_iara_opt _test_backend _test_sched_flag)
 
-    # Main build target depends on phony target, so it ALWAYS rebuilds
-    # The phony dependency ensures CMake never caches this target as "already built"
-    add_custom_target(${build_target_name}
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${TEST_BUILD_DIR}"
-        # Build the target (CMake will recompile because of phony dependency)
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${target_name}
-        DEPENDS ${build_target_name}_phony
-        VERBATIM
-    )
+    if(_test_iara_opt)
+        iara_collect_args(_test_iara_flags "IARA_FLAGS"
+            --iara-canonicalize --flatten --${_test_iara_opt}=main-actor=run)
+    else()
+        set(_test_iara_flags "")
+    endif()
 
-    # Register build-* as a CTest test
-    add_test(
-        NAME "${build_target_name}"
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${build_target_name}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    )
+    # Resolve topology input (mirrors iara_add_application logic)
+    set(_test_topology "")
+    if(DEFINED ENV{TOPOLOGY_FILE} AND NOT "$ENV{TOPOLOGY_FILE}" STREQUAL "")
+        set(_test_topology "$ENV{TOPOLOGY_FILE}")
+    elseif(EXISTS "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/topology.mlir")
+        set(_test_topology "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/topology.mlir")
+    elseif(EXISTS "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/topology.test")
+        set(_test_topology "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/topology.test")
+    else()
+        set(_test_topology "${TEST_BUILD_DIR}/topology.mlir")
+    endif()
 
-    # Set build test properties
-    set_tests_properties("${build_target_name}" PROPERTIES
-        FIXTURES_SETUP "${build_target_name}"
-        TIMEOUT 600
-    )
+    set(_iara_opt_bin "$ENV{IARA_DIR}/build/bin/iara-opt")
+    set(_schedule_mlir "${TEST_BUILD_DIR}/schedule.mlir")
+    set(_schedule_ll   "${TEST_BUILD_DIR}/schedule.ll")
+    set(_schedule_o    "${TEST_BUILD_DIR}/schedule.o")
+    set(_aout          "${TEST_BUILD_DIR}/a.out")
 
-    # Register run-* as a CTest test that depends on build-*
-    add_test(
-        NAME "${target_name}"
-        COMMAND ${target_name}
-        WORKING_DIRECTORY "${TEST_BUILD_DIR}"
-    )
+    # --------------------------------------------------------------------------
+    # setup-* (only when codegen_script exists for this application)
+    # --------------------------------------------------------------------------
+    set(_codegen_script "")
+    foreach(_cs
+            "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/codegen.sh"
+            "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/src/codegen.sh")
+        if(EXISTS "${_cs}")
+            set(_codegen_script "${_cs}")
+            break()
+        endif()
+    endforeach()
 
-    # Set run test properties (depends on build test via fixtures)
+    if(_codegen_script)
+        set(_setup_cmake "${TEST_BUILD_DIR}/setup-${instance_name}.cmake")
+        # Build the env var list for codegen (mirrors iara_add_application)
+        set(_codegen_env_str
+            "PATH_TO_APP_SOURCES=${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}"
+            "PATH_TO_TEST_SOURCES=${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}"
+            "PATH_TO_TEST_BUILD_DIR=${TEST_BUILD_DIR}"
+            "TEST_SCHEDULER=${TEST_SCHEDULER}"
+            "IARA_OPT_SCHEDULER=${_test_iara_opt}"
+            "IARA_RUNTIME_BACKEND=${_test_backend}"
+        )
+        foreach(_p ${TEST_PARAMETERS})
+            list(APPEND _codegen_env_str "${_p}")
+        endforeach()
+        foreach(_d ${TEST_DEFINES})
+            # cmake -E env requires NAME=VALUE; skip bare defines (no '=')
+            string(FIND "${_d}" "=" _eq_pos)
+            if(_eq_pos GREATER -1)
+                list(APPEND _codegen_env_str "${_d}")
+            endif()
+        endforeach()
+
+        # Join env list into semicolon-separated string for the cmake script
+        list(JOIN _codegen_env_str "\n    " _codegen_env_lines)
+
+        file(GENERATE OUTPUT "${_setup_cmake}" CONTENT
+"# Auto-generated setup script for ${instance_name}
+cmake_minimum_required(VERSION 3.20)
+execute_process(
+    COMMAND \"${CMAKE_COMMAND}\" -E env
+        ${_codegen_env_lines}
+        sh \"${_codegen_script}\"
+    WORKING_DIRECTORY \"${TEST_BUILD_DIR}\"
+    COMMAND_ERROR_IS_FATAL ANY)
+")
+        add_test(NAME "setup-${instance_name}"
+            COMMAND ${CMAKE_COMMAND} -P "${_setup_cmake}"
+            WORKING_DIRECTORY "${TEST_BUILD_DIR}")
+        set_tests_properties("setup-${instance_name}" PROPERTIES TIMEOUT 120)
+    endif()
+
+    # --------------------------------------------------------------------------
+    # build-* — direct iara-opt invocation (debugger-friendly)
+    # Only generated for IaRa schedulers that have a topology and iara-opt pass.
+    # --------------------------------------------------------------------------
+    if(_test_iara_opt AND _test_topology)
+        add_test(NAME "${build_target_name}"
+            COMMAND "${_iara_opt_bin}" ${_test_iara_flags} "${_test_topology}"
+                    -o "${_schedule_mlir}"
+            WORKING_DIRECTORY "${TEST_BUILD_DIR}")
+        set_tests_properties("${build_target_name}" PROPERTIES
+            ENVIRONMENT "IARA_DIR=$ENV{IARA_DIR};SCHEDULER_MODE=${TEST_SCHEDULER};PATH_TO_TEST_SOURCES=${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR};PATH_TO_TEST_BUILD_DIR=${TEST_BUILD_DIR}"
+            TIMEOUT 120)
+    endif()
+
+    # --------------------------------------------------------------------------
+    # lower-* — cmake -P script: delete outputs then cmake --build
+    # --------------------------------------------------------------------------
+    set(_lower_cmake "${TEST_BUILD_DIR}/lower-${instance_name}.cmake")
+    file(GENERATE OUTPUT "${_lower_cmake}" CONTENT
+"# Auto-generated lower script for ${instance_name}
+cmake_minimum_required(VERSION 3.20)
+file(REMOVE \"${_schedule_ll}\" \"${_schedule_o}\" \"${_aout}\")
+execute_process(
+    COMMAND \"${CMAKE_COMMAND}\" --build \"${CMAKE_BINARY_DIR}\"
+            --target ${target_name}
+    WORKING_DIRECTORY \"${CMAKE_BINARY_DIR}\"
+    COMMAND_ERROR_IS_FATAL ANY)
+")
+    add_test(NAME "lower-${instance_name}"
+        COMMAND ${CMAKE_COMMAND} -P "${_lower_cmake}"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+    set_tests_properties("lower-${instance_name}" PROPERTIES TIMEOUT 600)
+
+    # --------------------------------------------------------------------------
+    # run-* — direct a.out invocation (debugger-friendly)
+    # --------------------------------------------------------------------------
+    add_test(NAME "${target_name}"
+        COMMAND "${_aout}"
+        WORKING_DIRECTORY "${TEST_BUILD_DIR}")
+    set_tests_properties("${target_name}" PROPERTIES TIMEOUT 60)
+
+    # --------------------------------------------------------------------------
+    # Sequential ordering: setup- → build- → lower- → run-
+    # DEPENDS ensures tests run in order when CTest uses parallel execution
+    # (e.g. VSCode "Run All Tests" button in an instance directory).
+    # --------------------------------------------------------------------------
+    if(_codegen_script AND _test_iara_opt AND _test_topology)
+        set_tests_properties("${build_target_name}" PROPERTIES
+            DEPENDS "setup-${instance_name}")
+    endif()
+    if(_test_iara_opt AND _test_topology)
+        set_tests_properties("lower-${instance_name}" PROPERTIES
+            DEPENDS "${build_target_name}")
+    elseif(_codegen_script)
+        set_tests_properties("lower-${instance_name}" PROPERTIES
+            DEPENDS "setup-${instance_name}")
+    endif()
     set_tests_properties("${target_name}" PROPERTIES
-        FIXTURES_REQUIRED "${build_target_name}"
-    )
+        DEPENDS "lower-${instance_name}")
+
+    # --------------------------------------------------------------------------
+    # Hierarchical LABELS for VSCode CTest tree: app/instance
+    # --------------------------------------------------------------------------
+    set(_test_label "${TEST_ENTRY}/${instance_name}")
+    if(_codegen_script)
+        set_tests_properties("setup-${instance_name}" PROPERTIES LABELS "${_test_label}")
+    endif()
+    if(_test_iara_opt AND _test_topology)
+        set_tests_properties("${build_target_name}" PROPERTIES LABELS "${_test_label}")
+    endif()
+    set_tests_properties("lower-${instance_name}" PROPERTIES LABELS "${_test_label}")
+    set_tests_properties("${target_name}" PROPERTIES LABELS "${_test_label}")
 
 endfunction()

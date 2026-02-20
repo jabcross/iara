@@ -6,11 +6,12 @@
 application:
   name: 05-cholesky
   description: "Block-based Cholesky decomposition using BLAS/LAPACK"
+  app_type: experiment
   build:
     extra_linker_args: ["-lopenblas"]
 
     defines:
-      - "VERBOSE"
+      - "VERBOSE=1"
 
 
 parameters:
@@ -156,14 +157,13 @@ measurements:
 
 # Named experiment sets for different purposes
 experiment_sets:
-  # Regression test
-  - name: regression
-    description: "Comprehensive regression test with multiple schedulers and parameters"
+  # Comprehensive test
+  - name: comprehensive
+    description: "Comprehensive test with multiple schedulers and parameters"
     parameters:
       MATRIX_SIZE: [2048, 4096]
       NUM_BLOCKS: [1, 2, 4]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
-    generate_tests: true  # Generate CTest instances for regression testing
 
   # Baseline comparison (non-IaRa schedulers)
   - name: baseline
@@ -172,7 +172,7 @@ experiment_sets:
       MATRIX_SIZE: [5040, 10080, 15120]
       NUM_BLOCKS: [4, 8, 12]
       scheduler: [sequential, omp-for, omp-task, enkits-task]
-    generate_tests: false
+
 
   # IaRa scheduler evaluation
   - name: iara
@@ -181,7 +181,7 @@ experiment_sets:
       MATRIX_SIZE: [5040, 10080, 15120]
       NUM_BLOCKS: [4, 8, 12]
       scheduler: [vf-omp, vf-enkits]
-    generate_tests: false
+
 
   # Scaling study
   - name: scaling
@@ -190,7 +190,7 @@ experiment_sets:
       MATRIX_SIZE: [20160]  # Fixed size, vary blocks
       NUM_BLOCKS: [4, 6, 8, 10, 12, 14, 16, 18, 20]
       scheduler: [sequential, omp-task, vf-omp]
-    generate_tests: false
+
 
   # Full comparison
   - name: all_schedulers
@@ -199,7 +199,7 @@ experiment_sets:
       MATRIX_SIZE: [10080]
       NUM_BLOCKS: [4]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-omp, vf-enkits]
-    generate_tests: false
+
 
   # Compact comparison with small values
   - name: compact_schedulers
@@ -208,7 +208,7 @@ experiment_sets:
       MATRIX_SIZE: [2048, 4096]
       NUM_BLOCKS: [2, 4]
       scheduler: [sequential, omp-task, vf-omp]
-    generate_tests: false
+
 
   # Quick test with single virtual FIFO instance
   - name: quick
@@ -217,7 +217,7 @@ experiment_sets:
       MATRIX_SIZE: [2048]
       NUM_BLOCKS: [2]
       scheduler: [vf-omp]
-    generate_tests: false
+
 
 # Execution configuration
 execution:

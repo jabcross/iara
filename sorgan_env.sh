@@ -27,3 +27,8 @@ else
 fi
 
 source "$IARA_DIR/.env"
+
+# Tab completion for the experiment framework CLI
+if command -v register-python-argcomplete &>/dev/null; then
+  eval "$(register-python-argcomplete "python3 -m tools.experiment_framework")"
+fi

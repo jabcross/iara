@@ -6,6 +6,7 @@
 application:
   name: 13-degridder
   description: "Radio Astronomy Degridding using IaRa dataflow"
+  app_type: experiment
   build:
     # Linker args: casacore libraries from pkg-config, math library, FFTW
     extra_linker_args: ["-lm", "-lcasa_casa", "-lcasa_tables", "-lcasa_scimath",
@@ -13,7 +14,7 @@ application:
 
     # Compile-time constants - fixed for all degridder instances
     defines:
-      - "VERBOSE"
+      - "VERBOSE=1"
       # Fixed radio astronomy parameters
       - "NUM_KERNELS=17"                   # Number of W-projection kernels (fixed)
       - "OVERSAMPLING_FACTOR=16"           # FFT oversampling factor (fixed)
@@ -147,16 +148,15 @@ measurements:
 
 # Named experiment sets for different purposes
 experiment_sets:
-  # Regression test
-  - name: regression
-    description: "Quick test for regression testing"
+  # Quick test
+  - name: quick
+    description: "Quick test for debugging"
     parameters:
       SIZE: [small]
       NUM_CORES: [1]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp]
-    generate_tests: true
 
   # Sequential debug test
   - name: debug-sequential
@@ -167,7 +167,7 @@ experiment_sets:
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-sequential]
-    generate_tests: true
+
 
   # Small scale testing
   - name: small
@@ -178,7 +178,7 @@ experiment_sets:
       NUM_CHUNK: [1, 8, 32]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, vf-enkits]
-    generate_tests: false
+
 
   # Full scale experiments
   - name: full
@@ -189,7 +189,7 @@ experiment_sets:
       NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, vf-enkits]
-    generate_tests: false
+
 
   # Chunking study
   - name: chunking
@@ -200,7 +200,7 @@ experiment_sets:
       NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp]
-    generate_tests: false
+
 
 # Execution configuration
 execution:

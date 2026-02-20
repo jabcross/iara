@@ -644,23 +644,21 @@ def build_instance(
         logger.info("CMake configuration successful")
         logger.debug(f"CMake output: {result.stdout[:200]}")
 
-        # Step 3: Build
-        logger.info(f"Building {instance_name}")
-        cmake_build_cmd = [
-            'cmake',
-            '--build', str(build_dir),
-            '--config', 'Release',
-            '--',
-            '-j1'
+        # Step 3: Build via CTest (mirrors clicking "play" in VSCode Testing sidebar)
+        logger.info(f"Running CTest for {instance_name}")
+        ctest_cmd = [
+            'ctest',
+            '--test-dir', str(build_dir),
+            '--output-on-failure',
         ]
 
-        log_subprocess_call(cmake_build_cmd, cwd=Path.cwd())
+        log_subprocess_call(ctest_cmd, cwd=Path.cwd())
 
         # Time the build command
         import time
         build_start_time = time.time()
         result = subprocess.run(
-            cmake_build_cmd,
+            ctest_cmd,
             capture_output=True,
             text=True,
             timeout=600

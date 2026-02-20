@@ -112,10 +112,20 @@ LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(NodeOp broadcast) {
 
   auto src = body->getArgument(0);
 
+  // Determine whether output[0] is inout (reuses input buffer, no copy arg
+  // generated for it). If so, copy outputs start at outputs[1].
+  bool has_inout = !broadcast.getInout().empty() &&
+                   getTypeSize(outputs.front()) == getTypeSize(input);
+  size_t output_start = has_inout ? 1 : 0;
+
   for (auto [i, argument] :
        llvm::enumerate(body->getArguments().drop_front(1))) {
 
-    int num_copies = getTypeSize(argument) / getTypeSize(input);
+    // Use the broadcast output Value's type size, not the opaque-pointer
+    // argument size. getTypeSize(!llvm.ptr) == 8, which causes integer
+    // division to zero for any output type larger than 8 bytes.
+    size_t num_copies =
+        getTypeSize(outputs[output_start + i]) / getTypeSize(input);
 
     for (auto offset = 0; offset < num_copies; offset++) {
       Value dst = argument;

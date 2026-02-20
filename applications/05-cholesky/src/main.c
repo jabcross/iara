@@ -538,7 +538,7 @@ int main(int argc, char *argv[]) {
   convert_to_linear(inout_matrix_blocked, output_matrix_linear);
 
   printf("Blocked cholesky output:\n");
-  print_matrix(output_matrix_linear);
+  // print_matrix(output_matrix_linear);
 
   printf("Initialization time: %lf s\n", init_time);
   printf("Block conversion time: %lf s\n", convert_time);

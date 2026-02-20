@@ -11,6 +11,22 @@ This module provides the argparse scaffolding for all CLI commands:
 Command logic is deferred to Phase 5.
 """
 
+# Allow direct invocation (python3 cli.py ...) in addition to module invocation
+# (python3 -m tools.experiment_framework ...) by fixing up __package__ so that
+# relative imports inside the lazy-imported helper functions resolve correctly.
+if __name__ == "__main__" and __package__ is None:
+    import sys as _sys
+    from pathlib import Path as _Path
+    _pkg_root = str(_Path(__file__).resolve().parent.parent.parent)
+    if _pkg_root not in _sys.path:
+        _sys.path.insert(0, _pkg_root)
+    __package__ = "tools.experiment_framework"
+
+try:
+    import argcomplete
+    _ARGCOMPLETE = True
+except ImportError:
+    _ARGCOMPLETE = False
 import argparse
 import logging
 import subprocess
@@ -377,7 +393,8 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
     return 0
 
 
-def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
+def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
+                  results_json_path: Optional[Path] = None) -> int:
     """
     Run Phase 4: Generate visualizations and notebook.
 
@@ -386,6 +403,7 @@ def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int
         exp_set: Experiment set name
         app_dir: Application experiment directory
         yaml_path: Path to experiments.yaml
+        results_json_path: Explicit results JSON path (optional; defaults to latest in results/)
 
     Returns:
         0 on success, 2 on critical error
@@ -399,19 +417,25 @@ def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int
 
     results_dir = app_dir / "results"
 
-    # Find most recent results JSON
-    if not results_dir.exists():
-        print(f"ERROR: Results directory not found: {results_dir}", file=sys.stderr)
-        logger.error(f"Results directory not found: {results_dir}")
-        return 2
+    # Resolve results JSON path
+    if results_json_path is not None:
+        if not results_json_path.exists():
+            print(f"ERROR: Specified results file not found: {results_json_path}", file=sys.stderr)
+            logger.error(f"Results file not found: {results_json_path}")
+            return 2
+        results_json = results_json_path
+    else:
+        if not results_dir.exists():
+            print(f"ERROR: Results directory not found: {results_dir}", file=sys.stderr)
+            logger.error(f"Results directory not found: {results_dir}")
+            return 2
+        json_files = sorted(results_dir.glob("results_*.json"))
+        if not json_files:
+            print(f"ERROR: No results found in {results_dir}", file=sys.stderr)
+            logger.error("No results JSON files found")
+            return 2
+        results_json = json_files[-1]
 
-    json_files = sorted(results_dir.glob("results_*.json"))
-    if not json_files:
-        print(f"ERROR: No results found in {results_dir}", file=sys.stderr)
-        logger.error("No results JSON files found")
-        return 2
-
-    results_json = json_files[-1]
     logger.info(f"Using results file: {results_json}")
 
     # Load configuration
@@ -510,6 +534,101 @@ def validate_hash(yaml_path: Path, app_dir: Path) -> int:
         return 2
 
 
+def _iter_app_sets(app_type_filter: str, set_filter: Optional[str] = None):
+    """Yield (app_name, set_name, exp_dir, yaml_path) for all apps matching app_type_filter."""
+    from .config import load_experiments_yaml, ConfigError
+    apps_dir = Path("applications")
+    if not apps_dir.exists():
+        return
+    for app_dir in sorted(apps_dir.iterdir()):
+        if not app_dir.is_dir():
+            continue
+        yaml_path = app_dir / "experiment" / "experiments.yaml"
+        if not yaml_path.exists():
+            continue
+        try:
+            config = load_experiments_yaml(yaml_path)
+        except ConfigError as e:
+            print(f"WARNING: Skipping {app_dir.name}: {e}", file=sys.stderr)
+            continue
+        if config.get("application", {}).get("app_type", "") != app_type_filter:
+            continue
+        exp_dir = app_dir / "experiment"
+        for exp_set in config.get("experiment_sets", []):
+            set_name = exp_set["name"]
+            if set_filter and set_name != set_filter:
+                continue
+            yield app_dir.name, set_name, exp_dir, yaml_path
+
+
+def _batch_summary(results: list) -> int:
+    """Print pass/fail summary. Returns 0 if all passed, 1 if any failed."""
+    if not results:
+        print("No matching apps/sets found.", file=sys.stderr)
+        return 1
+    passed = sum(1 for _, _, rc in results if rc == 0)
+    failed = sum(1 for _, _, rc in results if rc != 0)
+    print("\n=== Summary ===")
+    for app_name, set_name, rc in results:
+        status = "PASS" if rc == 0 else "FAIL"
+        print(f"  [{status}] {app_name} / {set_name}")
+    print(f"\n{passed} passed, {failed} failed")
+    return 0 if failed == 0 else 1
+
+
+def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) -> int:
+    """Run the full pipeline (generate→build→execute→visualize) for one (app, set)."""
+    onetime_script = Path("applications") / app / "onetime.sh"
+    if onetime_script.exists():
+        try:
+            subprocess.run(["sh", str(onetime_script)], check=True)
+        except subprocess.CalledProcessError as e:
+            logging.getLogger(__name__).error(f"One-time setup script failed: {e}")
+            return 2
+
+    if not args.skip_generate:
+        rc = run_generate(app, exp_set, app_dir, yaml_path)
+        if rc != 0:
+            return rc
+    else:
+        rc = validate_hash(yaml_path, app_dir)
+        if rc != 0:
+            return rc
+
+    if not args.skip_build:
+        rc = run_build(app, exp_set, app_dir, yaml_path)
+        if rc == 2:
+            return 2
+
+    if not args.skip_execute:
+        rc = run_execute(app, exp_set, app_dir, yaml_path)
+        if rc == 2:
+            return 2
+
+    return run_visualize(app, exp_set, app_dir, yaml_path)
+
+
+def _list_available_apps() -> list:
+    """Return sorted list of application names that have experiments.yaml."""
+    apps_dir = Path("applications")
+    if not apps_dir.exists():
+        return []
+    return sorted(
+        d.name for d in apps_dir.iterdir()
+        if d.is_dir() and (d / "experiment" / "experiments.yaml").exists()
+    )
+
+
+def _list_available_sets(yaml_path: Path) -> list:
+    """Return list of experiment set names from a YAML config file."""
+    try:
+        from .config import load_experiments_yaml
+        config = load_experiments_yaml(yaml_path)
+        return [s["name"] for s in config.get("experiment_sets", [])]
+    except Exception:
+        return []
+
+
 def main() -> int:
     """
     Main entry point for the CLI.
@@ -563,7 +682,7 @@ def main() -> int:
     generate_parser.add_argument(
         "--app",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Application name (e.g., '05-cholesky')",
     )
@@ -571,9 +690,16 @@ def main() -> int:
     generate_parser.add_argument(
         "--set",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Experiment set name (e.g., 'regression')",
+    )
+
+    generate_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
     # ============================================================================
@@ -587,7 +713,7 @@ def main() -> int:
     build_parser.add_argument(
         "--app",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Application name (e.g., '05-cholesky')",
     )
@@ -595,9 +721,16 @@ def main() -> int:
     build_parser.add_argument(
         "--set",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Experiment set name (e.g., 'regression')",
+    )
+
+    build_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
     build_parser.add_argument(
@@ -619,7 +752,7 @@ def main() -> int:
     execute_parser.add_argument(
         "--app",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Application name (e.g., '05-cholesky')",
     )
@@ -627,9 +760,16 @@ def main() -> int:
     execute_parser.add_argument(
         "--set",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Experiment set name (e.g., 'regression')",
+    )
+
+    execute_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
     execute_parser.add_argument(
@@ -657,7 +797,7 @@ def main() -> int:
     visualize_parser.add_argument(
         "--app",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Application name (e.g., '05-cholesky')",
     )
@@ -665,9 +805,16 @@ def main() -> int:
     visualize_parser.add_argument(
         "--set",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Experiment set name (e.g., 'regression')",
+    )
+
+    visualize_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
     visualize_parser.add_argument(
@@ -675,6 +822,22 @@ def main() -> int:
         type=str,
         metavar="PATH",
         help="Path to results JSON file (default: latest in results/)",
+    )
+
+    # ============================================================================
+    # clean command
+    # ============================================================================
+    clean_parser = subparsers.add_parser(
+        "clean",
+        help="Delete all built instances (build_experiments/)",
+    )
+
+    clean_parser.add_argument(
+        "--app",
+        type=str,
+        nargs="?",
+        metavar="NAME",
+        help="Limit to a specific application (default: all apps)",
     )
 
     # ============================================================================
@@ -688,7 +851,7 @@ def main() -> int:
     run_parser.add_argument(
         "--app",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Application name (e.g., '05-cholesky')",
     )
@@ -696,9 +859,16 @@ def main() -> int:
     run_parser.add_argument(
         "--set",
         type=str,
-        required=True,
+        nargs="?",
         metavar="NAME",
         help="Experiment set name (e.g., 'regression')",
+    )
+
+    run_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
     run_parser.add_argument(
@@ -718,6 +888,27 @@ def main() -> int:
         action="store_true",
         help="Use existing measurements (skip execution)",
     )
+
+    # Register completers and activate argcomplete (no-op if not installed)
+    if _ARGCOMPLETE:
+        def _app_completer(prefix, **kw):
+            return _list_available_apps()
+
+        def _set_completer(prefix, parsed_args, **kw):
+            app = getattr(parsed_args, 'app', None)
+            if not app:
+                return []
+            return _list_available_sets(
+                Path("applications") / app / "experiment" / "experiments.yaml")
+
+        for _sp in [generate_parser, build_parser, execute_parser, visualize_parser, run_parser, clean_parser]:
+            for _action in _sp._actions:
+                if _action.dest == 'app':
+                    _action.completer = _app_completer
+                elif _action.dest == 'set':
+                    _action.completer = _set_completer
+
+        argcomplete.autocomplete(parser)
 
     # Parse arguments
     args = parser.parse_args()
@@ -740,27 +931,71 @@ def main() -> int:
     logger.info(f"Command: {args.command}")
 
     # ============================================================================
+    # Validate --app and --set for commands that require them
+    # ============================================================================
+    if args.command in ("generate", "build", "execute", "visualize", "run"):
+        app_type = getattr(args, 'app_type', None)
+
+        if args.app and app_type:
+            print("ERROR: --app and --app_type are mutually exclusive.", file=sys.stderr)
+            return 2
+
+        if not app_type:
+            # Single app/set mode — validate app and set
+            if not args.app:
+                available = _list_available_apps()
+                print("Available applications:", file=sys.stderr)
+                for a in available:
+                    print(f"  {a}", file=sys.stderr)
+                return 2
+
+            _yaml_path = Path("applications") / args.app / "experiment" / "experiments.yaml"
+            if not _yaml_path.exists():
+                print(f"ERROR: Application '{args.app}' not found.", file=sys.stderr)
+                available = _list_available_apps()
+                if available:
+                    print("Available applications:", file=sys.stderr)
+                    for a in available:
+                        print(f"  {a}", file=sys.stderr)
+                return 2
+
+            available_sets = _list_available_sets(_yaml_path)
+            if not args.set:
+                print(f"Available sets for '{args.app}':", file=sys.stderr)
+                for s in available_sets:
+                    print(f"  {s}", file=sys.stderr)
+                return 2
+
+            if args.set not in available_sets:
+                print(f"ERROR: Experiment set '{args.set}' not found in '{args.app}'.", file=sys.stderr)
+                if available_sets:
+                    print("Available sets:", file=sys.stderr)
+                    for s in available_sets:
+                        print(f"  {s}", file=sys.stderr)
+                return 2
+
+    # ============================================================================
     # generate command
     # ============================================================================
     if args.command == "generate":
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = run_generate(app_name, set_name, exp_dir, yaml_path)
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
+
         logger.info(f"Application: {args.app}")
         logger.info(f"Experiment set: {args.set}")
 
         from .generator import generate_cmakelists
         from .config import ConfigError
 
-        # Construct paths
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
         output_path = app_dir / "CMakeLists.txt"
 
-        # Validate YAML file exists
-        if not yaml_path.exists():
-            print(f"ERROR: Application '{args.app}' not found at applications/{args.app}/experiment/experiments.yaml", file=sys.stderr)
-            logger.error(f"YAML file not found: {yaml_path}")
-            return 2
-
-        # Generate CMakeLists.txt
         try:
             count = generate_cmakelists(yaml_path, output_path, args.set)
             print(f"Generated {count} instances in {output_path}")
@@ -779,362 +1014,114 @@ def main() -> int:
     # build command
     # ============================================================================
     if args.command == "build":
-        # Validate required arguments
-        if not args.app or not args.set:
-            print("ERROR: --app and --set are required for build command", file=sys.stderr)
-            return 2
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = run_build(app_name, set_name, exp_dir, yaml_path)
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
 
         logger.info(f"Phase 2: Build - App: {args.app}, Set: {args.set}")
-
-        # Construct paths
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
-
-        # Call run_build which handles all build logic
-        exit_code = run_build(args.app, args.set, app_dir, yaml_path)
-        return exit_code
+        return run_build(args.app, args.set, app_dir, yaml_path)
 
     # ============================================================================
     # execute command
     # ============================================================================
     if args.command == "execute":
-        # Validate required arguments
-        if not args.app or not args.set:
-            print("ERROR: --app and --set are required for execute command", file=sys.stderr)
-            return 2
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = run_execute(app_name, set_name, exp_dir, yaml_path,
+                                 repetitions=getattr(args, 'repetitions', None),
+                                 timeout=getattr(args, 'timeout', None))
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
 
         logger.info(f"Phase 3: Execute - App: {args.app}, Set: {args.set}")
-
-        # Import required Phase 3 functions
-        from .collector import collect_all_measurements
-        from .builder import read_build_results, update_instance_execution, write_build_results
-        from .config import load_experiments_yaml, ConfigError
-        from datetime import datetime, timezone
-
-        # Construct paths
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
-        results_dir = app_dir / "results"
-
-        # Verify build results exist
-        if not results_dir.exists():
-            print(f"ERROR: Build results not found at {results_dir}", file=sys.stderr)
-            print(f"       Run 'python3 -m tools.experiment_framework build --app {args.app} --set {args.set}' first", file=sys.stderr)
-            logger.error(f"Results directory {results_dir} does not exist")
-            return 2
-
-        # Find most recent results JSON
-        json_files = sorted(results_dir.glob("results_*.json"))
-        if not json_files:
-            print(f"ERROR: No build results JSON found in {results_dir}", file=sys.stderr)
-            print("       Run the build command first", file=sys.stderr)
-            logger.error("No results JSON files found")
-            return 2
-
-        latest_json = json_files[-1]
-        logger.info(f"Using results file: {latest_json}")
-
-        # Load configuration and build results
-        try:
-            config = load_experiments_yaml(yaml_path)
-            build_results_obj = read_build_results(latest_json)
-
-            # Convert BuildResults object to dict for collect_all_measurements
-            build_results_dict = {
-                'successful_instances': [
-                    {
-                        'instance_name': inst.instance_name,
-                        'compilation': inst.compilation,
-                        'binary_size_bytes': inst.binary_size_bytes,
-                        'executable_path': inst.executable_path,
-                        'execution': inst.execution
-                    }
-                    for inst in build_results_obj.successful_instances
-                ],
-                'failed_instances': [
-                    {
-                        'instance_name': inst.instance_name,
-                        'errors': inst.errors
-                    }
-                    for inst in build_results_obj.failed_instances
-                ]
-            }
-
-            # Debug: Log the structure being passed to collector
-            logger.debug(f"build_results_dict structure: {len(build_results_dict['successful_instances'])} successful instances")
-            for inst_dict in build_results_dict['successful_instances']:
-                logger.debug(f"  Instance '{inst_dict['instance_name']}': executable_path={inst_dict.get('executable_path')}")
-
-        except ConfigError as e:
-            print(f"ERROR: Configuration/results loading failed: {e}", file=sys.stderr)
-            logger.error(f"Failed to load config/results: {e}", exc_info=True)
-            return 2
-        except Exception as e:
-            print(f"ERROR: Unexpected error loading config/results: {e}", file=sys.stderr)
-            logger.error(f"Unexpected error: {e}", exc_info=True)
-            return 2
-
-        # Check for successful builds to execute
-        if not build_results_obj.successful_instances:
-            print("ERROR: No successful builds found - nothing to execute", file=sys.stderr)
-            logger.warning("No successful instances to execute")
-            return 2
-
-        print(f"Executing {len(build_results_obj.successful_instances)} instances...")
-        logger.info(f"Starting Phase 3 execution of {len(build_results_obj.successful_instances)} instances")
-
-        # Execute all instances
-        try:
-            # Use CLI args if provided, otherwise from YAML config
-            repetitions = args.repetitions if hasattr(args, 'repetitions') and args.repetitions else None
-            timeout = args.timeout if hasattr(args, 'timeout') and args.timeout else None
-
-            collection_results = collect_all_measurements(
-                build_results_dict,
-                config,
-                repetitions=repetitions,
-                timeout=timeout
-            )
-
-        except KeyboardInterrupt:
-            print("\nExecution interrupted by user", file=sys.stderr)
-            logger.warning("Execution interrupted")
-            return 1
-        except Exception as e:
-            print(f"ERROR: Execution failed: {e}", file=sys.stderr)
-            logger.error(f"Execution error: {e}", exc_info=True)
-            return 2
-
-        # Update build results with execution data
-        updated_count = 0
-        for exec_result in collection_results['execution_results']:
-            instance_name = exec_result['instance_name']
-            try:
-                update_instance_execution(build_results_obj, instance_name, exec_result)
-                updated_count += 1
-            except ValueError as e:
-                logger.warning(f"Could not update instance {instance_name}: {e}")
-
-        logger.info(f"Updated {updated_count} instances with execution data")
-
-        # Write updated results back to JSON
-        try:
-            output_file = write_build_results(
-                build_results_obj,
-                results_dir,
-                config,
-                args.set,
-                app_dir
-            )
-
-            print(f"\nExecution complete!")
-            print(f"  Results updated in: {output_file}")
-            logger.info(f"Results written to {output_file}")
-
-            # Print summary statistics
-            summary = collection_results['summary']
-            print(f"\nSummary:")
-            print(f"  Executed:  {summary['executed']} instances")
-            if summary['skipped'] > 0:
-                print(f"  Skipped:   {summary['skipped']} instances")
-            if summary['errors'] > 0:
-                print(f"  Errors:    {summary['errors']} instances")
-
-            # Show measurement counts
-            if collection_results['execution_results']:
-                first_result = collection_results['execution_results'][0]
-                meas_count = len(first_result['runs'][0].get('measurements', {})) if first_result['runs'] else 0
-                print(f"  Measurements per run: {meas_count}")
-
-            return 0 if summary['errors'] == 0 else 1
-
-        except Exception as e:
-            print(f"ERROR: Failed to write results: {e}", file=sys.stderr)
-            logger.error(f"Write error: {e}", exc_info=True)
-            return 2
+        return run_execute(args.app, args.set, app_dir, yaml_path,
+                           repetitions=getattr(args, 'repetitions', None),
+                           timeout=getattr(args, 'timeout', None))
 
     # ============================================================================
     # visualize command
     # ============================================================================
     if args.command == "visualize":
-        # Validate required arguments
-        if not args.app or not args.set:
-            print("ERROR: --app and --set are required for visualize command", file=sys.stderr)
-            return 2
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = run_visualize(app_name, set_name, exp_dir, yaml_path)
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
 
         logger.info(f"Phase 4: Visualize - App: {args.app}, Set: {args.set}")
-
-        # Import required Phase 4 functions
-        from .visualizer import generate_vegalite_json
-        from .notebook import generate_notebook, execute_notebook
-        from .config import load_experiments_yaml, ConfigError
-        from datetime import datetime, timezone
-
-        # Construct paths (use absolute paths for notebook generation)
         app_dir = Path("applications").resolve() / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
-        results_dir = app_dir / "results"
-
-        # Verify results directory exists
-        if not results_dir.exists():
-            print(f"ERROR: Results directory not found at {results_dir}", file=sys.stderr)
-            print(f"       Run 'python3 -m tools.experiment_framework execute --app {args.app} --set {args.set}' first", file=sys.stderr)
-            logger.error(f"Results directory {results_dir} does not exist")
-            return 2
-
-        # Find most recent results JSON or use specified path
-        if args.results:
-            results_json = Path(args.results)
-            if not results_json.exists():
-                print(f"ERROR: Specified results file not found: {args.results}", file=sys.stderr)
-                return 2
-        else:
-            json_files = sorted(results_dir.glob("results_*.json"))
-            if not json_files:
-                print(f"ERROR: No results JSON found in {results_dir}", file=sys.stderr)
-                print("       Run the execute command first", file=sys.stderr)
-                logger.error("No results JSON files found")
-                return 2
-            results_json = json_files[-1]
-
-        logger.info(f"Using results file: {results_json}")
-
-        # Load configuration
-        try:
-            config = load_experiments_yaml(yaml_path)
-        except ConfigError as e:
-            print(f"ERROR: Configuration loading failed: {e}", file=sys.stderr)
-            logger.error(f"Failed to load config: {e}", exc_info=True)
-            return 2
-        except Exception as e:
-            print(f"ERROR: Unexpected error loading config: {e}", file=sys.stderr)
-            logger.error(f"Unexpected error: {e}", exc_info=True)
-            return 2
-
-        # Check if visualization config exists
-        if "visualization" not in config or "plots" not in config.get("visualization", {}):
-            print("WARNING: No visualization configuration found in YAML", file=sys.stderr)
-            print("         Skipping plot generation", file=sys.stderr)
-            logger.warning("No visualization.plots section in config")
-            vegalite_files = []
-        else:
-            # Generate Vega-Lite plots
-            print("Generating Vega-Lite visualizations...")
-            try:
-                vegalite_files = generate_vegalite_json(config, results_json, results_dir)
-                print(f"  Generated {len(vegalite_files)} plot(s)")
-                logger.info(f"Generated {len(vegalite_files)} Vega-Lite files")
-            except Exception as e:
-                print(f"ERROR: Visualization generation failed: {e}", file=sys.stderr)
-                logger.error(f"Visualization error: {e}", exc_info=True)
-                return 2
-
-        # Generate Jupyter notebook
-        print("Generating Jupyter notebook...")
-        try:
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            notebook_path = results_dir / f"analysis_{timestamp}.ipynb"
-
-            # Pass absolute paths for notebook to use
-            generate_notebook(config, results_json, vegalite_files, notebook_path)
-            print(f"  Notebook created: {notebook_path}")
-            logger.info(f"Generated notebook: {notebook_path}")
-        except Exception as e:
-            print(f"ERROR: Notebook generation failed: {e}", file=sys.stderr)
-            logger.error(f"Notebook generation error: {e}", exc_info=True)
-            return 2
-
-        # Execute notebook (unless skipped)
-        skip_execution = hasattr(args, 'skip_notebook_execution') and args.skip_notebook_execution
-        if not skip_execution:
-            print("Executing notebook...")
-            try:
-                execute_notebook(notebook_path)
-                print(f"  Notebook executed successfully")
-                logger.info("Notebook execution completed")
-            except FileNotFoundError as e:
-                print(f"WARNING: {e}", file=sys.stderr)
-                print(f"         Notebook generated but not executed: {notebook_path}", file=sys.stderr)
-                logger.warning(f"Jupyter not available: {e}")
-                return 1
-            except Exception as e:
-                print(f"WARNING: Notebook execution failed: {e}", file=sys.stderr)
-                print(f"         Notebook generated but not executed: {notebook_path}", file=sys.stderr)
-                logger.error(f"Notebook execution error: {e}", exc_info=True)
-                return 1
-
-        print("\nVisualization complete!")
-        print(f"  Results: {results_json}")
-        print(f"  Notebook: {notebook_path}")
-        if vegalite_files:
-            print(f"  Plots: {len(vegalite_files)} Vega-Lite JSON files in {results_dir}")
-
-        return 0
+        results_path = Path(args.results) if getattr(args, 'results', None) else None
+        return run_visualize(args.app, args.set, app_dir, yaml_path, results_json_path=results_path)
 
     # ============================================================================
     # run command (orchestrator)
     # ============================================================================
     if args.command == "run":
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = _run_pipeline(app_name, set_name, exp_dir, yaml_path, args)
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
+
         logger.info(f"Running full pipeline for {args.app}/{args.set}")
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
+        rc = _run_pipeline(args.app, args.set, app_dir, yaml_path, args)
+        if rc == 0:
+            print("\n" + "="*60)
+            print("PIPELINE COMPLETE")
+            print("="*60)
+            print(f"Application: {args.app}")
+            print(f"Experiment Set: {args.set}")
+            print(f"Results: {app_dir / 'results'}")
+        return rc
 
-        # Run one-time setup script if it exists
-        onetime_script = Path("applications") / args.app / "onetime.sh"
-        if onetime_script.exists():
-            logger.info(f"Executing one-time setup script: {onetime_script}")
-            try:
-                subprocess.run(["sh", str(onetime_script)], check=True)
-            except subprocess.CalledProcessError as e:
-                logger.error(f"One-time setup script failed: {e}")
-                return 2
-        
-        # Phase 1: Generate (conditional)
-        if not args.skip_generate:
-            logger.info("Phase 1: Generating CMakeLists.txt...")
-            exit_code = run_generate(args.app, args.set, app_dir, yaml_path)
-            if exit_code != 0:
-                return exit_code
+    # ============================================================================
+    # clean command
+    # ============================================================================
+    if args.command == "clean":
+        import shutil
+        build_root = Path("build_experiments")
+        if not build_root.exists():
+            print("Nothing to clean (build_experiments/ does not exist).")
+            return 0
+
+        app = getattr(args, 'app', None)
+        if app:
+            target = build_root / app
+            if not target.exists():
+                print(f"Nothing to clean for '{app}' ({target} does not exist).")
+                return 0
         else:
-            logger.info("Phase 1: Skipped (--skip-generate)")
-            # Validate hash
-            exit_code = validate_hash(yaml_path, app_dir)
-            if exit_code != 0:
-                return exit_code
+            target = build_root
 
-        # Phase 2: Build (conditional)
-        if not args.skip_build:
-            logger.info("Phase 2: Building instances...")
-            exit_code = run_build(args.app, args.set, app_dir, yaml_path)
-            if exit_code == 2:
-                return 2
-
-        # Phase 3: Execute (conditional)
-        if not args.skip_execute:
-            logger.info("Phase 3: Executing instances...")
-            exit_code = run_execute(args.app, args.set, app_dir, yaml_path)
-            if exit_code == 2:
-                return 2
-
-        # Phase 4: Visualize (always)
-        logger.info("Phase 4: Generating visualizations...")
-        exit_code = run_visualize(args.app, args.set, app_dir, yaml_path)
-        if exit_code == 2:
-            return 2
-
-        # Success
-        print("\n" + "="*60)
-        print("PIPELINE COMPLETE")
-        print("="*60)
-        print(f"Application: {args.app}")
-        print(f"Experiment Set: {args.set}")
-        print(f"Results: {app_dir / 'results'}")
-
+        try:
+            answer = input(f"Remove {target}? [y/N] ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if answer.strip().lower() != "y":
+            print("Aborted.")
+            return 1
+        shutil.rmtree(target)
+        print(f"Removed {target}")
         return 0
 
-    # ============================================================================
-    # Other commands (not yet implemented)
-    # ============================================================================
     logger.warning(f"Command '{args.command}' handler not yet implemented")
     return 0
 

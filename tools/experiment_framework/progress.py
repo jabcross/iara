@@ -24,6 +24,7 @@ class ProgressBar:
         self.name = name
         self.current = 0
         self.bar_width = 50
+        self._display()
 
     def update(self, count: int = 1) -> None:
         """
