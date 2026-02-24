@@ -1028,26 +1028,25 @@ def get_yaml_hash(experiment_dir: Path) -> str:
         return "unknown"
 
 
-def extract_binary_sections(build_result: BuildResult) -> Dict[str, int]:
+def extract_binary_sections(build_result: BuildResult) -> Dict[str, Any]:
     """
     Extract binary sections from build result using 'size -A' command.
 
-    Parses the ELF binary to extract section sizes for .text, .data, and .bss.
+    Parses all ELF sections and groups them by base name (e.g. all .ltext.*
+    subsections are aggregated under 'ltext').  The result contains
+    total_size_bytes (from the filesystem) and a sections dict mapping
+    sanitised base names to their cumulative byte sizes.
 
     Args:
         build_result: BuildResult with binary_size_bytes and executable_path
 
     Returns:
-        Dict with keys: total_size_bytes, text_section_bytes, data_section_bytes,
-        bss_section_bytes
+        Dict with keys:
+            total_size_bytes: int  – file size in bytes
+            sections: Dict[str, int] – {base_section_name: bytes, ...}
     """
     total_size = build_result.binary_size_bytes
-    sections = {
-        "total_size_bytes": total_size,
-        "text_section_bytes": 0,
-        "data_section_bytes": 0,
-        "bss_section_bytes": 0
-    }
+    sections_by_base: Dict[str, int] = {}
 
     # Try to get section sizes from executable if available
     if build_result.executable_path:
@@ -1063,14 +1062,13 @@ def extract_binary_sections(build_result: BuildResult) -> Dict[str, int]:
                 )
 
                 if result.returncode == 0:
-                    # Parse size -A output: section name and size in decimal
-                    # Format: .section_name    size    addr
+                    # Parse size -A output: .section_name   size   addr
                     for line in result.stdout.split('\n'):
                         line = line.strip()
                         if not line:
                             continue
 
-                        # Skip header lines
+                        # Skip header / total lines
                         if line.startswith('section') or line.startswith('Total'):
                             continue
 
@@ -1078,24 +1076,30 @@ def extract_binary_sections(build_result: BuildResult) -> Dict[str, int]:
                         if len(parts) >= 2:
                             try:
                                 section_name = parts[0]
-                                size = int(parts[1])  # Size is in decimal
+                                size = int(parts[1])
+                                if size == 0:
+                                    continue
 
-                                if section_name == '.text':
-                                    sections["text_section_bytes"] = size
-                                elif section_name == '.data':
-                                    sections["data_section_bytes"] = size
-                                elif section_name == '.bss':
-                                    sections["bss_section_bytes"] = size
+                                # Group by base name: strip leading dot, take
+                                # only the first component so that e.g.
+                                # ".ltext", ".ltext.unlikely.", and
+                                # ".ltext._ZN8casacore..." all map to "ltext".
+                                base = section_name.lstrip('.').split('.')[0]
+                                if base:
+                                    sections_by_base[base] = sections_by_base.get(base, 0) + size
                             except (ValueError, IndexError):
                                 pass
 
-                logger.debug(f"Extracted section sizes: {sections}")
+                logger.debug(f"Extracted {len(sections_by_base)} section groups")
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 logger.warning(f"Could not extract section sizes: {e}")
         else:
             logger.debug(f"Executable not found at {executable}")
 
-    return sections
+    return {
+        "total_size_bytes": total_size,
+        "sections": sections_by_base
+    }
 
 
 def _parse_instance_name(instance_name: str) -> Dict[str, Any]:
@@ -1116,42 +1120,27 @@ def _parse_instance_name(instance_name: str) -> Dict[str, Any]:
         Dict with scheduler and parameter key-value pairs
     """
     parts = instance_name.split('_')
-    if len(parts) < 2:
+    if len(parts) < 3:
         return {}
 
     params = {}
-    # First part is the application, second is scheduler
-    if len(parts) >= 2:
-        params['scheduler'] = parts[1]
+    # Format: <app>_<set>_<scheduler>_<key1>_<val1>_<key2>_<val2>...
+    # Neither keys nor values ever contain underscores, so the structure is a
+    # strict sequence of alternating single-token keys and single-token values.
+    # parts[0] = app, parts[1] = set name (skip), parts[2] = scheduler
+    params['scheduler'] = parts[2]
 
-    # Rest are parameters with underscores in names followed by values
-    # Algorithm: group consecutive non-numeric parts as parameter name,
-    # then next numeric (or string) part as value
-    i = 2
-    while i < len(parts):
-        # Collect consecutive non-numeric parts as parameter name
-        key_parts = []
-        while i < len(parts) and not parts[i].lstrip('-').isdigit():
-            key_parts.append(parts[i])
-            i += 1
-
-        if not key_parts:
-            # No key found, move on
-            i += 1
-            continue
-
-        # Now get the value (next part)
-        if i < len(parts):
+    remaining = parts[3:]
+    for i in range(0, len(remaining) - 1, 2):
+        key = remaining[i]
+        val_str = remaining[i + 1]
+        try:
+            params[key] = int(val_str)
+        except ValueError:
             try:
-                value = int(parts[i])
+                params[key] = float(val_str)
             except ValueError:
-                value = parts[i]
-            key = '_'.join(key_parts)
-            params[key] = value
-            i += 1
-        else:
-            # Key without value, skip it
-            break
+                params[key] = val_str
 
     return params
 

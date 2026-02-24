@@ -129,13 +129,13 @@ measurements:
 experiment_sets:
   # Quick test
   - name: quick
-    description: "Quick test for debugging"
+    description: "Quick test for debugging (SIZE=small: uses cycle_0_deconvolved_2560.csv which exists)"
     parameters:
       SIZE: [small]
       NUM_CORES: [1]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
-      scheduler: [vf-omp]
+      scheduler: [vf-omp, preesm]
 
   # Sequential debug test
   - name: debug-sequential
@@ -192,16 +192,29 @@ experiment_sets:
       scheduler: [vf-omp, preesm]
 
 
+  # Smaller-than-WAMCA comparison (WAMCA used cores=[1,2,4,6,8] x chunks=[1..128])
+  # Available preesm scenarios: large, cores in {1,2,4,6,8,64}
+  - name: compare
+    description: "Scaled-down WAMCA comparison: IaRa vf-omp vs Preesm on large dataset"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1, 4, 8]
+      NUM_CHUNK: [1, 8, 64]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp, preesm]
+
+
 # Execution configuration
 execution:
   # Number of times to run each configuration
-  repetitions: 5
+  repetitions: 1
 
   # Number of warmup runs (not included in measurements)
-  warmup: 1
+  warmup: 0
 
   # Timeout for each run (seconds)
-  timeout: 600
+  # Paper experiments showed execution times up to ~100s; 300s provides headroom
+  timeout: 300
 
   # Environment variables to set for all runs
   environment:
@@ -221,7 +234,7 @@ visualization:
   plots:
     # Runtime performance: grouped bars
     runtime_performance:
-      title: "Degridder Runtime Performance"
+      title: "Degridder Runtime Wall Time"
       type: grouped_bars
       y_axis:
         metric: wall_time

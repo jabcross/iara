@@ -325,14 +325,33 @@ function(iara_add_application)
         endif()
     endif()
 
-    # Preesm scheduler: detect preesm-codegen.sh and glob generated sources
+    # Preesm scheduler: detect preesm-codegen.sh and use degridder source files
     if("${scheduler}" STREQUAL "preesm")
         if(EXISTS "${APP_APP_SRC_DIR}/preesm-codegen.sh")
             set(codegen_script "${APP_APP_SRC_DIR}/preesm-codegen.sh")
         endif()
 
-        # Exclude IaRa main.cpp — Preesm generates its own main
-        list(FILTER cpp_sources EXCLUDE REGEX "main\\.cpp$")
+        # For preesm: replace IaRa kernel sources with the degridder repo's src files.
+        # Preesm-generated C code uses different function signatures from IaRa's
+        # kernel wrappers (e.g. passes compile-time constants as explicit args).
+        # degridder/Code/src/*.c have the Preesm-compatible implementations.
+        set(_preesm_code_src "")
+        if(DEFINED ENV{PREESM_DEGRIDDER_REPO} AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
+            set(_preesm_code_src "$ENV{PREESM_DEGRIDDER_REPO}/Code/src")
+        elseif(DEFINED ENV{IARA_DIR} AND NOT "$ENV{IARA_DIR}" STREQUAL "")
+            get_filename_component(_preesm_code_src "$ENV{IARA_DIR}/../degridder/Code/src" ABSOLUTE)
+        endif()
+
+        if(_preesm_code_src AND EXISTS "${_preesm_code_src}")
+            file(GLOB _preesm_c_src CONFIGURE_DEPENDS
+                "${_preesm_code_src}/*.c"
+                "${_preesm_code_src}/CPU/*.c")
+            set(c_sources ${_preesm_c_src})
+            set(cpp_sources "${_preesm_code_src}/casacore_wrapper.cpp")
+        else()
+            # Fallback: at least exclude IaRa's main.cpp
+            list(FILTER cpp_sources EXCLUDE REGEX "main\\.cpp$")
+        endif()
 
         # Glob Preesm-generated C files (CONFIGURE_DEPENDS triggers reconfigure
         # when setup-* creates new files before lower-* calls cmake --build)
@@ -534,6 +553,70 @@ function(iara_add_application)
 
     if(schedule_obj)
         set_source_files_properties(${schedule_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+    endif()
+
+    # Preesm: the upstream degridder sources and the Preesm-generated Core0.c
+    # must both see the upstream Code/include headers (which have multi-arg
+    # function signatures, proper IN/OUT/float2 types, and no constants.h).
+    # IaRa's own src/ headers declare single-arg wrapper signatures that are
+    # incompatible with the Preesm schedule and with degridding.c's definitions.
+    #
+    # Two-part fix applied per-source for both source sets:
+    #   1. Set INCLUDE_DIRECTORIES property to prepend the upstream Code/include
+    #      ahead of target-level includes so the correct headers win.
+    #   2. For the Code/src files that use parameter names matching the -D macros:
+    #      -U every clashing macro name to clear command-line -D flags, and define
+    #      CONSTANTS_H to block constants.h if reached via the IaRa tree.
+    if("${scheduler}" STREQUAL "preesm")
+        # Locate the upstream degridder Code/include directory
+        set(_degridder_include_dir "")
+        if(_preesm_code_src AND EXISTS "${_preesm_code_src}/../include")
+            get_filename_component(_degridder_include_dir "${_preesm_code_src}/../include" ABSOLUTE)
+        elseif(DEFINED ENV{PREESM_DEGRIDDER_REPO} AND EXISTS "$ENV{PREESM_DEGRIDDER_REPO}/Code/include")
+            set(_degridder_include_dir "$ENV{PREESM_DEGRIDDER_REPO}/Code/include")
+        elseif(DEFINED ENV{IARA_DIR})
+            get_filename_component(_degridder_include_dir "$ENV{IARA_DIR}/../degridder/Code/include" ABSOLUTE)
+        endif()
+
+        if(_degridder_include_dir AND EXISTS "${_degridder_include_dir}")
+            # Apply upstream include priority to both source sets
+            set(_all_preesm_srcs ${_preesm_c_src} ${preesm_generated_c})
+            if(_all_preesm_srcs)
+                set_source_files_properties(${_all_preesm_srcs} PROPERTIES
+                    INCLUDE_DIRECTORIES "${_degridder_include_dir}")
+            endif()
+        endif()
+
+        # Undefine clashing macros and block constants.h for ALL preesm sources
+        # (Code/src C files, casacore_wrapper.cpp, and generated/*.c) so that
+        # parameter names and local variable names matching -D macros are not
+        # macro-expanded at the use site.
+        set(_preesm_macro_clashes
+            GRID_SIZE NUM_VISIBILITIES NUM_CHUNK NUM_KERNELS
+            TOTAL_KERNELS_SAMPLES TOTAL_KERNEL_SAMPLES OVERSAMPLING_FACTOR
+            NUM_KERNEL_SUPPORT NUM_SCENARIO NUMBER_SAMPLE_IN_KERNEL
+            NUM_VISIB_D_N_CHUNK NUM_CORES)
+        set(_preesm_undef_flags "")
+        foreach(_m ${_preesm_macro_clashes})
+            list(APPEND _preesm_undef_flags "-U${_m}")
+        endforeach()
+        # Collect all source files: upstream C, casacore C++, and generated C
+        set(_preesm_casacore_cpp "")
+        if(_preesm_code_src AND EXISTS "${_preesm_code_src}/casacore_wrapper.cpp")
+            set(_preesm_casacore_cpp "${_preesm_code_src}/casacore_wrapper.cpp")
+        endif()
+        set(_all_preesm_srcs ${_preesm_c_src} ${_preesm_casacore_cpp} ${preesm_generated_c})
+        if(_all_preesm_srcs)
+            set_source_files_properties(${_all_preesm_srcs} PROPERTIES
+                COMPILE_OPTIONS "${_preesm_undef_flags};-DCONSTANTS_H")
+        endif()
+
+        # Preesm generates a very large static Shared[] BSS buffer (potentially
+        # several GB for chunks>=8) which exceeds the 2GB PC32 addressing limit
+        # of the default x86-64 code model.  Use the large code model so the
+        # compiler emits 64-bit relocations throughout.
+        target_compile_options(${target_name} PRIVATE -mcmodel=large)
+        target_link_options(${target_name} PRIVATE -mcmodel=large)
     endif()
 
     set_target_properties(${target_name}
@@ -835,7 +918,12 @@ execute_process(
         add_test(NAME "setup-${instance_name}"
             COMMAND ${CMAKE_COMMAND} -P "${_setup_cmake}"
             WORKING_DIRECTORY "${TEST_BUILD_DIR}")
-        set_tests_properties("setup-${instance_name}" PROPERTIES TIMEOUT 120)
+        # Preesm launches Eclipse which can take several minutes; give it 600s
+        if("${TEST_SCHEDULER}" STREQUAL "preesm")
+            set_tests_properties("setup-${instance_name}" PROPERTIES TIMEOUT 600)
+        else()
+            set_tests_properties("setup-${instance_name}" PROPERTIES TIMEOUT 120)
+        endif()
     endif()
 
     # --------------------------------------------------------------------------
@@ -877,7 +965,7 @@ execute_process(
     add_test(NAME "${target_name}"
         COMMAND "${_aout}"
         WORKING_DIRECTORY "${TEST_BUILD_DIR}")
-    set_tests_properties("${target_name}" PROPERTIES TIMEOUT 60)
+    set_tests_properties("${target_name}" PROPERTIES TIMEOUT 600)
 
     # --------------------------------------------------------------------------
     # Sequential ordering: setup- → build- → lower- → run-

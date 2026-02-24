@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Preesm codegen script for 13-degridder
-# Generates Preesm scheduling code from pre-existing scenarios.
-#
-# Future work: generate parametric scenarios dynamically
-# (analogous to generate_topology.py for IaRa).
+# Generates a parametric Preesm scenario from a template (substituting NUM_CHUNK
+# and NUM_KERNEL_SUPPORT), then runs the Preesm Eclipse CLI to produce C code.
 set -euo pipefail
 
 echo "=== Preesm codegen ==="
@@ -11,6 +9,8 @@ echo "=== Preesm codegen ==="
 # --- Validate required env vars ---
 : "${SIZE:?Must set SIZE (small/medium/large)}"
 : "${NUM_CORES:?Must set NUM_CORES}"
+: "${NUM_CHUNK:?Must set NUM_CHUNK}"
+: "${NUM_KERNEL_SUPPORT:?Must set NUM_KERNEL_SUPPORT}"
 : "${PATH_TO_TEST_BUILD_DIR:?Must set PATH_TO_TEST_BUILD_DIR}"
 : "${IARA_DIR:?Must set IARA_DIR}"
 
@@ -22,21 +22,17 @@ if [ ! -d "$PREESM_REPO" ]; then
   exit 1
 fi
 
-SCENARIOS_DIR="$PREESM_REPO/Scenarios"
+# --- Generate .slam architecture + .scenario from Python script ---
+GENERATOR="$IARA_DIR/applications/13-degridder/generate_preesm_scenario.py"
 
-# --- Map (SIZE, NUM_CORES) → scenario file ---
-# Available parametric scenarios: parametric_scenario_large_{1,2,4,6,8,64}_cores.scenario
-# TODO: Add small/medium parametric scenario generation.
-SCENARIO_FILE="${SCENARIOS_DIR}/parametric_scenario_${SIZE}_${NUM_CORES}_cores.scenario"
+SCENARIO_NAME=$(python3 "$GENERATOR" \
+  --num-cores "$NUM_CORES" \
+  --num-chunk "$NUM_CHUNK" \
+  --num-kernel-support "$NUM_KERNEL_SUPPORT" \
+  --size "$SIZE" \
+  --preesm-repo "$PREESM_REPO")
 
-if [ ! -f "$SCENARIO_FILE" ]; then
-  echo "ERROR: Scenario not found: $SCENARIO_FILE" >&2
-  echo "Available scenarios:" >&2
-  ls "$SCENARIOS_DIR"/*.scenario 2>/dev/null | sed 's/^/  /' >&2
-  exit 1
-fi
-
-echo "Using scenario: $SCENARIO_FILE"
+echo "Generated scenario: $SCENARIO_NAME"
 
 # --- Run Preesm CLI ---
 # CLI script: $IARA_DIR/preesm/commandLinePreesm.sh
@@ -59,12 +55,10 @@ if [ ! -x "$PREESM_DIR/eclipse" ]; then
   exit 1
 fi
 
-SCENARIO_FILENAME="$(basename "$SCENARIO_FILE")"
-
 mkdir -p "${PATH_TO_TEST_BUILD_DIR}/generated"
 
-echo "Running Preesm: workflow=Codegen.workflow scenario=$SCENARIO_FILENAME"
-bash "$PREESM_SCRIPT" "$PREESM_DIR" "$PREESM_REPO" "Codegen.workflow" "$SCENARIO_FILENAME"
+echo "Running Preesm: workflow=Codegen.workflow scenario=$SCENARIO_NAME"
+bash "$PREESM_SCRIPT" "$PREESM_DIR" "$PREESM_REPO" "Codegen.workflow" "$SCENARIO_NAME"
 
 # Preesm writes generated code to $PREESM_REPO/Code/generated/
 # Copy to instance build dir
@@ -85,6 +79,14 @@ cat > "$GENERATED_HEADER" << EOF
 EOF
 echo "Generated $GENERATED_HEADER"
 
-# --- Create output directory ---
-mkdir -p output
+# --- Set up paths that Preesm binary expects at runtime ---
+# Preesm's degridder/Code/src/top.c uses relative paths ../data/ and writes
+# output to ../output/, relative to the working directory where a.out is run.
+# a.out is run from PATH_TO_TEST_BUILD_DIR, so we create a symlink and dir
+# at the parent level so those relative paths resolve correctly.
+DATA_SRC="$IARA_DIR/applications/13-degridder/data"
+ln -sfn "$DATA_SRC" "${PATH_TO_TEST_BUILD_DIR}/../data"
+mkdir -p "${PATH_TO_TEST_BUILD_DIR}/../output"
+# Also create output/ in build dir for any files written there
+mkdir -p "${PATH_TO_TEST_BUILD_DIR}/output"
 echo "=== Preesm codegen done ==="

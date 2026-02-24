@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 def generate_instance_name(
     app_name: str,
+    set_name: str,
     params: Dict[str, Any],
     computed_param_names: set = None,
     param_labels: Dict[str, str] = None
@@ -35,10 +36,11 @@ def generate_instance_name(
     Generate instance name following naming convention.
 
     Format:
-        <XX-app-name>_<scheduler-value>_<param-name-1>_<value-1>_...
+        <XX-app-name>_<set-name>_<scheduler-value>_<param-name-1>_<value-1>_...
 
     Rules:
         - Application name must start with two digits
+        - Set name follows app name
         - Scheduler value only (no "scheduler=" prefix)
         - All other parameters include name and value
         - Parameters separated by underscores
@@ -48,6 +50,7 @@ def generate_instance_name(
 
     Args:
         app_name: Application name (e.g., "05-cholesky")
+        set_name: Experiment set name (e.g., "quick", "vs-preesm")
         params: Parameter dictionary with parameter names and values
         computed_param_names: Optional set of computed parameter names to exclude
 
@@ -56,15 +59,16 @@ def generate_instance_name(
 
     Example:
         app_name = "05-cholesky"
+        set_name = "quick"
         params = {"scheduler": "vf-omp", "matrix_size": 2048, "num_blocks": 4, "block_size": 512}
         computed_param_names = {"block_size"}
-        → "05-cholesky_vf-omp_matrix_size_2048_num_blocks_4"
+        → "05-cholesky_quick_vf-omp_matrix_size_2048_num_blocks_4"
     """
     if computed_param_names is None:
         computed_param_names = set()
 
-    # Start with app name
-    parts = [app_name]
+    # Start with app name and set name
+    parts = [app_name, set_name]
 
     # Add scheduler value (without "scheduler=" prefix)
     scheduler = str(params.get('scheduler', '')).strip()
@@ -324,7 +328,7 @@ def generate_cmakelists(
     cmake_code_blocks = []
     progress = ProgressBar(len(combinations), "Generating")
     for combo in combinations:
-        instance_name = generate_instance_name(app_name, combo, computed_param_names, param_labels)
+        instance_name = generate_instance_name(app_name, experiment_set, combo, computed_param_names, param_labels)
         cmake_code = generate_cmake_instance(instance_name, combo, config, experiment_set)
         cmake_code_blocks.append(cmake_code)
         progress.update()

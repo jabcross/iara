@@ -34,6 +34,10 @@ PLOTLY_MARK_TYPES = [
     "line_plot", "scatter"
 ]
 
+# ELF sections that hold zero-filled (uninitialised) data — they occupy no
+# space in the on-disk binary and are skipped by the "no-BSS" plot variant.
+BSS_SECTION_NAMES = {"bss", "lbss", "tbss", "sbss"}
+
 # Constants for unit conversion (Task 4.2)
 TIME_MEASUREMENTS = {
     "wall_time_s", "user_time_s", "system_time_s", "compute_time_s",
@@ -104,6 +108,15 @@ def _default_plot_specs(app_name: str) -> Dict[str, Dict[str, Any]]:
             "x_axis": {},
             "stack_by": "section",
             "description": "Binary size split by text/data/bss sections",
+        },
+        "binary_size_no_bss": {
+            "title": f"{title_prefix} — Binary Size Breakdown (on-disk sections only)",
+            "type": "stacked_bar",
+            "y_axis": {"metric": "binary_size_breakdown"},
+            "x_axis": {},
+            "stack_by": "section",
+            "exclude_bss": True,
+            "description": "Binary size split by on-disk sections only (BSS/LBSS excluded)",
         },
     }
 
@@ -213,6 +226,9 @@ def translate_plotly_to_vegalite(
         "title": plotly_spec.get("title", plot_name),
         "width": 800,
         "height": {"step": 30},
+        # Bind interval selection to the chart scales so scroll zooms and
+        # drag pans on both axes without requiring any extra widgets.
+        "params": [{"name": "grid", "select": "interval", "bind": "scales"}],
         "data": {
             "url": "PLACEHOLDER",
             "format": {"type": "json", "property": "instances"}
@@ -221,8 +237,16 @@ def translate_plotly_to_vegalite(
         "encoding": {},
         "transform": [
             {
-                "calculate": "replace(datum.name, /^[^_]+_/, '')",
+                # Strip <app>_<set>_ — keeps the scheduler token so every
+                # instance has a unique Y label.
+                "calculate": "replace(datum.name, /^[^_]+_[^_]+_/, '')",
                 "as": "short_name"
+            },
+            {
+                # Strip <app>_<set>_<scheduler>_ — used for sorting so that
+                # bars sharing the same configuration appear adjacent.
+                "calculate": "replace(datum.name, /^[^_]+_[^_]+_[^_]+_/, '')",
+                "as": "config_key"
             }
         ]
     }
@@ -296,11 +320,14 @@ def _build_grouped_bars_encoding(
     scheduler_order: str
 ) -> None:
     """Build encoding for grouped_bars plot type (horizontal bars)."""
-    # Y encoding: always use instance names (short_name) so bars are labeled with their identity
+    # Y encoding: unique per instance (short_name keeps the scheduler token),
+    # but sorted by config_key so same-config bars from different schedulers
+    # appear adjacent — scheduler becomes the finest visual granularity.
     vl_spec["encoding"]["y"] = {
         "field": "short_name",
         "type": "ordinal",
         "title": "Instance",
+        "sort": {"field": "config_key", "op": "min", "order": "ascending"},
         "axis": {"labelLimit": 300}
     }
 
@@ -324,14 +351,6 @@ def _build_grouped_bars_encoding(
         "type": "nominal",
         "title": "Scheduler"
     }
-
-    # yOffset for grouped bars: use ordinal scheduler field so Vega-Lite automatically
-    # subdivides each band. With 1 scheduler it fills the full band; with N it splits equally.
-    if group_param and group_param != "instance":
-        vl_spec["encoding"]["yOffset"] = {
-            "field": "parameters.scheduler",
-            "type": "ordinal"
-        }
 
     # Tooltip encoding
     tooltip_fields = [
@@ -360,24 +379,20 @@ def _build_stacked_bar_encoding(
 
     # Special handling for binary section stacking
     if stack_by == "section":
-        # Binary size breakdown: fold binary section fields
-        section_fields = [
-            "binary.text_section_bytes",
-            "binary.data_section_bytes",
-            "binary.bss_section_bytes"
-        ]
-
+        # Fold over binary.sections.* fields.  The actual list of fields is
+        # left empty here and populated later by generate_vegalite_json once it
+        # has computed the top-N sections from the real results data.
         if "transform" not in vl_spec:
             vl_spec["transform"] = []
 
         vl_spec["transform"].append({
-            "fold": section_fields,
+            "fold": [],          # patched by generate_vegalite_json
             "as": ["section_field", "value"]
         })
 
-        # Add formula transform to extract clean section name from field path
+        # Strip the "binary.sections." prefix to obtain the bare section name
         vl_spec["transform"].append({
-            "calculate": "replace(split(datum.section_field, '.')[1], '_section_bytes', '')",
+            "calculate": "replace(datum.section_field, 'binary.sections.', '')",
             "as": "section_type"
         })
 
@@ -1098,6 +1113,83 @@ def convert_units_for_display(
     pass
 
 
+def _wrap_with_parameter_table(
+    bar_spec: Dict[str, Any],
+    param_keys: List[str],
+    instances: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """
+    Wrap a fully-processed bar-chart spec in an hconcat with a parameter table
+    on the left.  The table uses a fold transform so all columns share a single
+    view with no inter-column gaps; column headers are rendered as angled axis
+    labels on a top-oriented ordinal X axis.
+
+    The step width (pixels per column band) is computed from the longest cell
+    value across all columns at ~8 px/char plus 16 px of horizontal padding.
+
+    ``instances`` should be the raw list from the results JSON; it is used only
+    for step-width estimation — if omitted the header widths are used.
+    """
+    param_fields = [f"parameters.{k}" for k in param_keys]
+
+    # Carry over every transform except fold ones (those belong to the bar mark).
+    shared_transforms = [t for t in bar_spec.get("transform", []) if "fold" not in t]
+
+    # Mirror bar Y encoding; suppress axis labels (the bar chart provides them).
+    table_y = {**copy.deepcopy(bar_spec["encoding"]["y"]), "axis": None}
+
+    # Step width = widest cell value (headers are angled so they extend beyond
+    # their band and don't constrain the step).
+    px_per_char = 8
+    padding = 8
+    max_val_chars = 4  # minimum readable width
+    if instances:
+        for key in param_keys:
+            for inst in instances:
+                val = inst.get("parameters", {}).get(key, "")
+                max_val_chars = max(max_val_chars, len(str(val)))
+    else:
+        max_val_chars = max(len(k) for k in param_keys)
+    step = max_val_chars * px_per_char + padding
+
+    table_spec: Dict[str, Any] = {
+        "data": copy.deepcopy(bar_spec["data"]),
+        "transform": shared_transforms + [
+            {"fold": param_fields, "as": ["param_name", "param_value"]},
+            {"calculate": "replace(datum.param_name, 'parameters.', '')", "as": "param_label"},
+        ],
+        "mark": {"type": "text", "align": "center"},
+        "encoding": {
+            "y": table_y,
+            "x": {
+                "field": "param_label",
+                "type": "ordinal",
+                "sort": param_keys,
+                "axis": {"orient": "top", "labelAngle": -30, "title": None},
+            },
+            "text": {"field": "param_value", "type": "nominal"},
+        },
+        "width": {"step": step},
+        "height": copy.deepcopy(bar_spec.get("height", {"step": 30})),
+    }
+
+    # $schema and title move to the compound level; everything else stays in
+    # the bar sub-spec (including params for zoom/pan).
+    bar_sub = {k: v for k, v in bar_spec.items() if k not in ("$schema", "title")}
+
+    # Suppress Y axis on bar sub-spec — the parameter table provides the labels.
+    if "encoding" in bar_sub and "y" in bar_sub["encoding"]:
+        bar_sub["encoding"] = copy.deepcopy(bar_sub["encoding"])
+        bar_sub["encoding"]["y"].pop("title", None)
+        bar_sub["encoding"]["y"]["axis"] = None
+
+    return {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "title": bar_spec.get("title", ""),
+        "hconcat": [table_spec, bar_sub],
+    }
+
+
 def generate_vegalite_json(
     yaml_config: Dict[str, Any],
     results_json_path: Path,
@@ -1181,6 +1273,98 @@ def generate_vegalite_json(
             # Translate Plotly spec to Vega-Lite
             vl_spec = translate_plotly_to_vegalite(plot_name, plotly_spec)
 
+            # For binary-size section plots, patch the fold transform with the
+            # top-10 sections (by average size across instances).
+            if plotly_spec.get("stack_by") == "section" and results.get("instances"):
+                exclude_bss = plotly_spec.get("exclude_bss", False)
+                section_totals: Dict[str, int] = {}
+                section_counts: Dict[str, int] = {}
+                for inst in results["instances"]:
+                    for sec_name, sec_size in inst.get("binary", {}).get("sections", {}).items():
+                        if exclude_bss and sec_name in BSS_SECTION_NAMES:
+                            continue
+                        section_totals[sec_name] = section_totals.get(sec_name, 0) + sec_size
+                        section_counts[sec_name] = section_counts.get(sec_name, 0) + 1
+                section_avgs = {
+                    name: section_totals[name] / section_counts[name]
+                    for name in section_totals
+                }
+                top_sections = [
+                    name for name, _ in sorted(section_avgs.items(), key=lambda x: -x[1])[:10]
+                ]
+                top_fields = [f"binary.sections.{name}" for name in top_sections]
+                # Patch the placeholder fold transform
+                for transform in vl_spec.get("transform", []):
+                    if isinstance(transform.get("fold"), list) and transform.get("as") == ["section_field", "value"]:
+                        transform["fold"] = top_fields
+                        break
+
+            # Compute parameter table columns: non-scheduler keys in sort
+            # precedence order first, then scheduler last (finest granularity).
+            param_keys_for_table: List[str] = []
+            const_title_suffix = ""
+            if results.get("instances"):
+                first_params = results["instances"][0].get("parameters", {})
+                non_scheduler = sorted(k for k in first_params if k != "scheduler")
+                if first_params:
+                    param_keys_for_table = non_scheduler + ["scheduler"]
+
+                # Remove constant params from the table and promote them to the
+                # chart title as "key = value" suffixes separated by em-dashes.
+                all_instances = results["instances"]
+                const_parts: List[str] = []
+                varying: List[str] = []
+                for key in param_keys_for_table:
+                    vals = {inst.get("parameters", {}).get(key) for inst in all_instances}
+                    if len(vals) == 1:
+                        raw = next(iter(vals))
+                        if isinstance(raw, float) and raw == int(raw):
+                            raw = int(raw)
+                        const_parts.append(f"{key} = {raw}")
+                    else:
+                        varying.append(key)
+                param_keys_for_table = varying
+                if const_parts:
+                    const_title_suffix = " \u2014 " + " \u2014 ".join(const_parts)
+
+                # Build a numeric composite sort key from the numeric parameters
+                # so that values sort by magnitude (8 < 64) rather than
+                # lexicographically ('64' < '8').  Each numeric parameter
+                # contributes toNumber(value) * 1000^(position_from_right).
+                # String parameters are skipped (they don't affect ordering here).
+                # Use datum.parameters['key'] for nested JSON access.
+                sort_parts = []
+                for key in non_scheduler:
+                    val = first_params[key]
+                    if isinstance(val, (int, float)):
+                        sort_parts.append(f"toNumber(datum.parameters['{key}'])")
+
+                if sort_parts:
+                    n = len(sort_parts)
+                    weighted = []
+                    for i, part in enumerate(sort_parts):
+                        power = n - 1 - i
+                        if power > 0:
+                            weighted.append(f"{part} * {1000 ** power}")
+                        else:
+                            weighted.append(part)
+                    sort_key_expr = " + ".join(weighted)
+                    if "transform" not in vl_spec:
+                        vl_spec["transform"] = []
+                    vl_spec["transform"].append(
+                        {"calculate": sort_key_expr, "as": "sort_key"}
+                    )
+                    # Update Y encoding sort to use the new numeric sort key.
+                    y_enc = vl_spec.get("encoding", {}).get("y", {})
+                    if isinstance(y_enc.get("sort"), dict):
+                        y_enc["sort"]["field"] = "sort_key"
+                    elif "y" in vl_spec.get("encoding", {}):
+                        vl_spec["encoding"]["y"]["sort"] = {
+                            "field": "sort_key",
+                            "op": "min",
+                            "order": "ascending",
+                        }
+
             # Determine if we need to create separate files for each facet value
             x_axis = plotly_spec.get("x_axis", {})
             facet_param = None
@@ -1228,6 +1412,16 @@ def generate_vegalite_json(
                     if results:
                         facet_spec = apply_unit_conversions(facet_spec, results)
 
+                    # Append constant-param suffix to title
+                    if const_title_suffix and "title" in facet_spec:
+                        facet_spec["title"] = str(facet_spec["title"]) + const_title_suffix
+
+                    # Wrap with parameter table on the left
+                    if param_keys_for_table:
+                        facet_spec = _wrap_with_parameter_table(
+                            facet_spec, param_keys_for_table, results.get("instances")
+                        )
+
                     # Write to file with facet value in name
                     output_file = output_dir / f"plot_{plot_name}__{facet_param}_{facet_value}_{timestamp}.vl.json"
                     with open(output_file, 'w') as f:
@@ -1246,6 +1440,16 @@ def generate_vegalite_json(
                 # Apply unit conversions (if results data available)
                 if results:
                     vl_spec = apply_unit_conversions(vl_spec, results)
+
+                # Append constant-param suffix to title
+                if const_title_suffix and "title" in vl_spec:
+                    vl_spec["title"] = str(vl_spec["title"]) + const_title_suffix
+
+                # Wrap with parameter table on the left
+                if param_keys_for_table:
+                    vl_spec = _wrap_with_parameter_table(
+                        vl_spec, param_keys_for_table, results.get("instances")
+                    )
 
                 # Write to file
                 output_file = output_dir / f"plot_{plot_name}_{timestamp}.vl.json"

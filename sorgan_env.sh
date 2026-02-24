@@ -46,6 +46,8 @@ export PKG_CONFIG_PATH="$SPACK_VIEW_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
 export LDFLAGS="-L$SPACK_VIEW_PATH/lib $LDFLAGS"
 
 export PREESM_DIR="/scratch/$USER/bin/preesm-dir"
+export JAVA_HOME="/scratch/$USER/bin/java-17"
+export PATH="$JAVA_HOME/bin:$PATH"
 
 # Tab completion for the experiment framework CLI
 if command -v register-python-argcomplete &>/dev/null; then

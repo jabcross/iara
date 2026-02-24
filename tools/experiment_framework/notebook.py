@@ -472,22 +472,32 @@ from pathlib import Path
 with open("{abs_vegalite_path}", "r") as f:
     vl_spec = json.load(f)
 
-# If spec references a data file via file:// URL, load and embed the data
-if "data" in vl_spec and "url" in vl_spec.get("data", {{}}):
-    data_url = vl_spec["data"]["url"]
-    if data_url.startswith("file://"):
-        data_file_path = data_url[7:]  # Remove "file://" prefix
-        try:
-            with open(data_file_path, "r") as f:
-                data_content = json.load(f)
-            # Embed data directly in spec
-            vl_spec["data"]["values"] = data_content.get("instances", data_content)
-            # Remove the URL reference since we're embedding data
-            del vl_spec["data"]["url"]
-            if "format" in vl_spec["data"]:
-                del vl_spec["data"]["format"]
-        except Exception as e:
-            print(f"Warning: Could not load data from {{data_file_path}}: {{e}}")
+# Load and embed file:// data URLs for a spec part (flat or compound).
+# Compound specs (hconcat/vconcat/layer) store data inside each sub-spec,
+# not at the top level, so we recurse into them.
+_loaded_data = {{}}
+
+def _embed_file_data(spec_part):
+    data = spec_part.get("data", {{}})
+    url = data.get("url", "")
+    if url.startswith("file://"):
+        path = url[7:]  # strip "file://"
+        if path not in _loaded_data:
+            try:
+                with open(path, "r") as f:
+                    _loaded_data[path] = json.load(f)
+            except Exception as e:
+                print(f"Warning: Could not load data from {{path}}: {{e}}")
+                return
+        content = _loaded_data[path]
+        spec_part["data"]["values"] = content.get("instances", content)
+        del spec_part["data"]["url"]
+        spec_part["data"].pop("format", None)
+
+_embed_file_data(vl_spec)
+for _compound_key in ("hconcat", "vconcat", "layer", "concat"):
+    for _sub_spec in vl_spec.get(_compound_key, []):
+        _embed_file_data(_sub_spec)
 
 # Display using Altair (native Jupyter support)
 chart = alt.Chart.from_dict(vl_spec)
