@@ -1,0 +1,211 @@
+// Parameters (cfg_in_iface — primary, from experiments.yaml `parameters`):
+//   image_width
+//   image_height
+//   nBins
+//   nHistBins
+//   nKeypointsMax
+//   parallelismLevel
+//   nLocalKptMax
+//   descrWidth
+//   descrHistBins
+//   tot_image_size
+// Computed parameters (param — from experiments.yaml `computed_parameters`):
+//   nOctaves = min(maxOctaveWH+1, floor(ln(min(image_height, image_width))/ln(2) - 3))+imgDouble
+//   imgDouble = 1
+//   nLayers = 3
+//   nGpyrLayers = nLayers+3
+//   nDogLayers = nGpyrLayers-1
+//   gRmax = if(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))>1.0, ceil(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))), 1.0)
+//   gWmax = 2*gRmax+1
+//   totSizeWithoutLayers = if(imgDouble, geo_sum(4*tot_image_size,1/4,nOctaves), geo_sum(tot_image_size,1/4,nOctaves))
+//   nOctavesDownN = if(imgDouble, nOctaves-3, nOctaves-2)
+//   image_maxWH = max(image_width,image_height)
+//   maxOctaveH = pow_div_max(2, image_height)
+//   maxOctaveW = pow_div_max(2, image_width)
+//   maxOctaveWH = min(maxOctaveW, maxOctaveH)
+
+module {
+
+iara.actor @Htop_sift {
+
+  %image_i_i = iara.in : tensor<«tot_image_size»xi8>
+
+  %e47_d = iara.edge %image_i_i : tensor<«tot_image_size»xi8> -> tensor<«tot_image_size/parallelismLevel»xi8>
+
+  %e35_s, %e36_s = iara.node @p2iaw_compute_gaussian_coefs out ( tensor<«nGpyrLayers»xi32>, tensor<«nGpyrLayers*gWmax»xf32> )
+  %e35_d = iara.edge %e35_s : tensor<«nGpyrLayers»xi32> -> tensor<«nGpyrLayers»xi32>
+  %e36_d = iara.edge %e36_s : tensor<«nGpyrLayers*gWmax»xf32> -> tensor<«nGpyrLayers*gWmax»xf32>
+
+  %e7_s, %e8_s, %e9_s, %e10_s, %e11_s, %e12_s, %e72_s, %e73_s = iara.node @p2iaw_ITERATOR_detect_keypoints out ( tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32> )
+  %e7_d = iara.edge %e7_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e8_d = iara.edge %e8_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e9_d = iara.edge %e9_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e10_d = iara.edge %e10_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e11_d = iara.edge %e11_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e12_d = iara.edge %e12_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e72_d = iara.edge %e72_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e73_d = iara.edge %e73_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+
+  %e17_s, %e18_s, %e19_s, %e20_s, %e21_s, %e22_s, %e68_s, %e69_s = iara.node @p2iaw_ITERATOR_build_dog_pyr out ( tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32> )
+  %e17_d = iara.edge %e17_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e18_d = iara.edge %e18_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e19_d = iara.edge %e19_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e20_d = iara.edge %e20_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e21_d = iara.edge %e21_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e22_d = iara.edge %e22_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e68_d = iara.edge %e68_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e69_d = iara.edge %e69_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+
+  %e23_s, %e24_s, %e25_s, %e26_s, %e27_s, %e28_s, %e70_s, %e71_s = iara.node @p2iaw_ITERATOR_build_grd_rot_pyr out ( tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32> )
+  %e23_d = iara.edge %e23_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e24_d = iara.edge %e24_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e25_d = iara.edge %e25_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e26_d = iara.edge %e26_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e27_d = iara.edge %e27_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e28_d = iara.edge %e28_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e70_d = iara.edge %e70_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+  %e71_d = iara.edge %e71_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+
+  %e45_s = iara.node @p2iaw_counterGpyrLayer out ( tensor<«nGpyrLayers»xi32> )
+  %e45_d = iara.edge %e45_s : tensor<«nGpyrLayers»xi32> -> tensor<1xi32>
+
+  %e55_s = iara.node @p2iaw_counterOctaveDownN out ( tensor<«nOctavesDownN»xi32> )
+  %e55_d = iara.edge %e55_s : tensor<«nOctavesDownN»xi32> -> tensor<1xi32>
+
+  %e76_s = iara.node @p2iaw_counterPLevels out ( tensor<«parallelismLevel»xi32> )
+  %e76_d = iara.edge %e76_s : tensor<«parallelismLevel»xi32> -> tensor<1xi32>
+
+  %e81_s, %e82_s, %e79_s, %e80_s, %e43_s, %e62_s = iara.node @iara_broadcast in ( %e35_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32>, tensor<«nGpyrLayers*nGpyrLayers»xi32>, tensor<«nGpyrLayers*nGpyrLayers*nOctavesDownN»xi32> )
+  %e81_d = iara.edge %e81_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers*parallelismLevel»xi32>
+  %e82_d = iara.edge %e82_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers*parallelismLevel»xi32>
+  %e79_d = iara.edge %e79_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers*parallelismLevel»xi32>
+  %e80_d = iara.edge %e80_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers*parallelismLevel»xi32>
+  %e43_d = iara.edge %e43_s : tensor<«nGpyrLayers*nGpyrLayers»xi32> -> tensor<«nGpyrLayers»xi32>
+  %e62_d = iara.edge %e62_s : tensor<«nGpyrLayers*nGpyrLayers*nOctavesDownN»xi32> -> tensor<«nGpyrLayers»xi32>
+
+  %e83_s, %e84_s, %e85_s, %e86_s, %e44_s, %e63_s = iara.node @iara_broadcast in ( %e36_d:tensor<«nGpyrLayers*gWmax»xf32> ) out ( tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32>, tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32>, tensor<«nGpyrLayers*nGpyrLayers*gWmax»xf32>, tensor<«nGpyrLayers*nGpyrLayers*gWmax*nOctavesDownN»xf32> )
+  %e83_d = iara.edge %e83_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32> -> tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>
+  %e84_d = iara.edge %e84_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32> -> tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>
+  %e85_d = iara.edge %e85_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32> -> tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>
+  %e86_d = iara.edge %e86_s : tensor<«nGpyrLayers*nGpyrLayers*parallelismLevel*gWmax»xf32> -> tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>
+  %e44_d = iara.edge %e44_s : tensor<«nGpyrLayers*nGpyrLayers*gWmax»xf32> -> tensor<«nGpyrLayers*gWmax»xf32>
+  %e63_d = iara.edge %e63_s : tensor<«nGpyrLayers*nGpyrLayers*gWmax*nOctavesDownN»xf32> -> tensor<«nGpyrLayers*gWmax»xf32>
+
+  %e87_s, %e89_s, %e46_s, %e88_s, %e90_s, %e66_s = iara.node @iara_broadcast in ( %e45_d:tensor<1xi32> ) out ( tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<1xi32>, tensor<«parallelismLevel»xi32>, tensor<«parallelismLevel»xi32>, tensor<1xi32> )
+  %e87_d = iara.edge %e87_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
+  %e89_d = iara.edge %e89_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
+  %e46_d = iara.edge %e46_s : tensor<1xi32> -> tensor<1xi32>
+  %e88_d = iara.edge %e88_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
+  %e90_d = iara.edge %e90_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
+  %e66_d = iara.edge %e66_s : tensor<1xi32> -> tensor<«nGpyrLayers»xi32>
+
+  %e56_s, %e57_s = iara.node @iara_broadcast in ( %e55_d:tensor<1xi32> ) out ( tensor<1xi32>, tensor<«nGpyrLayers»xi32> )
+  %e56_d = iara.edge %e56_s : tensor<1xi32> -> tensor<1xi32>
+  %e57_d = iara.edge %e57_s : tensor<«nGpyrLayers»xi32> -> tensor<1xi32>
+
+  %e67_s = iara.node @p2iaw_BarrierCounterGpyr inout ( %e66_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers»xi32> )
+  %e67_d = iara.edge %e67_s : tensor<«nGpyrLayers»xi32> -> tensor<«nGpyrLayers»xi32>
+
+  %e61_s = iara.node @iara_broadcast in ( %e67_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers*nOctavesDownN»xi32> )
+  %e61_d = iara.edge %e61_s : tensor<«nGpyrLayers*nOctavesDownN»xi32> -> tensor<1xi32>
+
+  %e58_s = iara.node @p2iaw_extract_descriptor in ( %e14_d:tensor<«totSizeWithoutLayers*nLayers»xf32>, %e16_d:tensor<«totSizeWithoutLayers*nLayers»xf32> ) inout ( %e6_d:tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> ) out ( tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+  %e58_d = iara.edge %e58_s : tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nKeypointsMax+parallelismLevel»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+
+  %e6_s = iara.node @p2iaw_detect_keypoints in ( %e65_d:tensor<«totSizeWithoutLayers*nDogLayers»xf32>, %e13_d:tensor<«totSizeWithoutLayers*nLayers»xf32>, %e15_d:tensor<«totSizeWithoutLayers*nLayers»xf32>, %e7_d:tensor<1xi32>, %e8_d:tensor<1xi32>, %e9_d:tensor<1xi32>, %e10_d:tensor<1xi32>, %e11_d:tensor<1xi32>, %e12_d:tensor<1xi32>, %e72_d:tensor<1xi32>, %e73_d:tensor<1xi32> ) out ( tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+  %e6_d = iara.edge %e6_s : tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nLocalKptMax+1»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+
+  %e64_s = iara.node @p2iaw_build_dog_pyr in ( %e32_d:tensor<«totSizeWithoutLayers*nGpyrLayers»xf32>, %e17_d:tensor<1xi32>, %e18_d:tensor<1xi32>, %e19_d:tensor<1xi32>, %e20_d:tensor<1xi32>, %e21_d:tensor<1xi32>, %e22_d:tensor<1xi32>, %e68_d:tensor<1xi32>, %e69_d:tensor<1xi32> ) out ( tensor<«(totSizeWithoutLayers*nDogLayers)/parallelismLevel»xf32> )
+  %e64_d = iara.edge %e64_s : tensor<«(totSizeWithoutLayers*nDogLayers)/parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nDogLayers»xf32>
+
+  %e29_s, %e30_s = iara.node @p2iaw_build_grd_rot_pyr in ( %e31_d:tensor<«totSizeWithoutLayers*nGpyrLayers»xf32>, %e23_d:tensor<1xi32>, %e24_d:tensor<1xi32>, %e25_d:tensor<1xi32>, %e26_d:tensor<1xi32>, %e27_d:tensor<1xi32>, %e28_d:tensor<1xi32>, %e70_d:tensor<1xi32>, %e71_d:tensor<1xi32> ) out ( tensor<«(totSizeWithoutLayers*nLayers)/parallelismLevel»xf32>, tensor<«(totSizeWithoutLayers*nLayers)/parallelismLevel»xf32> )
+  %e29_d = iara.edge %e29_s : tensor<«(totSizeWithoutLayers*nLayers)/parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+  %e30_d = iara.edge %e30_s : tensor<«(totSizeWithoutLayers*nLayers)/parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+
+  %e34_s = iara.node @p2iaw_to_float in ( %e47_d:tensor<«tot_image_size/parallelismLevel»xi8> ) out ( tensor<«tot_image_size/parallelismLevel»xf32> )
+  %e34_d = iara.edge %e34_s : tensor<«tot_image_size/parallelismLevel»xf32> -> tensor<«tot_image_size»xf32>
+
+  %e33_s = iara.node @p2iaw_MERGE_gpyr in ( %e49_d:tensor<«tot_image_size*nGpyrLayers»xf32>, %e48_d:tensor<«if(imgDouble, 4*tot_image_size*nGpyrLayers, parallelismLevel*nGpyrLayers)»xf32>, %e52_d:tensor<«(tot_image_size*nGpyrLayers)/4»xf32>, %e54_d:tensor<«(tot_image_size*nGpyrLayers*nOctavesDownN)/16»xf32> ) out ( tensor<«totSizeWithoutLayers*nGpyrLayers»xf32> )
+  %e33_d = iara.edge %e33_s : tensor<«totSizeWithoutLayers*nGpyrLayers»xf32> -> tensor<«totSizeWithoutLayers*nGpyrLayers»xf32>
+
+  %e37_s = iara.node @p2iaw_upsample2x in ( %e76_d:tensor<1xi32>, %e75_d:tensor<«if(imgDouble,tot_image_size/parallelismLevel + image_width,1)»xf32> ) out ( tensor<«if(imgDouble,(4*tot_image_size)/parallelismLevel,1)»xf32> )
+  %e37_d = iara.edge %e37_s : tensor<«if(imgDouble,(4*tot_image_size)/parallelismLevel,1)»xf32> -> tensor<«if(imgDouble,4*tot_image_size,parallelismLevel)»xf32>
+
+  %e50_s = iara.node @p2iaw_downsample2xN in ( %e38_d:tensor<«tot_image_size/4»xf32>, %e1_d:tensor<«tot_image_size/16»xf32>, %e56_d:tensor<1xi32> ) out ( tensor<«tot_image_size/16»xf32> )
+  %e50_d = iara.edge %e50_s : tensor<«tot_image_size/16»xf32> -> tensor<«tot_image_size/16»xf32>
+
+  %e51_s = iara.node @p2iaw_seq_blur1 in ( %e44_d:tensor<«nGpyrLayers*gWmax»xf32>, %e43_d:tensor<«nGpyrLayers»xi32>, %e41_d:tensor<«tot_image_size/4»xf32>, %e2_d:tensor<«tot_image_size/4»xf32>, %e46_d:tensor<1xi32> ) out ( tensor<«tot_image_size/4»xf32> )
+  %e51_d = iara.edge %e51_s : tensor<«tot_image_size/4»xf32> -> tensor<«tot_image_size/4»xf32>
+
+  %e40_s = iara.node @p2iaw_downsample2x1 in ( %e39_d:tensor<«tot_image_size/parallelismLevel»xf32> ) out ( tensor<«tot_image_size/(parallelismLevel*4)»xf32> )
+  %e40_d = iara.edge %e40_s : tensor<«tot_image_size/(parallelismLevel*4)»xf32> -> tensor<«tot_image_size/4»xf32>
+
+  %e53_s = iara.node @p2iaw_seq_blurN in ( %e57_d:tensor<1xi32>, %e63_d:tensor<«nGpyrLayers*gWmax»xf32>, %e62_d:tensor<«nGpyrLayers»xi32>, %e42_d:tensor<«tot_image_size/16»xf32>, %e3_d:tensor<«tot_image_size/16»xf32>, %e61_d:tensor<1xi32> ) out ( tensor<«tot_image_size/16»xf32> )
+  %e53_d = iara.edge %e53_s : tensor<«tot_image_size/16»xf32> -> tensor<«tot_image_size/16»xf32>
+
+  %e59_s, %e60_s = iara.node @p2iaw_MERGE_keypoints in ( %e58_d:tensor<«nKeypointsMax+parallelismLevel»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> ) out ( tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>, tensor<1xi32> )
+  %keypoints_o_i = iara.edge %e59_s : tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+  %nbKeypoints_o_i = iara.edge %e60_s : tensor<1xi32> -> tensor<1xi32>
+
+  %e75_s = iara.node @p2iaw_SPLIT_upsample2x in ( %e74_d:tensor<«tot_image_size»xf32> ) out ( tensor<«if(imgDouble,image_width*(image_height + parallelismLevel),parallelismLevel)»xf32> )
+  %e75_d = iara.edge %e75_s : tensor<«if(imgDouble,image_width*(image_height + parallelismLevel),parallelismLevel)»xf32> -> tensor<«if(imgDouble,tot_image_size/parallelismLevel + image_width,1)»xf32>
+
+  %e78_s = iara.node @blur2x in ( %e83_d:tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>, %e91_d:tensor<«if(imgDouble, 4*tot_image_size,parallelismLevel)»xf32>, %e81_d:tensor<«nGpyrLayers*parallelismLevel»xi32>, %e5_d:tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32>, %e87_d:tensor<«parallelismLevel»xi32>, %e82_d:tensor<«nGpyrLayers*parallelismLevel»xi32>, %e84_d:tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>, %e88_d:tensor<«parallelismLevel»xi32> ) out ( tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> )
+  %e78_d = iara.edge %e78_s : tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> -> tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32>
+
+  %e77_s = iara.node @blur in ( %e85_d:tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>, %e92_d:tensor<«tot_image_size»xf32>, %e79_d:tensor<«nGpyrLayers*parallelismLevel»xi32>, %e4_d:tensor<«tot_image_size»xf32>, %e89_d:tensor<«parallelismLevel»xi32>, %e90_d:tensor<«parallelismLevel»xi32>, %e86_d:tensor<«nGpyrLayers*parallelismLevel*gWmax»xf32>, %e80_d:tensor<«nGpyrLayers*parallelismLevel»xi32> ) out ( tensor<«tot_image_size»xf32> )
+  %e77_d = iara.edge %e77_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size»xf32>
+
+  %e15_s, %e16_s = iara.node @iara_broadcast in ( %e30_d:tensor<«totSizeWithoutLayers*nLayers»xf32> ) out ( tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32>, tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> )
+  %e15_d = iara.edge %e15_s : tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+  %e16_d = iara.edge %e16_s : tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+
+  %e13_s, %e14_s = iara.node @iara_broadcast in ( %e29_d:tensor<«totSizeWithoutLayers*nLayers»xf32> ) out ( tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32>, tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> )
+  %e13_d = iara.edge %e13_s : tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+  %e14_d = iara.edge %e14_s : tensor<«totSizeWithoutLayers*nLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nLayers»xf32>
+
+  %e32_s, %e31_s = iara.node @iara_broadcast in ( %e33_d:tensor<«totSizeWithoutLayers*nGpyrLayers»xf32> ) out ( tensor<«totSizeWithoutLayers*nGpyrLayers*parallelismLevel»xf32>, tensor<«totSizeWithoutLayers*nGpyrLayers*parallelismLevel»xf32> )
+  %e32_d = iara.edge %e32_s : tensor<«totSizeWithoutLayers*nGpyrLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nGpyrLayers»xf32>
+  %e31_d = iara.edge %e31_s : tensor<«totSizeWithoutLayers*nGpyrLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nGpyrLayers»xf32>
+
+  %e74_s, %e92_s, %e39_s = iara.node @iara_broadcast in ( %e34_d:tensor<«tot_image_size»xf32> ) out ( tensor<«tot_image_size»xf32>, tensor<«tot_image_size*nGpyrLayers»xf32>, tensor<«tot_image_size»xf32> )
+  %e74_d = iara.edge %e74_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size»xf32>
+  %e92_d = iara.edge %e92_s : tensor<«tot_image_size*nGpyrLayers»xf32> -> tensor<«tot_image_size»xf32>
+  %e39_d = iara.edge %e39_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size/parallelismLevel»xf32>
+
+  %e91_s = iara.node @iara_broadcast in ( %e37_d:tensor<«if(imgDouble,4*tot_image_size,parallelismLevel)»xf32> ) out ( tensor<«if(imgDouble, nGpyrLayers*4*tot_image_size,nGpyrLayers*parallelismLevel)»xf32> )
+  %e91_d = iara.edge %e91_s : tensor<«if(imgDouble, nGpyrLayers*4*tot_image_size,nGpyrLayers*parallelismLevel)»xf32> -> tensor<«if(imgDouble, 4*tot_image_size,parallelismLevel)»xf32>
+
+  %e38_s, %e41_s = iara.node @iara_broadcast in ( %e40_d:tensor<«tot_image_size/4»xf32> ) out ( tensor<«(nOctavesDownN*tot_image_size)/4»xf32>, tensor<«(nGpyrLayers*tot_image_size)/4»xf32> )
+  %e38_d = iara.edge %e38_s : tensor<«(nOctavesDownN*tot_image_size)/4»xf32> -> tensor<«tot_image_size/4»xf32>
+  %e41_d = iara.edge %e41_s : tensor<«(nGpyrLayers*tot_image_size)/4»xf32> -> tensor<«tot_image_size/4»xf32>
+
+  %e42_s, %e1_s = iara.node @iara_broadcast in ( %e50_d:tensor<«tot_image_size/16»xf32> ) out ( tensor<«(tot_image_size*nGpyrLayers)/16»xf32>, tensor<«tot_image_size/16»xf32> )
+  %e42_d = iara.edge %e42_s : tensor<«(tot_image_size*nGpyrLayers)/16»xf32> -> tensor<«tot_image_size/16»xf32>
+  %e1_d = iara.edge %e1_s : tensor<«tot_image_size/16»xf32> -> tensor<«tot_image_size/16»xf32> { delay = «tot_image_size/16» }
+
+  %e4_s, %e49_s = iara.node @iara_broadcast in ( %e77_d:tensor<«tot_image_size»xf32> ) out ( tensor<«tot_image_size»xf32>, tensor<«tot_image_size»xf32> )
+  %e4_d = iara.edge %e4_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size»xf32> { delay = «tot_image_size» }
+  %e49_d = iara.edge %e49_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size*nGpyrLayers»xf32>
+
+  %e5_s, %e48_s = iara.node @iara_broadcast in ( %e78_d:tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> ) out ( tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32>, tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> )
+  %e5_d = iara.edge %e5_s : tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> -> tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> { delay = «if(imgDouble,4*tot_image_size,parallelismLevel)» }
+  %e48_d = iara.edge %e48_s : tensor<«if(imgDouble, (4*tot_image_size), parallelismLevel)»xf32> -> tensor<«if(imgDouble, 4*tot_image_size*nGpyrLayers, parallelismLevel*nGpyrLayers)»xf32>
+
+  %e2_s, %e52_s = iara.node @iara_broadcast in ( %e51_d:tensor<«tot_image_size/4»xf32> ) out ( tensor<«tot_image_size/4»xf32>, tensor<«tot_image_size/4»xf32> )
+  %e2_d = iara.edge %e2_s : tensor<«tot_image_size/4»xf32> -> tensor<«tot_image_size/4»xf32> { delay = «tot_image_size/4» }
+  %e52_d = iara.edge %e52_s : tensor<«tot_image_size/4»xf32> -> tensor<«(tot_image_size*nGpyrLayers)/4»xf32>
+
+  %e3_s, %e54_s = iara.node @iara_broadcast in ( %e53_d:tensor<«tot_image_size/16»xf32> ) out ( tensor<«tot_image_size/16»xf32>, tensor<«tot_image_size/16»xf32> )
+  %e3_d = iara.edge %e3_s : tensor<«tot_image_size/16»xf32> -> tensor<«tot_image_size/16»xf32> { delay = «tot_image_size/16» }
+  %e54_d = iara.edge %e54_s : tensor<«tot_image_size/16»xf32> -> tensor<«(tot_image_size*nGpyrLayers*nOctavesDownN)/16»xf32>
+
+  %e65_s = iara.node @iara_broadcast in ( %e64_d:tensor<«totSizeWithoutLayers*nDogLayers»xf32> ) out ( tensor<«totSizeWithoutLayers*nDogLayers*parallelismLevel»xf32> )
+  %e65_d = iara.edge %e65_s : tensor<«totSizeWithoutLayers*nDogLayers*parallelismLevel»xf32> -> tensor<«totSizeWithoutLayers*nDogLayers»xf32>
+
+  iara.out ( %keypoints_o_i : tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+  iara.out ( %nbKeypoints_o_i : tensor<1xi32> )
+
+} // iara.actor @Htop_sift
+
+} // module

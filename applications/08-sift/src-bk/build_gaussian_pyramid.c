@@ -7,7 +7,8 @@
 #include "ezsift-preesm.h"
 #include "sift_config.h"
 
-void BarrierCounterGpyr(int nGpyrLayers, IN int *iters_in, OUT int *iters_out) {
+void BarrierCounterGpyr(IN int *iters_in, OUT int *iters_out) {
+  int nGpyrLayers = SIFT_NUM_GPYR_LAYERS;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -81,9 +82,11 @@ void counterGpyrLayer(OUT int *iter) {
   }
 }
 
-void BarrierTranspose_1(int image_width, int image_height, int parallelismLevel,
-                        int tot_image_size, IN float *img_in,
-                        OUT float *img_out) {
+void BarrierTranspose_1(IN float *img_in, OUT float *img_out) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -106,9 +109,11 @@ void BarrierTranspose_1(int image_width, int image_height, int parallelismLevel,
   }
 }
 
-void BarrierTranspose_2(int image_width, int image_height, int parallelismLevel,
-                        int tot_image_size, IN float *img_in,
-                        OUT float *img_out) {
+void BarrierTranspose_2(IN float *img_in, OUT float *img_out) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -131,9 +136,12 @@ void BarrierTranspose_2(int image_width, int image_height, int parallelismLevel,
   }
 }
 
-void BarrierTranspose2x_1(int image_width, int image_height, int imgDouble,
-                          int parallelismLevel, int tot_image_size,
-                          IN float *img_in, OUT float *img_out) {
+void BarrierTranspose2x_1(IN float *img_in, OUT float *img_out) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -160,9 +168,12 @@ void BarrierTranspose2x_1(int image_width, int image_height, int imgDouble,
   }
 }
 
-void BarrierTranspose2x_2(int image_width, int image_height, int imgDouble,
-                          int parallelismLevel, int tot_image_size,
-                          IN float *img_in, OUT float *img_out) {
+void BarrierTranspose2x_2(IN float *img_in, OUT float *img_out) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -189,11 +200,13 @@ void BarrierTranspose2x_2(int image_width, int image_height, int imgDouble,
   }
 }
 
-void row_filter_transpose_1(int image_height, int image_width, int nGpyrLayers,
-                            int parallelismLevel, int gWmax, int tot_img_size,
-                            IN float *gaussian_coefs, IN float *img,
+void row_filter_transpose_1(IN float *gaussian_coefs, IN float *img,
                             IN int *column_sizes, IN float *imgIterPrev,
                             IN int *iter, OUT float *imgGT) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int gWmax = SIFT_GWIDTH_MAX;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -204,11 +217,13 @@ void row_filter_transpose_1(int image_height, int image_width, int nGpyrLayers,
                        image_height / parallelismLevel,
                        gaussian_coefs + gWmax * (*iter), gR);
 }
-void row_filter_transpose_2(int image_height, int image_width, int nGpyrLayers,
-                            int parallelismLevel, int gWmax, int tot_img_size,
-                            IN float *gaussian_coefs, IN float *img,
+void row_filter_transpose_2(IN float *gaussian_coefs, IN float *img,
                             IN int *column_sizes, IN int *iter,
                             OUT float *imgGT) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int gWmax = SIFT_GWIDTH_MAX;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -219,12 +234,15 @@ void row_filter_transpose_2(int image_height, int image_width, int nGpyrLayers,
                        gaussian_coefs + gWmax * (*iter), gR);
 }
 
-void row_filter_transpose2x_1(int image_height, int image_width, int imgDouble,
-                              int nGpyrLayers, int parallelismLevel, int gWmax,
-                              int tot_img_size, IN float *gaussian_coefs,
+void row_filter_transpose2x_1(IN float *gaussian_coefs,
                               IN float *img, IN int *column_sizes,
                               IN float *imgIterPrev, IN int *iter,
                               OUT float *imgGT) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int gWmax = SIFT_GWIDTH_MAX;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -238,11 +256,14 @@ void row_filter_transpose2x_1(int image_height, int image_width, int imgDouble,
   }
 }
 
-void row_filter_transpose2x_2(int image_height, int image_width, int imgDouble,
-                              int nGpyrLayers, int parallelismLevel, int gWmax,
-                              int tot_img_size, IN int *column_sizes,
+void row_filter_transpose2x_2(IN int *column_sizes,
                               IN float *img, IN float *gaussian_coefs,
                               IN int *iter, OUT float *imgGT) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int gWmax = SIFT_GWIDTH_MAX;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -255,10 +276,14 @@ void row_filter_transpose2x_2(int image_height, int image_width, int imgDouble,
   }
 }
 
-void seq_blur1(int image_width, int image_height, int nGpyrLayers, int gWmax,
-               int tot_image_size, int image_maxWH, IN float *fst_img,
+void seq_blur1(IN float *fst_img,
                IN float *imgBlurPrev, IN float *gaussian_coefs,
                IN int *column_sizes, IN int *iter, OUT float *imgBlurred) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int gWmax = SIFT_GWIDTH_MAX;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
+  int image_maxWH = SIFT_IMAGE_MAXWH;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -280,11 +305,15 @@ void seq_blur1(int image_width, int image_height, int nGpyrLayers, int gWmax,
    * 1); */
 }
 
-void seq_blurN(int image_width, int image_height, int nGpyrLayers, int gWmax,
-               int tot_image_size, int image_maxWH, IN float *fst_img,
+void seq_blurN(IN float *fst_img,
                IN float *imgBlurPrev, IN float *gaussian_coefs,
                IN int *column_sizes, IN int *iter, IN int *octaveLevel,
                OUT float *imgBlurred) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int gWmax = SIFT_GWIDTH_MAX;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
+  int image_maxWH = SIFT_IMAGE_MAXWH;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -316,16 +345,12 @@ void seq_blurN(int image_width, int image_height, int nGpyrLayers, int gWmax,
   /* write_float_pgm(fgpyr, imgBlurred, buffer, dstW, dstH, 1); */
 }
 
-void MERGE_gpyr(int nGpyrLayers, int imgDouble, int nOctavesDownN,
-                int totSizeWithoutLayers, int tot_image_size,
-                int parallelismLevel,
-                int image_width /* needed only for debug */,
-                int image_height /* needed only for debug */,
-
-                /* IN float * img, IN float * imgUp2x, IN float * imgDown2x1, IN
-                   float * imgDown2xN, */
-                IN float *gpyrs, IN float *gpyrsUp2x, IN float *gpyrsDown2x1,
+void MERGE_gpyr(IN float *gpyrs, IN float *gpyrsUp2x, IN float *gpyrsDown2x1,
                 IN float *gpyrsDown2xN, OUT float *gpyr) {
+  int nGpyrLayers = SIFT_NUM_GPYR_LAYERS;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int nOctavesDownN = SIFT_OCTAVES_DOWN_N;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -404,7 +429,7 @@ void compute_gaussian_coefs(OUT int *column_sizes,
   // Use standard SIFT configuration
   int gWmax = SIFT_GWIDTH_MAX;
   int nGpyrLayers = SIFT_NUM_GPYR_LAYERS;
-  int nLayers = SIFT_NUM_SCALES - 1;  // nLayers = nGpyrLayers - 3 = 3
+  int nLayers = SIFT_NLAYERS;  // nLayers = nGpyrLayers - 3 = 3
   int imgDouble = SIFT_IMG_DOUBLE;
 
   // Compute all sigmas for different layers

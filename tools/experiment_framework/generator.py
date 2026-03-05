@@ -165,6 +165,7 @@ def generate_cmake_instance(
     # Extract application entry name
     app_name = config.get('application', {}).get('name', 'unknown')
     entry = config.get('application', {}).get('entry', app_name)
+    main_actor = config.get('application', {}).get('build', {}).get('main_actor', 'run')
 
     # Scheduler
     scheduler = str(params.get('scheduler', 'sequential'))
@@ -240,6 +241,7 @@ def generate_cmake_instance(
         f'    APPLICATION_DIR "{app_dir}"',
         f'    ENTRY "{entry}"',
         f'    SCHEDULER "{scheduler}"',
+        f'    MAIN_ACTOR "{main_actor}"',
     ]
 
     # Add PARAMETERS if present

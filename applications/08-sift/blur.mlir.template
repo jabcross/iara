@@ -1,0 +1,48 @@
+// Parameters (cfg_in_iface — primary, from experiments.yaml `parameters`):
+//   image_width
+//   image_height
+//   gWmax
+//   parallelismLevel
+//   nGpyrLayers
+//   tot_image_size
+// Computed parameters (param — from experiments.yaml `computed_parameters`):
+
+module {
+
+iara.actor @blur {
+
+  %gauss_coefs1_i_i = iara.in : tensor<«nGpyrLayers*gWmax*parallelismLevel»xf32>
+  %imgOri_i_i = iara.in : tensor<«tot_image_size»xf32>
+  %col_sizes1_i_i = iara.in : tensor<«nGpyrLayers*parallelismLevel»xi32>
+  %iterPrev_i_i = iara.in : tensor<«tot_image_size»xf32>
+  %iter_nb1_i_i = iara.in : tensor<«1*parallelismLevel»xi32>
+  %iter_nb2_i_i = iara.in : tensor<«1*parallelismLevel»xi32>
+  %gauss_coefs2_i_i = iara.in : tensor<«nGpyrLayers*gWmax*parallelismLevel»xf32>
+  %col_sizes2_i_i = iara.in : tensor<«nGpyrLayers*parallelismLevel»xi32>
+
+  %e5_d = iara.edge %gauss_coefs1_i_i : tensor<«nGpyrLayers*gWmax*parallelismLevel»xf32> -> tensor<«nGpyrLayers*gWmax»xf32>
+  %e6_d = iara.edge %imgOri_i_i : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size/parallelismLevel»xf32>
+  %e7_d = iara.edge %col_sizes1_i_i : tensor<«nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers»xi32>
+  %e9_d = iara.edge %iterPrev_i_i : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size/parallelismLevel»xf32>
+  %e8_d = iara.edge %iter_nb1_i_i : tensor<«1*parallelismLevel»xi32> -> tensor<1xi32>
+  %e12_d = iara.edge %iter_nb2_i_i : tensor<«1*parallelismLevel»xi32> -> tensor<1xi32>
+  %e11_d = iara.edge %gauss_coefs2_i_i : tensor<«nGpyrLayers*gWmax*parallelismLevel»xf32> -> tensor<«nGpyrLayers*gWmax»xf32>
+  %e10_d = iara.edge %col_sizes2_i_i : tensor<«nGpyrLayers*parallelismLevel»xi32> -> tensor<«nGpyrLayers»xi32>
+
+  %e1_s = iara.node @p2iaw_row_filter_transpose_1 in ( %e5_d:tensor<«nGpyrLayers*gWmax»xf32>, %e7_d:tensor<«nGpyrLayers»xi32>, %e6_d:tensor<«tot_image_size/parallelismLevel»xf32>, %e9_d:tensor<«tot_image_size/parallelismLevel»xf32>, %e8_d:tensor<1xi32> ) out ( tensor<«tot_image_size/parallelismLevel»xf32> )
+  %e1_d = iara.edge %e1_s : tensor<«tot_image_size/parallelismLevel»xf32> -> tensor<«tot_image_size»xf32>
+
+  %e3_s = iara.node @p2iaw_row_filter_transpose_2 in ( %e11_d:tensor<«nGpyrLayers*gWmax»xf32>, %e10_d:tensor<«nGpyrLayers»xi32>, %e2_d:tensor<«tot_image_size/parallelismLevel»xf32>, %e12_d:tensor<1xi32> ) out ( tensor<«tot_image_size/parallelismLevel»xf32> )
+  %e3_d = iara.edge %e3_s : tensor<«tot_image_size/parallelismLevel»xf32> -> tensor<«tot_image_size»xf32>
+
+  %e2_s = iara.node @p2iaw_BarrierTranspose_1 in ( %e1_d:tensor<«tot_image_size»xf32> ) out ( tensor<«tot_image_size»xf32> )
+  %e2_d = iara.edge %e2_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size/parallelismLevel»xf32>
+
+  %e4_s = iara.node @p2iaw_BarrierTranspose_2 in ( %e3_d:tensor<«tot_image_size»xf32> ) out ( tensor<«tot_image_size»xf32> )
+  %imgBlurred_o_i = iara.edge %e4_s : tensor<«tot_image_size»xf32> -> tensor<«tot_image_size»xf32>
+
+  iara.out ( %imgBlurred_o_i : tensor<«tot_image_size»xf32> )
+
+} // iara.actor @blur
+
+} // module

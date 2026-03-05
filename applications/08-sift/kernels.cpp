@@ -55,7 +55,6 @@ int main() {
 
   // Output measurements in expected format for capture by measurement framework
   printf("Wall time: %lf s\n", wall_time);
-  printf("Keypoints found: 0\n");
 
   return 0;
 }

@@ -1,0 +1,293 @@
+/**
+ * SIFT Preesm-to-IaRa actor wrappers (preesm2iara.c.template)
+ *
+ * Each p2iaw_<name> wrapper:
+ *   - Accepts only data parameters in IaRa order: pure inputs, inout, pure outputs
+ *   - Calls the original Preesm C function with config params baked as template markers
+ *   - Config params are resolved by instantiate-mlir-template.py at instantiation time
+ *
+ * Inout pairs (single buffer passed for both Preesm in+out arguments):
+ *   - extract_descriptor: keypoints (pass NULL for keypoints_out to skip self-copy)
+ *   - BarrierCounterGpyr: iters (pure memcpy identity)
+ */
+
+#include <stddef.h>
+#include <stdio.h>
+#include "ezsift-preesm.h"
+
+/* ── Hextract.pi leaf actors ─────────────────────────────────────────────── */
+
+void p2iaw_read_pgm(unsigned char *img) {
+    read_pgm(«image_width», «image_height», img);
+}
+
+void p2iaw_draw_keypoints_to_ppm_file(int *nbKeypoints, unsigned char *image,
+                                      struct SiftKeypoint *keypoints) {
+    draw_keypoints_to_ppm_file(«nKeypointsMax», «image_width», «image_height»,
+                               «tot_image_size», nbKeypoints, image, keypoints);
+}
+
+void p2iaw_export_keypoints_to_key_file(int *nbKeypoints, SiftKpt *keypoints) {
+    export_keypoints_to_key_file(«nKeypointsMax», «DumpDescriptor», «nBins»,
+                                 nbKeypoints, keypoints);
+    printf("Keypoints found: %d\n", *nbKeypoints);
+}
+
+/* ── Htop_sift.pi leaf actors ────────────────────────────────────────────── */
+
+/* -- Counters / iterators (output-only) ---------------------------------- */
+
+void p2iaw_counterGpyrLayer(int *iter) {
+    counterGpyrLayer(«nGpyrLayers», iter);
+}
+
+void p2iaw_counterOctaveDownN(int *iter) {
+    counterOctaveDownN(«nOctavesDownN», iter);
+}
+
+void p2iaw_counterPLevels(int *iter) {
+    counterPLevels(«parallelismLevel», iter);
+}
+
+void p2iaw_compute_gaussian_coefs(int *column_sizes, float *gaussian_coefs) {
+    compute_gaussian_coefs(«gWmax», «nGpyrLayers», «nLayers», «imgDouble»,
+                           column_sizes, gaussian_coefs);
+}
+
+void p2iaw_ITERATOR_build_dog_pyr(int *start_octave, int *stop_octave,
+                                  int *start_layer, int *stop_layer,
+                                  int *start_line, int *stop_line,
+                                  int *start_col, int *stop_col) {
+    ITERATOR_build_dog_pyr(«parallelismLevel», «nOctaves», «nDogLayers»,
+                           «image_width», «image_height», «imgDouble»,
+                           start_octave, stop_octave,
+                           start_layer, stop_layer,
+                           start_line, stop_line,
+                           start_col, stop_col);
+}
+
+void p2iaw_ITERATOR_build_grd_rot_pyr(int *start_octave, int *stop_octave,
+                                      int *start_layer, int *stop_layer,
+                                      int *start_line, int *stop_line,
+                                      int *start_col, int *stop_col) {
+    ITERATOR_build_grd_rot_pyr(«parallelismLevel», «nOctaves», «nLayers»,
+                               «image_width», «image_height», «imgDouble»,
+                               start_octave, stop_octave,
+                               start_layer, stop_layer,
+                               start_line, stop_line,
+                               start_col, stop_col);
+}
+
+void p2iaw_ITERATOR_detect_keypoints(int *start_octave, int *stop_octave,
+                                     int *start_layer, int *stop_layer,
+                                     int *start_line, int *stop_line,
+                                     int *start_col, int *stop_col) {
+    ITERATOR_detect_keypoints(«parallelismLevel», «nOctaves», «nLayers»,
+                              «image_width», «image_height», «imgDouble»,
+                              start_octave, stop_octave,
+                              start_layer, stop_layer,
+                              start_line, stop_line,
+                              start_col, stop_col);
+}
+
+/* -- Image processing ---------------------------------------------------- */
+
+void p2iaw_to_float(unsigned char *uchar_img, float *float_img) {
+    to_float(«parallelismLevel», «image_width», «image_height»,
+             uchar_img, float_img);
+}
+
+void p2iaw_SPLIT_upsample2x(float *in, float *out) {
+    SPLIT_upsample2x(«parallelismLevel», «imgDouble»,
+                     «image_width», «image_height», «tot_image_size»,
+                     in, out);
+}
+
+void p2iaw_upsample2x(int *iter, float *img, float *img2x) {
+    upsample2x(«image_width», «image_height»,
+               «parallelismLevel», «imgDouble»,
+               iter, img, img2x);
+}
+
+void p2iaw_downsample2x1(float *img2x, float *img) {
+    downsample2x1(«image_width», «image_height», «parallelismLevel»,
+                  img2x, img);
+}
+
+void p2iaw_downsample2xN(float *fst_img, float *imgDownPrev, int *iter,
+                         float *imgDown2x) {
+    downsample2xN(«image_width», «image_height»,
+                  fst_img, imgDownPrev, iter, imgDown2x);
+}
+
+/* -- Gaussian blur pipeline ---------------------------------------------- */
+
+void p2iaw_seq_blur1(float *gaussian_coefs, int *column_sizes,
+                     float *fst_img, float *imgBlurPrev, int *iter,
+                     float *imgBlurred) {
+    seq_blur1(«image_height», «image_width», «tot_image_size»,
+              «nGpyrLayers», «gWmax», «image_maxWH»,
+              gaussian_coefs, column_sizes,
+              fst_img, imgBlurPrev, iter, imgBlurred);
+}
+
+void p2iaw_seq_blurN(int *octaveLevel, float *gaussian_coefs, int *column_sizes,
+                     float *fst_img, float *imgBlurPrev, int *iter,
+                     float *imgBlurred) {
+    seq_blurN(«image_height», «image_width», «tot_image_size»,
+              «nGpyrLayers», «gWmax», «image_maxWH»,
+              octaveLevel, gaussian_coefs, column_sizes,
+              fst_img, imgBlurPrev, iter, imgBlurred);
+}
+
+/* -- INOUT: BarrierCounterGpyr ------------------------------------------- */
+
+void p2iaw_BarrierCounterGpyr(int *iters) {
+    BarrierCounterGpyr(«nGpyrLayers», iters, iters);
+}
+
+/* -- Merge / pyramid construction ---------------------------------------- */
+
+void p2iaw_MERGE_gpyr(float *gpyrs, float *gpyrsUp2x,
+                      float *gpyrsDown2x1, float *gpyrsDown2xN,
+                      float *gpyr) {
+    MERGE_gpyr(«nGpyrLayers», «imgDouble»,
+               «image_width», «image_height»,
+               «nOctavesDownN», «totSizeWithoutLayers», «tot_image_size»,
+               gpyr, gpyrs, gpyrsUp2x, gpyrsDown2x1, gpyrsDown2xN);
+}
+
+void p2iaw_build_dog_pyr(float *gpyr,
+                         int *start_octave, int *stop_octave,
+                         int *start_layer, int *stop_layer,
+                         int *start_line, int *stop_line,
+                         int *start_col, int *stop_col,
+                         float *dogPyr) {
+    build_dog_pyr(«nGpyrLayers», «totSizeWithoutLayers»,
+                  «parallelismLevel», «nDogLayers»,
+                  «image_width», «image_height», «imgDouble»,
+                  gpyr, dogPyr,
+                  start_octave, stop_octave,
+                  start_layer, stop_layer,
+                  start_line, stop_line,
+                  start_col, stop_col);
+}
+
+void p2iaw_build_grd_rot_pyr(float *gpyr,
+                             int *start_octave, int *stop_octave,
+                             int *start_layer, int *stop_layer,
+                             int *start_line, int *stop_line,
+                             int *start_col, int *stop_col,
+                             float *grdPyr, float *rotPyr) {
+    build_grd_rot_pyr(«nGpyrLayers», «totSizeWithoutLayers»,
+                      «parallelismLevel», «nLayers»,
+                      «image_width», «image_height», «imgDouble»,
+                      gpyr, grdPyr, rotPyr,
+                      start_octave, stop_octave,
+                      start_layer, stop_layer,
+                      start_line, stop_line,
+                      start_col, stop_col);
+}
+
+/* -- Keypoint detection & extraction ------------------------------------- */
+
+void p2iaw_detect_keypoints(float *dogPyr, float *grdPyr, float *rotPyr,
+                            int *start_octave, int *stop_octave,
+                            int *start_layer, int *stop_layer,
+                            int *start_line, int *stop_line,
+                            int *start_col, int *stop_col,
+                            struct SiftKeypoint *keypoints) {
+    detect_keypoints(«nLayers», «totSizeWithoutLayers»,
+                     «parallelismLevel», «nDogLayers», «nLocalKptMax»,
+                     «image_width», «image_height»,
+                     «nOctaves», «imgDouble»,
+                     dogPyr, grdPyr, rotPyr,
+                     start_octave, stop_octave,
+                     start_layer, stop_layer,
+                     start_line, stop_line,
+                     start_col, stop_col,
+                     keypoints);
+}
+
+/* -- INOUT: extract_descriptor ------------------------------------------- */
+/* keypoints is inout: Preesm writes descriptors into keypoints_in in-place.
+ * Pass NULL for keypoints_out to skip the unnecessary self-memcpy. */
+
+void p2iaw_extract_descriptor(float *grdPyr, float *rotPyr,
+                              SiftKpt *keypoints) {
+    extract_descriptor(«nLayers», «totSizeWithoutLayers»,
+                       «parallelismLevel», «nLocalKptMax»,
+                       «image_width», «image_height»,
+                       «imgDouble», «nBins», «nHistBins»,
+                       «descrWidth», «descrHistBins»,
+                       grdPyr, rotPyr,
+                       keypoints, NULL);
+}
+
+void p2iaw_MERGE_keypoints(SiftKpt *keypoints_in,
+                           SiftKpt *keypoints_out, int *nbKeypoints_out) {
+    MERGE_keypoints(«nKeypointsMax», «parallelismLevel», «nLocalKptMax»,
+                    keypoints_in, keypoints_out, nbKeypoints_out);
+}
+
+/* ── Hblur.pi leaf actors ────────────────────────────────────────────────── */
+
+void p2iaw_BarrierTranspose_1(float *img_in, float *img_out) {
+    BarrierTranspose_1(«image_width», «image_height», «parallelismLevel»,
+                       «tot_image_size», img_in, img_out);
+}
+
+void p2iaw_BarrierTranspose_2(float *img_in, float *img_out) {
+    BarrierTranspose_2(«image_width», «image_height», «parallelismLevel»,
+                       «tot_image_size», img_in, img_out);
+}
+
+void p2iaw_row_filter_transpose_1(float *gaussian_coefs, int *column_sizes,
+                                  float *img, float *imgIterPrev, int *iter,
+                                  float *imgGT) {
+    row_filter_transpose_1(«image_height», «image_width», «nGpyrLayers»,
+                           «gWmax», «parallelismLevel»,
+                           gaussian_coefs, column_sizes,
+                           img, imgIterPrev, iter, imgGT);
+}
+
+void p2iaw_row_filter_transpose_2(float *gaussian_coefs, int *column_sizes,
+                                  float *img, int *iter,
+                                  float *imgGT) {
+    row_filter_transpose_2(«image_height», «image_width», «nGpyrLayers»,
+                           «gWmax», «parallelismLevel»,
+                           gaussian_coefs, column_sizes,
+                           img, iter, imgGT);
+}
+
+/* ── Hblur2x.pi leaf actors ──────────────────────────────────────────────── */
+
+void p2iaw_BarrierTranspose2x_1(float *img_in, float *img_out) {
+    BarrierTranspose2x_1(«image_width», «image_height», «imgDouble»,
+                         «parallelismLevel», «tot_image_size»,
+                         img_in, img_out);
+}
+
+void p2iaw_BarrierTranspose2x_2(float *img_in, float *img_out) {
+    BarrierTranspose2x_2(«image_width», «image_height», «imgDouble»,
+                         «parallelismLevel», «tot_image_size»,
+                         img_in, img_out);
+}
+
+void p2iaw_row_filter_transpose2x_1(float *gaussian_coefs, int *column_sizes,
+                                    float *img, float *imgIterPrev, int *iter,
+                                    float *imgGT) {
+    row_filter_transpose2x_1(«image_height», «image_width», «nGpyrLayers»,
+                             «gWmax», «parallelismLevel», «imgDouble»,
+                             gaussian_coefs, column_sizes,
+                             img, imgIterPrev, iter, imgGT);
+}
+
+void p2iaw_row_filter_transpose2x_2(float *gaussian_coefs, int *column_sizes,
+                                    float *img, int *iter,
+                                    float *imgGT) {
+    row_filter_transpose2x_2(«image_height», «image_width», «nGpyrLayers»,
+                             «gWmax», «parallelismLevel», «imgDouble»,
+                             gaussian_coefs, column_sizes,
+                             img, iter, imgGT);
+}

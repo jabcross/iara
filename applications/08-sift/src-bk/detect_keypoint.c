@@ -19,7 +19,7 @@ void ITERATOR_detect_keypoints(OUT int *start_octave,
   // Use standard SIFT configuration
   int parallelismLevel = SIFT_PARALLELISM_LEVEL;
   int nOctaves = SIFT_NUM_OCTAVES;
-  int nLayers = SIFT_NUM_SCALES - 1;  // Number of scales per octave
+  int nLayers = SIFT_NLAYERS;
   int image_width = SIFT_IMAGE_WIDTH;
   int image_height = SIFT_IMAGE_HEIGHT;
   int imgDouble = SIFT_IMG_DOUBLE;
@@ -314,20 +314,33 @@ int compareKeypointThreshold(struct SiftKeypoint *kpt_in_list,
 }
 
 // Keypoint detection.
-void detect_keypoints(int totSizeWithoutLayers, int parallelismLevel,
-                      int nDogLayers, int nLayers, int nLocalKptMax,
-                      int nOctaves /* needed only for debug */, int imgDouble,
-                      int image_width, int image_height,
-
-                      IN float *grdPyr, IN float *rotPyr, IN float *dogPyr,
+void detect_keypoints(IN float *grdPyr, IN float *rotPyr, IN float *dogPyr,
                       IN int *start_octave, IN int *stop_octave,
                       IN int *start_layer, IN int *stop_layer,
                       IN int *start_line, IN int *stop_line, IN int *start_col,
                       IN int *stop_col,
-                      OUT SiftKpt *keypoints /* , OUT int * nbKeypoints */) {
+                      OUT SiftKpt *keypoints) {
+  int nDogLayers = SIFT_NUM_DOG_LAYERS;
+  int nLayers = SIFT_NLAYERS;
+  int nLocalKptMax = SIFT_NUM_LOCAL_KPT_MAX;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
 
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
+  fprintf(stderr, "  [DEBUG] grdPyr=%p rotPyr=%p dogPyr=%p kpts=%p\n",
+          (void*)grdPyr, (void*)rotPyr, (void*)dogPyr, (void*)keypoints);
+  fprintf(stderr, "  [DEBUG] so=%p eo=%p sl=%p el=%p\n",
+          (void*)start_octave, (void*)stop_octave,
+          (void*)start_layer, (void*)stop_layer);
+  if (start_octave && stop_octave && start_layer && stop_layer &&
+      start_line && stop_line && start_col && stop_col) {
+    fprintf(stderr, "  [DEBUG] oct=[%d,%d) layer=[%d,%d) line=[%d,%d) col=[%d,%d)\n",
+            *start_octave, *stop_octave, *start_layer, *stop_layer,
+            *start_line, *stop_line, *start_col, *stop_col);
+  }
+  fflush(stderr);
 #endif
 
   /* #ifdef SIFT_DEBUG */

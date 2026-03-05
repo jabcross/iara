@@ -1,7 +1,8 @@
 # SIFT Feature Detection Experiment Configuration
 #
-# This file defines all experiments, parameters, measurements, and visualization
-# settings for the SIFT feature detection application.
+# IaRa vf-omp vs Preesm baseline comparison.
+# Image size is fixed at 800x640 (hardcoded in topology.mlir and codegen.sh).
+# Varying parameter: NUM_CORES (number of CPU cores for parallelism).
 
 application:
   name: 08-sift
@@ -9,54 +10,36 @@ application:
   app_type: experiment
   build:
     extra_linker_args: ["-lm"]
+    main_actor: "Hextract"
 
-    # Compile-time defines that are always present
+    # Compile-time defines always present
     defines:
       - "VERBOSE=1"
 
-# Metadata for framework integration (environment variables, CSV columns)
-
 parameters:
-  # Image width parameter
-  - name: IMAGE_WIDTH
+  # Number of CPU cores for parallel execution
+  - name: NUM_CORES
     type: int
-    label: "Image Width"
-    description: "Image width in pixels"
-    unit: "px"
+    label: "CPU Cores"
+    description: "Number of CPU cores for parallel execution"
 
-  # Image height parameter
-  - name: IMAGE_HEIGHT
-    type: int
-    label: "Image Height"
-    description: "Image height in pixels"
-    unit: "px"
-
-  # Scheduler selection (IaRa virtual FIFO schedulers only)
+  # Scheduler selection
   - name: scheduler
     type: str
     label: "Scheduler"
     description: "Task scheduling strategy"
     choices:
-      - vf-omp         # Virtual FIFO with OpenMP backend
-      - vf-enkits      # Virtual FIFO with EnkiTS backend
+      - vf-omp    # IaRa Virtual FIFO with OpenMP backend
+      - preesm    # Preesm reference implementation
 
-# Computed parameters (derived from other parameters)
 computed_parameters: []
 
-# Constraints on parameter combinations
 constraints:
-  # image_width must be positive
-  - expression: "IMAGE_WIDTH > 0"
-    description: "Image width must be positive"
-
-  # image_height must be positive
-  - expression: "IMAGE_HEIGHT > 0"
-    description: "Image height must be positive"
+  - expression: "NUM_CORES > 0"
+    description: "Number of cores must be positive"
 
 # Measurement definitions
-# wall_time and max_rss_mb are standard — collected automatically by the framework.
 measurements:
-  # Verification result
   - name: keypoints_found
     type: int
     parser:
@@ -67,90 +50,52 @@ measurements:
     required: false
     description: "Number of keypoints detected"
 
-# Experiment sets for different use cases
+# Experiment sets
 experiment_sets:
-  # Standard test
-  - name: standard
-    description: "Standard SIFT test with virtual FIFO schedulers"
+  # Single core, both schedulers — fast sanity check
+  - name: quick
+    description: "Quick sanity check: 1 core, both schedulers"
     parameters:
-      IMAGE_WIDTH: [800]
-      IMAGE_HEIGHT: [640]
-      scheduler: [vf-omp, vf-enkits]
+      NUM_CORES: [1]
+      scheduler: [vf-omp, preesm]
 
-  # Small scale testing
-  - name: small
-    description: "Small-scale experiments with quick execution"
-
+  # IaRa vs Preesm across core counts (original repo: 1-core and 4-core scenarios)
+  - name: compare
+    description: "IaRa vf-omp vs Preesm on 1 and 4 cores"
     parameters:
-      IMAGE_WIDTH: [512, 800]
-      IMAGE_HEIGHT: [512, 640]
-      scheduler: [vf-omp, vf-enkits]
+      NUM_CORES: [1, 4]
+      scheduler: [vf-omp, preesm]
 
-  # Full scale experiments
-  - name: full
-    description: "Full-scale experiments with various image sizes"
-
+  # Reproduces Table 1 from Honorat et al. 2019 (SIFT SDF iterators paper).
+  # Core counts {1,2,4,5,10} are the common divisors of the 4-D array sizes
+  # used in SIFT, matching the original Preesm vs OpenMP evaluation exactly.
+  - name: paper
+    description: "Table 1 reproduction: 1/2/4/5/10 cores, IaRa vf-omp vs Preesm"
     parameters:
-      IMAGE_WIDTH: [512, 768, 1024, 1536, 2048]
-      IMAGE_HEIGHT: [512, 768, 1024, 1536, 2048]
-      scheduler: [vf-omp, vf-enkits]
+      NUM_CORES: [1, 2, 4, 5, 10]
+      scheduler: [vf-omp, preesm]
+
+# Execution configuration
+execution:
+  repetitions: 3
+  warmup: 1
+  timeout: 120
+  environment:
+    # {NUM_CORES} is substituted per-instance by the experiment framework.
+    # Preesm binaries use pthreads (not OMP); this only affects IaRa vf-omp.
+    OMP_NUM_THREADS: "{NUM_CORES}"
+    OMP_PROC_BIND: "close"
+    OMP_PLACES: "cores"
+    PARALLELISM_LEVEL: "{NUM_CORES}"
 
 # Visualization configuration
 visualization:
-  defaults:
-    backend: plotly
-    figsize: [14, 8]
-
-  # Declarative plot specifications
   plots:
-    # Runtime performance: grouped bars
-    runtime_performance:
-      title: "SIFT Runtime Performance"
+    wall_time:
+      title: "SIFT Runtime Wall Time"
       type: grouped_bars
       y_axis:
         metric: wall_time
       x_axis:
-        image_size: separate_plots
+        NUM_CORES: group_by
       scheduler: ordered_within_group
-      error_bars: std_dev
-      description: "Execution time across different image sizes and schedulers"
-
-    # Memory usage: grouped bars
-    memory_usage:
-      title: "SIFT Peak Memory Usage"
-      type: grouped_bars
-      y_axis:
-        metric: max_rss_mb
-      x_axis:
-        image_size: separate_plots
-      scheduler: ordered_within_group
-      error_bars: std_dev
-      description: "Peak memory usage by image size and scheduler"
-
-    # Keypoints found: line plot to show trend
-    keypoints_trend:
-      title: "SIFT Keypoints Found vs Image Size"
-      type: line_plot
-      y_axis:
-        metric: keypoints_found
-      x_axis:
-        image_size: x_axis
-      scheduler: separate_lines
-      description: "Number of keypoints detected for each image size"
-
-# Execution configuration
-execution:
-  # Number of times to run each configuration
-  repetitions: 5
-
-  # Number of warmup runs (not included in measurements)
-  warmup: 1
-
-  # Timeout for each run (seconds)
-  timeout: 300
-
-  # Environment variables to set for all runs
-  environment:
-    OMP_NUM_THREADS: "8"
-    OMP_PROC_BIND: "spread"
-    OMP_PLACES: "threads"

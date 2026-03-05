@@ -919,6 +919,69 @@ def compute_all_statistics(
     return statistics
 
 
+def _extract_instance_params(instance_name: str, config: dict) -> dict:
+    """
+    Reconstruct parameter values from an instance name using config parameter labels.
+
+    Instance name format: {app}_{set}_{scheduler_value}[_{label_slug}_{value}]...
+
+    Example:
+        "08-sift_quick_vf-omp_cpu-cores_4" with label "CPU Cores" for NUM_CORES
+        → {"scheduler": "vf-omp", "NUM_CORES": 4}
+    """
+    # Build label_slug -> param_name mapping (skip scheduler, handled separately)
+    label_to_param = {}
+    for p in config.get('parameters', []):
+        name = p['name']
+        if name == 'scheduler':
+            continue
+        label = p.get('label', name)
+        slug = label.lower().replace(' ', '-')
+        slug = ''.join(c for c in slug if c.isalnum() or c == '-')
+        label_to_param[slug] = name
+
+    parts = instance_name.split('_')
+    params = {}
+
+    # parts[0]=app, parts[1]=set, parts[2]=scheduler value, parts[3:]=label/value pairs
+    if len(parts) >= 3:
+        params['scheduler'] = parts[2]
+
+    remaining = '_'.join(parts[3:])  # e.g. "cpu-cores_4"
+
+    for label_slug, param_name in label_to_param.items():
+        pattern = rf'{re.escape(label_slug)}_([^_]+)'
+        m = re.search(pattern, remaining)
+        if m:
+            val_str = m.group(1)
+            try:
+                params[param_name] = int(val_str)
+            except ValueError:
+                try:
+                    params[param_name] = float(val_str)
+                except ValueError:
+                    params[param_name] = val_str
+
+    return params
+
+
+def _substitute_env_params(env_vars: dict, params: dict) -> dict:
+    """
+    Return a copy of env_vars with {PARAM_NAME} placeholders replaced by values.
+
+    Example:
+        env_vars = {"OMP_NUM_THREADS": "{NUM_CORES}"}
+        params   = {"NUM_CORES": 4}
+        → {"OMP_NUM_THREADS": "4"}
+    """
+    result = {}
+    for k, v in env_vars.items():
+        for param_name, param_val in params.items():
+            v = v.replace(f'{{{param_name}}}', str(param_val))
+        result[k] = v
+    return result
+
+
 def collect_all_measurements(
     build_results: Dict[str, Any],
     config: Dict[str, Any],
@@ -958,7 +1021,7 @@ def collect_all_measurements(
     exec_config = config.get('execution', {})
     final_repetitions = repetitions or exec_config.get('repetitions', 5)
     final_timeout = timeout or exec_config.get('timeout', 300)
-    env_vars = exec_config.get('environment', {})
+    base_env_vars = exec_config.get('environment', {})
     # Standard measurements always precede app-specific ones.
     # Apps must not redefine wall_time or max_rss_mb in their yaml.
     app_measurements = [
@@ -1022,6 +1085,11 @@ def collect_all_measurements(
             continue
 
         try:
+            # Resolve per-instance env vars: substitute {PARAM_NAME} with values
+            # extracted from instance_name (e.g. {NUM_CORES} -> 1).
+            instance_params = _extract_instance_params(instance_name, config)
+            env_vars = _substitute_env_params(base_env_vars, instance_params)
+
             # Execute instance with all repetitions
             exec_result = execute_instance(
                 executable,

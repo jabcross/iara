@@ -27,13 +27,16 @@ void ITERATOR_build_dog_pyr(OUT int *start_octave, OUT int *stop_octave,
 }
 
 // Build difference of Gaussian pyramids.
-void build_dog_pyr(int nDogLayers, int totSizeWithoutLayers,
-                   int parallelismLevel, int nGpyrLayers, int image_width,
-                   int image_height, int imgDouble, IN float *gpyr,
+void build_dog_pyr(IN float *gpyr,
                    IN int *start_octave, IN int *stop_octave,
                    IN int *start_layer, IN int *stop_layer, IN int *start_line,
                    IN int *stop_line, IN int *start_col, IN int *stop_col,
                    OUT float *dogPyr) {
+  int nDogLayers = SIFT_NUM_DOG_LAYERS;
+  int nGpyrLayers = SIFT_NUM_GPYR_LAYERS;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
 
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);

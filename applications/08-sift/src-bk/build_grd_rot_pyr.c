@@ -17,7 +17,7 @@ void ITERATOR_build_grd_rot_pyr(OUT int *start_octave,
   // Use standard SIFT configuration
   int parallelismLevel = SIFT_PARALLELISM_LEVEL;
   int nOctaves = SIFT_NUM_OCTAVES;
-  int nLayers = SIFT_NUM_SCALES - 1;  // Number of scales per octave
+  int nLayers = SIFT_NLAYERS;
   int image_width = SIFT_IMAGE_WIDTH;
   int image_height = SIFT_IMAGE_HEIGHT;
   int imgDouble = SIFT_IMG_DOUBLE;
@@ -29,13 +29,16 @@ void ITERATOR_build_grd_rot_pyr(OUT int *start_octave,
 }
 
 // Build gradient pyramids.
-void build_grd_rot_pyr(int totSizeWithoutLayers, int parallelismLevel,
-                       int nLayers, int nGpyrLayers, int image_width,
-                       int image_height, int imgDouble, IN float *gpyr,
+void build_grd_rot_pyr(IN float *gpyr,
                        IN int *start_octave, IN int *stop_octave,
                        IN int *start_layer, IN int *stop_layer,
                        IN int *start_line, IN int *stop_line, IN int *start_col,
                        IN int *stop_col, OUT float *grdPyr, OUT float *rotPyr) {
+  int nLayers = SIFT_NLAYERS;
+  int nGpyrLayers = SIFT_NUM_GPYR_LAYERS;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif

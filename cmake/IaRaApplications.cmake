@@ -179,10 +179,13 @@ function(iara_add_application)
     # Parse arguments
     cmake_parse_arguments(APP
         ""  # No boolean options
-        "ENTRY;SCHEDULER;TARGET_NAME;BUILD_DIR;APP_NAME;TEST_SRC_DIR;APP_SRC_DIR;PARAMETERS_SCRIPT"  # Single-value args
+        "ENTRY;SCHEDULER;TARGET_NAME;BUILD_DIR;APP_NAME;TEST_SRC_DIR;APP_SRC_DIR;PARAMETERS_SCRIPT;MAIN_ACTOR"  # Single-value args
         "EXTRA_KERNEL_ARGS;EXTRA_LINKER_ARGS;CODEGEN_ENV"  # Multi-value args
         ${ARGN}
     )
+    if(NOT APP_MAIN_ACTOR)
+        set(APP_MAIN_ACTOR "run")
+    endif()
 
     # Validate required parameters
     if(NOT APP_SCHEDULER)
@@ -216,9 +219,10 @@ function(iara_add_application)
     endif()
 
     # Find C/C++ sources (look in src/ subdirectory first, then in app root, then in test dir)
+    # GLOB_RECURSE so that sources in subdirectories (e.g. src/x86/clock.c) are included.
     if(EXISTS "${APP_APP_SRC_DIR}/src")
-        file(GLOB c_sources CONFIGURE_DEPENDS "${APP_APP_SRC_DIR}/src/*.c")
-        file(GLOB cpp_sources CONFIGURE_DEPENDS "${APP_APP_SRC_DIR}/src/*.cpp")
+        file(GLOB_RECURSE c_sources CONFIGURE_DEPENDS "${APP_APP_SRC_DIR}/src/*.c")
+        file(GLOB_RECURSE cpp_sources CONFIGURE_DEPENDS "${APP_APP_SRC_DIR}/src/*.cpp")
         set(app_include_dir "${APP_APP_SRC_DIR}/src")
     elseif(EXISTS "${APP_APP_SRC_DIR}")
         file(GLOB c_sources CONFIGURE_DEPENDS "${APP_APP_SRC_DIR}/*.c")
@@ -296,7 +300,7 @@ function(iara_add_application)
 
     # Collect extra arguments
     if(NOT is_baseline_scheduler AND final_iara_opt)
-        iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --${final_iara_opt}=main-actor=run)
+        iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --${final_iara_opt}=main-actor=${APP_MAIN_ACTOR})
     endif()
     iara_collect_args(schedule_extra_args "EXTRA_SCHEDULE_ARGS")
     iara_collect_args(kernel_extra_args "EXTRA_KERNEL_ARGS")
@@ -325,29 +329,36 @@ function(iara_add_application)
         endif()
     endif()
 
-    # Preesm scheduler: detect preesm-codegen.sh and use degridder source files
+    # Preesm scheduler: detect preesm-codegen.sh and replace kernel sources with
+    # the Preesm app repo's src files.  Preesm-generated C code uses different
+    # function signatures from IaRa's kernel wrappers.
     if("${scheduler}" STREQUAL "preesm")
         if(EXISTS "${APP_APP_SRC_DIR}/preesm-codegen.sh")
             set(codegen_script "${APP_APP_SRC_DIR}/preesm-codegen.sh")
         endif()
 
-        # For preesm: replace IaRa kernel sources with the degridder repo's src files.
-        # Preesm-generated C code uses different function signatures from IaRa's
-        # kernel wrappers (e.g. passes compile-time constants as explicit args).
-        # degridder/Code/src/*.c have the Preesm-compatible implementations.
+        # Select the Preesm app's Code/src directory.
+        # Check for app-specific env vars first, then fall back to degridder.
         set(_preesm_code_src "")
-        if(DEFINED ENV{PREESM_DEGRIDDER_REPO} AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
+        if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{PREESM_SIFT_REPO}
+                AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
+            set(_preesm_code_src "$ENV{PREESM_SIFT_REPO}/Code/src")
+        elseif(DEFINED ENV{PREESM_DEGRIDDER_REPO}
+                AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
             set(_preesm_code_src "$ENV{PREESM_DEGRIDDER_REPO}/Code/src")
         elseif(DEFINED ENV{IARA_DIR} AND NOT "$ENV{IARA_DIR}" STREQUAL "")
             get_filename_component(_preesm_code_src "$ENV{IARA_DIR}/../degridder/Code/src" ABSOLUTE)
         endif()
 
         if(_preesm_code_src AND EXISTS "${_preesm_code_src}")
-            file(GLOB _preesm_c_src CONFIGURE_DEPENDS
-                "${_preesm_code_src}/*.c"
-                "${_preesm_code_src}/CPU/*.c")
+            file(GLOB_RECURSE _preesm_c_src CONFIGURE_DEPENDS "${_preesm_code_src}/*.c")
             set(c_sources ${_preesm_c_src})
-            set(cpp_sources "${_preesm_code_src}/casacore_wrapper.cpp")
+            # Only degridder has a casacore C++ wrapper; SIFT is pure C.
+            if(NOT APP_ENTRY MATCHES "sift" AND EXISTS "${_preesm_code_src}/casacore_wrapper.cpp")
+                set(cpp_sources "${_preesm_code_src}/casacore_wrapper.cpp")
+            else()
+                set(cpp_sources "")
+            endif()
         else()
             # Fallback: at least exclude IaRa's main.cpp
             list(FILTER cpp_sources EXCLUDE REGEX "main\\.cpp$")
@@ -357,6 +368,23 @@ function(iara_add_application)
         # when setup-* creates new files before lower-* calls cmake --build)
         file(GLOB preesm_generated_c CONFIGURE_DEPENDS "${build_subdir}/generated/*.c")
         list(APPEND c_sources ${preesm_generated_c})
+    endif()
+
+    # IaRa scheduler for SIFT: use Preesm upstream sources + generated p2iaw wrappers.
+    # The wrappers bridge IaRa's calling convention (data-only, in/inout/out order)
+    # to Preesm's original function signatures (config params + data params).
+    if(NOT "${scheduler}" STREQUAL "preesm" AND APP_ENTRY MATCHES "sift")
+        set(_sift_preesm_src "")
+        if(DEFINED ENV{PREESM_SIFT_REPO} AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
+            set(_sift_preesm_src "$ENV{PREESM_SIFT_REPO}/Code/src")
+        endif()
+        if(_sift_preesm_src AND EXISTS "${_sift_preesm_src}")
+            file(GLOB_RECURSE _sift_c_src CONFIGURE_DEPENDS "${_sift_preesm_src}/*.c")
+            set(c_sources ${_sift_c_src})
+            # Keep only IaRa-specific C++ (kernels.cpp with main + runtime init)
+            list(FILTER cpp_sources INCLUDE REGEX "kernels\\.cpp$")
+            # The generated preesm2iara.c wrapper will be added after codegen below
+        endif()
     endif()
 
     # Always add scheduler flag (for both codegen and non-codegen applications)
@@ -409,6 +437,16 @@ function(iara_add_application)
             COMMENT "Running codegen for ${target_name}"
             VERBATIM
         )
+
+        # Include generated wrapper C files (e.g., preesm2iara.c from IaRa codegen)
+        # Not used by preesm scheduler (which generates its own schedule C files)
+        if(NOT "${scheduler}" STREQUAL "preesm")
+            set(_codegen_wrapper "${build_subdir}/preesm2iara.c")
+            if(EXISTS "${APP_APP_SRC_DIR}/preesm2iara.c.template")
+                set_source_files_properties(${_codegen_wrapper} PROPERTIES GENERATED TRUE)
+                list(APPEND c_sources ${_codegen_wrapper})
+            endif()
+        endif()
 
         # Add compile flags for codegen'd applications
         if(final_num_blocks)
@@ -615,8 +653,28 @@ function(iara_add_application)
         # several GB for chunks>=8) which exceeds the 2GB PC32 addressing limit
         # of the default x86-64 code model.  Use the large code model so the
         # compiler emits 64-bit relocations throughout.
-        target_compile_options(${target_name} PRIVATE -mcmodel=large)
-        target_link_options(${target_name} PRIVATE -mcmodel=large)
+        # (Only degridder has this problem; SIFT data is ~2 MB.)
+        if(APP_ENTRY MATCHES "degridder")
+            target_compile_options(${target_name} PRIVATE -mcmodel=large)
+            target_link_options(${target_name} PRIVATE -mcmodel=large)
+        endif()
+
+        # SIFT Preesm: Code/src/filenames.c uses PROJECT_ROOT_PATH "/dat/img1.pgm".
+        # Set PROJECT_ROOT_PATH to the IaRa SIFT app dir so the path resolves via
+        # the dat -> data symlink created by preesm-codegen.sh.
+        # PREESM_LOOP_SIZE=1: without this, Core0.c loops infinitely
+        # (Preesm's while(!preesmStopThreads) is only bounded by PREESM_LOOP_SIZE).
+        if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{IARA_DIR})
+            target_compile_definitions(${target_name} PRIVATE
+                "PROJECT_ROOT_PATH=\"$ENV{IARA_DIR}/applications/08-sift\""
+                PREESM_LOOP_SIZE=1)
+        endif()
+    endif()
+
+    # SIFT (IaRa schedulers): filenames.c uses PROJECT_ROOT_PATH "/dat/img1.pgm"
+    if(NOT "${scheduler}" STREQUAL "preesm" AND APP_ENTRY MATCHES "sift" AND DEFINED ENV{IARA_DIR})
+        target_compile_definitions(${target_name} PRIVATE
+            "PROJECT_ROOT_PATH=\"$ENV{IARA_DIR}/applications/08-sift\"")
     endif()
 
     set_target_properties(${target_name}
@@ -649,8 +707,16 @@ function(iara_add_application)
     # Preesm needs generated/ in build dir + preesm.h from Preesm repo
     if("${scheduler}" STREQUAL "preesm")
         list(APPEND test_include_dirs "${build_subdir}/generated")
-        # preesm.h lives in the Preesm repo's include dir
-        if(DEFINED ENV{PREESM_DEGRIDDER_REPO})
+    endif()
+
+    # SIFT uses Preesm upstream sources for both IaRa and Preesm schedulers,
+    # so both need the upstream Code/include headers.
+    if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{PREESM_SIFT_REPO}
+            AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
+        list(APPEND test_include_dirs "$ENV{PREESM_SIFT_REPO}/Code/include")
+    elseif("${scheduler}" STREQUAL "preesm")
+        if(DEFINED ENV{PREESM_DEGRIDDER_REPO}
+                AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
             list(APPEND test_include_dirs "$ENV{PREESM_DEGRIDDER_REPO}/Code/include")
         elseif(DEFINED ENV{IARA_DIR})
             list(APPEND test_include_dirs "$ENV{IARA_DIR}/../degridder/Code/include")
@@ -740,10 +806,13 @@ function(iara_add_test_instance)
     # Parse arguments
     cmake_parse_arguments(TEST
         ""  # No boolean options
-        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR"  # Single-value args
+        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR"  # Single-value args
         "PARAMETERS;DEFINES;LINKER_ARGS"  # Multi-value args
         ${ARGN}
     )
+    if(NOT TEST_MAIN_ACTOR)
+        set(TEST_MAIN_ACTOR "run")
+    endif()
 
     # Validate required parameters
     if(NOT TEST_NAME)
@@ -805,6 +874,7 @@ function(iara_add_test_instance)
         TARGET_NAME "${target_name}"
         BUILD_DIR "${TEST_BUILD_DIR}"
         TEST_SRC_DIR "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}"
+        MAIN_ACTOR "${TEST_MAIN_ACTOR}"
         EXTRA_KERNEL_ARGS ${extra_kernel_args_list}
         EXTRA_LINKER_ARGS ${linker_args_list}
         CODEGEN_ENV ${codegen_env_list}
@@ -833,7 +903,7 @@ function(iara_add_test_instance)
 
     if(_test_iara_opt)
         iara_collect_args(_test_iara_flags "IARA_FLAGS"
-            --iara-canonicalize --flatten --${_test_iara_opt}=main-actor=run)
+            --iara-canonicalize --flatten --${_test_iara_opt}=main-actor=${TEST_MAIN_ACTOR})
     else()
         set(_test_iara_flags "")
     endif()

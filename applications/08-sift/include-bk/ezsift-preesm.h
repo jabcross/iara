@@ -45,6 +45,11 @@
 #define SIFT_NUM_KEYPOINTS_MAX 1400
 #define SIFT_NUM_LOCAL_KPT_MAX 350
 
+// Descriptor parameters
+#define SIFT_DESCR_WIDTH 4
+#define SIFT_DESCR_HIST_BINS 8
+#define SIFT_NHISTBINS ((SIFT_DESCR_WIDTH+2)*(SIFT_DESCR_WIDTH+2)*(SIFT_DESCR_HIST_BINS+2))
+
 // default sigma for initial gaussian smoothing
 #define SIFT_SIGMA 1.6f
 
@@ -139,129 +144,82 @@ typedef struct MatchPair {
 
 /* for sift */
 
-void to_float(int parallelismLevel, int image_width, int image_height,
-              int tot_image_size, IN unsigned char *uchar_img,
-              OUT float *float_img);
+void to_float(IN unsigned char *uchar_img, OUT float *float_img);
 
 void compute_gaussian_coefs(OUT int *columns_sizes,
                             OUT float *gaussian_coefs);
 
 void counterGpyrLayer(OUT int *iter);
 
-void BarrierTranspose_1(int image_width, int image_height, int parallelismLevel,
-                        int tot_image_size, IN float *img_in,
-                        OUT float *img_out);
+void BarrierTranspose_1(IN float *img_in, OUT float *img_out);
 
-void BarrierTranspose2x_1(int image_width, int image_height, int imgDouble,
-                          int parallelismLevel, int tot_image_size,
-                          IN float *img_in, OUT float *img_out);
+void BarrierTranspose2x_1(IN float *img_in, OUT float *img_out);
 
-void BarrierTranspose_2(int image_width, int image_height, int parallelismLevel,
-                        int tot_image_size, IN float *img_in,
-                        OUT float *img_out);
+void BarrierTranspose_2(IN float *img_in, OUT float *img_out);
 
-void BarrierTranspose2x_2(int image_width, int image_height, int imgDouble,
-                          int parallelismLevel, int tot_image_size,
-                          IN float *img_in, OUT float *img_out);
+void BarrierTranspose2x_2(IN float *img_in, OUT float *img_out);
 
-void row_filter_transpose_1(int image_height, int image_width, int nGpyrLayers,
-                            int parallelismLevel, int gWmax, int tot_img_size,
-                            IN float *gaussian_coefs, IN float *img,
+void row_filter_transpose_1(IN float *gaussian_coefs, IN float *img,
                             IN int *column_sizes, IN float *imgIterPrev,
                             IN int *iter, OUT float *imgGT);
 
-void row_filter_transpose2x_1(int image_height, int image_width, int imgDouble,
-                              int nGpyrLayers, int parallelismLevel, int gWmax,
-                              int tot_img_size, IN float *gaussian_coefs,
-                              IN float *img, IN int *column_sizes,
-                              IN float *imgIterPrev, IN int *iter,
-                              OUT float *imgGT);
+void row_filter_transpose2x_1(IN float *gaussian_coefs, IN float *img,
+                              IN int *column_sizes, IN float *imgIterPrev,
+                              IN int *iter, OUT float *imgGT);
 
-void row_filter_transpose_2(int image_height, int image_width, int nGpyrLayers,
-                            int parallelismLevel, int gWmax, int tot_img_size,
-                            IN float *gaussian_coefs, IN float *img,
+void row_filter_transpose_2(IN float *gaussian_coefs, IN float *img,
                             IN int *column_sizes, IN int *iter,
                             OUT float *imgGT);
 
-void row_filter_transpose2x_2(int image_height, int image_width, int imgDouble,
-                              int nGpyrLayers, int parallelismLevel, int gWmax,
-                              int tot_img_size, IN int *column_sizes,
-                              IN float *img, IN float *gaussian_coefs,
-                              IN int *iter, OUT float *imgGT);
+void row_filter_transpose2x_2(IN int *column_sizes, IN float *img,
+                              IN float *gaussian_coefs, IN int *iter,
+                              OUT float *imgGT);
 
-void seq_blur1(int image_width, int image_height, int nGpyrLayers, int gWmax,
-               int tot_image_size, int image_maxWH, IN float *fst_img,
-               IN float *imgBlurPrev, IN float *gaussian_coefs,
-               IN int *column_sizes, IN int *iter, OUT float *imgBlurred);
-
-void seq_blurN(int image_width, int image_height, int nGpyrLayers, int gWmax,
-               int tot_image_size, int image_maxWH, IN float *fst_img,
-               IN float *imgBlurPrev, IN float *gaussian_coefs,
-               IN int *column_sizes, IN int *iter, IN int *octaveLevel,
+void seq_blur1(IN float *fst_img, IN float *imgBlurPrev,
+               IN float *gaussian_coefs, IN int *column_sizes, IN int *iter,
                OUT float *imgBlurred);
 
-void MERGE_gpyr(int nGpyrLayers, int imgDouble, int nOctavesDownN,
-                int totSizeWithoutLayers, int tot_image_size,
-                int parallelismLevel,
-                int image_width /* needed only for debug */,
-                int image_height /* needed only for debug */,
+void seq_blurN(IN float *fst_img, IN float *imgBlurPrev,
+               IN float *gaussian_coefs, IN int *column_sizes, IN int *iter,
+               IN int *octaveLevel, OUT float *imgBlurred);
 
-                /* IN float * img, IN float * imgUp2x, IN float * imgDown2x1, IN
-                   float * imgDown2xN, */
-                IN float *gpyrs, IN float *gpyrsUp2x, IN float *gpyrsDown2x1,
+void MERGE_gpyr(IN float *gpyrs, IN float *gpyrsUp2x, IN float *gpyrsDown2x1,
                 IN float *gpyrsDown2xN, OUT float *gpyr);
 
 void counterOctaveDownN(OUT int *iter);
 
-void upsample2x(int image_height, int imgDouble, int image_width,
-                int parallelismLevel, int tot_image_size, IN float *img,
-                IN int *iter, OUT float *img2x);
+void upsample2x(IN float *img, IN int *iter, OUT float *img2x);
 
-void downsample2x1(int image_height, int image_width, int parallelismLevel,
-                   int tot_image_size, IN float *img2x, OUT float *img);
+void downsample2x1(IN float *img2x, OUT float *img);
 
-void downsample2xN(int image_height, int image_width, int tot_img_size,
-                   IN float *fst_img, IN float *imgDownPrev, IN int *iter,
+void downsample2xN(IN float *fst_img, IN float *imgDownPrev, IN int *iter,
                    OUT float *imgDown2x);
 
-void build_grd_rot_pyr(int totSizeWithoutLayers, int parallelismLevel,
-                       int nLayers, int nGpyrLayers, int image_width,
-                       int image_height, int imgDouble, IN float *gpyr,
+void build_grd_rot_pyr(IN float *gpyr,
                        IN int *start_octave, IN int *stop_octave,
                        IN int *start_layer, IN int *stop_layer,
-                       IN int *start_line, IN int *stop_line, IN int *start_col,
-                       IN int *stop_col, OUT float *grdPyr, OUT float *rotPyr);
+                       IN int *start_line, IN int *stop_line,
+                       IN int *start_col, IN int *stop_col,
+                       OUT float *grdPyr, OUT float *rotPyr);
 
-void build_dog_pyr(int nDogLayers, int totSizeWithoutLayers,
-                   int parallelismLevel, int nGpyrLayers, int image_width,
-                   int image_height, int imgDouble, IN float *gpyr,
+void build_dog_pyr(IN float *gpyr,
                    IN int *start_octave, IN int *stop_octave,
-                   IN int *start_layer, IN int *stop_layer, IN int *start_line,
-                   IN int *stop_line, IN int *start_col, IN int *stop_col,
+                   IN int *start_layer, IN int *stop_layer,
+                   IN int *start_line, IN int *stop_line,
+                   IN int *start_col, IN int *stop_col,
                    OUT float *dogPyr);
 
-void detect_keypoints(int totSizeWithoutLayers, int parallelismLevel,
-                      int nDogLayers, int nLayers, int nLocalKptMax,
-                      int nOctaves /* needed only for debug */, int imgDouble,
-                      int image_width, int image_height,
-
-                      IN float *grdPyr, IN float *rotPyr, IN float *dogPyr,
+void detect_keypoints(IN float *grdPyr, IN float *rotPyr, IN float *dogPyr,
                       IN int *start_octave, IN int *stop_octave,
                       IN int *start_layer, IN int *stop_layer,
-                      IN int *start_line, IN int *stop_line, IN int *start_col,
-                      IN int *stop_col,
-                      OUT SiftKpt *keypoints /* , OUT int * nbKeypoints */);
+                      IN int *start_line, IN int *stop_line,
+                      IN int *start_col, IN int *stop_col,
+                      OUT SiftKpt *keypoints);
 
-void extract_descriptor(
-    int parallelismLevel, int totSizeWithoutLayers, int nLayers,
-    int nLocalKptMax, int image_width, int image_height, int imgDouble,
-    int nBins, int nHistBins, int descrWidth, int descrHistBins,
-    IN SiftKpt *keypoints_in, IN float *grdPyr, IN float *rotPyr,
-    /* IN int * nbKeypoints_in, */
-    OUT SiftKpt *keypoints_out /* , OUT int * nbKeypoints_out */);
+void extract_descriptor(IN SiftKpt *keypoints_in, IN float *grdPyr,
+                        IN float *rotPyr, OUT SiftKpt *keypoints_out);
 
-void MERGE_keypoints(int nKeypointsMax, int parallelismLevel, int nLocalKptMax,
-                     IN SiftKpt *keypoints_in, /* IN int * nbKeypoints_in, */
+void MERGE_keypoints(IN SiftKpt *keypoints_in,
                      OUT SiftKpt *keypoints_out, OUT int *nbKeypoints_out);
 
 void ITERATOR_build_dog_pyr(OUT int *start_octave, OUT int *stop_octave,
@@ -281,11 +239,9 @@ void ITERATOR_detect_keypoints(OUT int *start_octave,
                                OUT int *stop_line, OUT int *start_col,
                                OUT int *stop_col);
 
-void BarrierCounterGpyr(int nGpyrLayers, IN int *iters_in, OUT int *iters_out);
+void BarrierCounterGpyr(IN int *iters_in, OUT int *iters_out);
 
-void SPLIT_upsample2x(int image_width, int imgDouble, int image_height,
-                      int parallelismLevel, int tot_image_size, IN float *in,
-                      OUT float *out);
+void SPLIT_upsample2x(IN float *in, OUT float *out);
 
 void counterPLevels(OUT int *iter);
 
@@ -293,14 +249,12 @@ void counterPLevels(OUT int *iter);
 
 void filename1(OUT char *filename);
 
-void read_pgm(IN char *filename, OUT unsigned char *img);
+void read_pgm(OUT unsigned char *img);
 
-void draw_keypoints_to_ppm_file(IN struct SiftKeypoint *keypoints,
-                                IN int *nbKeypoints, IN unsigned char *image,
-                                IN char *filename);
+void draw_keypoints_to_ppm_file(IN int *nbKeypoints, IN unsigned char *image,
+                                IN struct SiftKeypoint *keypoints);
 
-void export_keypoints_to_key_file(IN char *filename, IN SiftKpt *keypoints,
-                                  IN int *nbKeypoints);
+void export_keypoints_to_key_file(IN int *nbKeypoints, IN SiftKpt *keypoints);
 
 /* for match */
 

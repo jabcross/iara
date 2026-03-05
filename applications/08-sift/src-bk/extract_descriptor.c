@@ -2,10 +2,12 @@
 #include <string.h>
 
 #include "ezsift-common.h"
+#include "sift_config.h"
 
-void MERGE_keypoints(int nKeypointsMax, int parallelismLevel, int nLocalKptMax,
-                     IN SiftKpt *keypoints_in, /* IN int * nbKeypoints_in, */
+void MERGE_keypoints(IN SiftKpt *keypoints_in,
                      OUT SiftKpt *keypoints_out, OUT int *nbKeypoints_out) {
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int nLocalKptMax = SIFT_NUM_LOCAL_KPT_MAX;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -19,18 +21,23 @@ void MERGE_keypoints(int nKeypointsMax, int parallelismLevel, int nLocalKptMax,
     offset_out += nbKpt;
   }
   nbKeypoints_out[0] = offset_out;
-  fprintf(stderr, "nbKpt: %d\n", nbKeypoints_out[0]);
+  printf("Keypoints found: %d\n", nbKeypoints_out[0]);
 }
 
 // Extract descriptor
 // 1. Unroll the tri-linear part.
 void extract_descriptor(
-    int parallelismLevel, int totSizeWithoutLayers, int nLayers,
-    int nLocalKptMax, int image_width, int image_height, int imgDouble,
-    int nBins, int nHistBins, int descrWidth, int descrHistBins,
     IN SiftKpt *keypoints_in, IN float *grdPyr, IN float *rotPyr,
-    /* IN int * nbKeypoints_in, */
-    OUT SiftKpt *keypoints_out /* , OUT int * nbKeypoints_out */) {
+    OUT SiftKpt *keypoints_out) {
+  int nLocalKptMax = SIFT_NUM_LOCAL_KPT_MAX;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int nLayers = SIFT_NLAYERS;
+  int nBins = SIFT_nBins;
+  int nHistBins = SIFT_NHISTBINS;
+  int descrWidth = SIFT_DESCR_WIDTH;
+  int descrHistBins = SIFT_DESCR_HIST_BINS;
 
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);

@@ -46,6 +46,8 @@ export PKG_CONFIG_PATH="$SPACK_VIEW_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
 export LDFLAGS="-L$SPACK_VIEW_PATH/lib $LDFLAGS"
 
 export PREESM_DIR="/scratch/$USER/bin/preesm-dir"
+export PREESM_DEGRIDDER_REPO="/scratch/$USER/repos/preesm-apps/degridder"
+export PREESM_SIFT_REPO="/scratch/$USER/repos/preesm-apps/SIFT"
 export JAVA_HOME="/scratch/$USER/bin/java-17"
 export PATH="$JAVA_HOME/bin:$PATH"
 

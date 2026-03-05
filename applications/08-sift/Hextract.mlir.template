@@ -1,0 +1,48 @@
+// Parameters (cfg_in_iface — primary, from experiments.yaml `parameters`):
+// Computed parameters (param — from experiments.yaml `computed_parameters`):
+//   nKeypointsMaxUser = 1400.0
+//   image_width = 800.0
+//   image_height = 640.0
+//   DumpDescriptor = 0.0
+//   descrWidth = 4.0
+//   nBins = descrWidth*descrWidth*descrHistBins
+//   nHistBins = (descrWidth + 2) * (descrWidth + 2) * (descrHistBins + 2)
+//   tot_image_size = image_width*image_height
+//   descrHistBins = 8.0
+//   parallelismLevel = 4.0
+//   nLocalKptMax = max(1, floor(nKeypointsMaxUser/parallelismLevel))
+//   nKeypointsMax = parallelismLevel*nLocalKptMax
+
+module {
+
+iara.actor @Hextract {
+
+
+
+  %e1_s = iara.node @p2iaw_read_pgm out ( tensor<«tot_image_size»xi8> )
+  %e1_d = iara.edge %e1_s : tensor<«tot_image_size»xi8> -> tensor<«tot_image_size»xi8>
+
+  %e2_s, %e3_s = iara.node @iara_broadcast in ( %e1_d:tensor<«tot_image_size»xi8> ) out ( tensor<«tot_image_size»xi8>, tensor<«tot_image_size»xi8> )
+  %e2_d = iara.edge %e2_s : tensor<«tot_image_size»xi8> -> tensor<«tot_image_size»xi8>
+  %e3_d = iara.edge %e3_s : tensor<«tot_image_size»xi8> -> tensor<«tot_image_size»xi8>
+
+  %e4_s, %e5_s = iara.node @Htop_sift in ( %e2_d:tensor<«tot_image_size»xi8> ) out ( tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>, tensor<1xi32> )
+  %e4_d = iara.edge %e4_s : tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+  %e5_d = iara.edge %e5_s : tensor<1xi32> -> tensor<1xi32>
+
+  %e6_s, %e9_s = iara.node @iara_broadcast in ( %e4_d:tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> ) out ( tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>, tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+  %e6_d = iara.edge %e6_s : tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+  %e9_d = iara.edge %e9_s : tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> -> tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>>
+
+  %e7_s, %e8_s = iara.node @iara_broadcast in ( %e5_d:tensor<1xi32> ) out ( tensor<1xi32>, tensor<1xi32> )
+  %e7_d = iara.edge %e7_s : tensor<1xi32> -> tensor<1xi32>
+  %e8_d = iara.edge %e8_s : tensor<1xi32> -> tensor<1xi32>
+
+  iara.node @p2iaw_draw_keypoints_to_ppm_file in ( %e7_d:tensor<1xi32>, %e3_d:tensor<«tot_image_size»xi8>, %e6_d:tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+
+  iara.node @p2iaw_export_keypoints_to_key_file in ( %e8_d:tensor<1xi32>, %e9_d:tensor<«nKeypointsMax»x!llvm.struct<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, array<128 x f32>)>> )
+
+
+} // iara.actor @Hextract
+
+} // module

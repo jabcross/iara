@@ -1,0 +1,33 @@
+{
+  "parameters": {
+    "NUM_CORES": "parallelismLevel"
+  },
+  "constants": {
+    "image_width":       800,
+    "image_height":      640,
+    "descrWidth":        4,
+    "descrHistBins":     8,
+    "nKeypointsMaxUser": 1400,
+    "DumpDescriptor":    0
+  },
+  "computed_parameters": [
+    {"name": "tot_image_size",       "expr": "image_width*image_height"},
+    {"name": "nBins",                "expr": "descrWidth*descrWidth*descrHistBins"},
+    {"name": "nHistBins",            "expr": "(descrWidth+2)*(descrWidth+2)*(descrHistBins+2)"},
+    {"name": "nLocalKptMax",         "expr": "max(1, floor(nKeypointsMaxUser/parallelismLevel))"},
+    {"name": "nKeypointsMax",        "expr": "parallelismLevel*nLocalKptMax"},
+    {"name": "imgDouble",            "expr": "1"},
+    {"name": "nLayers",              "expr": "3"},
+    {"name": "nGpyrLayers",          "expr": "nLayers+3"},
+    {"name": "nDogLayers",           "expr": "nGpyrLayers-1"},
+    {"name": "gRmax",                "expr": "if(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))>1.0, ceil(3.0*1.6*sqrt(2^((2*(nGpyrLayers-1))/nLayers)-2^((2*(nGpyrLayers-2))/nLayers))), 1.0)"},
+    {"name": "gWmax",                "expr": "2*gRmax+1"},
+    {"name": "image_maxWH",          "expr": "max(image_width,image_height)"},
+    {"name": "maxOctaveH",           "expr": "pow_div_max(2, image_height)"},
+    {"name": "maxOctaveW",           "expr": "pow_div_max(2, image_width)"},
+    {"name": "maxOctaveWH",          "expr": "min(maxOctaveW, maxOctaveH)"},
+    {"name": "nOctaves",             "expr": "min(maxOctaveWH+1, floor(ln(min(image_height, image_width))/ln(2) - 3))+imgDouble"},
+    {"name": "nOctavesDownN",        "expr": "if(imgDouble, nOctaves-3, nOctaves-2)"},
+    {"name": "totSizeWithoutLayers", "expr": "if(imgDouble, geo_sum(4*tot_image_size,1/4,nOctaves), geo_sum(tot_image_size,1/4,nOctaves))"}
+  ]
+}

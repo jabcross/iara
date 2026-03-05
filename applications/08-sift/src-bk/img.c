@@ -4,13 +4,17 @@
 #include <string.h>
 
 #include "ezsift-preesm.h"
+#include "sift_config.h"
 
 /* static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; */
 /* static int nb = -1; */
 
-void SPLIT_upsample2x(int image_width, int imgDouble, int image_height,
-                      int parallelismLevel, int tot_image_size, IN float *in,
-                      OUT float *out) {
+void SPLIT_upsample2x(IN float *in, OUT float *out) {
+  int image_width = SIFT_IMAGE_WIDTH;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int tot_image_size = SIFT_TOT_IMAGE_SIZE;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -60,9 +64,10 @@ void to_uchar(int w, int h, float *img_in, unsigned char *img_out) {
   }
 }
 
-void to_float(int parallelismLevel, int image_width, int image_height,
-              int tot_image_size, IN unsigned char *uchar_img,
-              OUT float *float_img) {
+void to_float(IN unsigned char *uchar_img, OUT float *float_img) {
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int image_height = SIFT_IMAGE_HEIGHT;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -76,9 +81,11 @@ void to_float(int parallelismLevel, int image_width, int image_height,
 }
 
 // Upsample the image by 2x, linear interpolation.
-void upsample2x(int image_height, int imgDouble, int image_width,
-                int parallelismLevel, int tot_image_size, IN float *img,
-                IN int *iter, OUT float *img2x) {
+void upsample2x(IN float *img, IN int *iter, OUT float *img2x) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int imgDouble = SIFT_IMG_DOUBLE;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -167,8 +174,10 @@ void upsample2x(int image_height, int imgDouble, int image_width,
 }
 
 // Downsample the image by 2x, nearest neighbor interpolation.
-void downsample2x1(int image_height, int image_width, int parallelismLevel,
-                   int tot_image_size, IN float *img2x, OUT float *img) {
+void downsample2x1(IN float *img2x, OUT float *img) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
+  int parallelismLevel = SIFT_PARALLELISM_LEVEL;
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);
 #endif
@@ -185,9 +194,10 @@ void downsample2x1(int image_height, int image_width, int parallelismLevel,
 }
 
 // Downsample the image by 2x, nearest neighbor interpolation.
-void downsample2xN(int image_height, int image_width, int tot_img_size,
-                   IN float *fst_img, IN float *imgDownPrev, IN int *iter,
+void downsample2xN(IN float *fst_img, IN float *imgDownPrev, IN int *iter,
                    OUT float *imgDown2x) {
+  int image_height = SIFT_IMAGE_HEIGHT;
+  int image_width = SIFT_IMAGE_WIDTH;
 
 #ifdef SIFT_DEBUG
   fprintf(stderr, "Enter function: %s\n", __FUNCTION__);

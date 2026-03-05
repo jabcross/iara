@@ -514,13 +514,15 @@ class DIFParser:
                 def format_input_ports(self) -> str:
                     if len(self.in_ports) == 0:
                         return ''
-                    return f' in {', '.join(("%"+str(in_port.get_ssa_val_name()) for in_port in self.in_ports))}  : {', '.join((format_tensor_type(in_port.rate, translate_type(in_port.type)) for in_port in self.in_ports))} '
+                    items = ', '.join(
+                        f'%{in_port.get_ssa_val_name()}:{format_tensor_type(in_port.rate, translate_type(in_port.type))}'
+                        for in_port in self.in_ports)
+                    return f' in {items} '
 
                 def format_output_types(self) -> str:
-                    assert (type(out_port.rate) is not None)
                     if len(self.out_ports) == 0:
                         return ''
-                    return ' out: ' + ', '.join(format_tensor_type(out_port.rate, translate_type(out_port.type)) for out_port in self.out_ports) + ' '
+                    return ' out ' + ', '.join(format_tensor_type(out_port.rate, translate_type(out_port.type)) for out_port in self.out_ports) + ' '
 
                 def format_op(self) -> str:
                     return f'{self.format_result_ssa_values()}iara.node @{self.type}{
