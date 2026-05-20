@@ -134,7 +134,8 @@ def generate_cmake_instance(
     instance_name: str,
     params: Dict[str, Any],
     config: Dict[str, Any],
-    experiment_set: str
+    experiment_set: str,
+    extra_defines: list = None,
 ) -> str:
     """
     Generate CMake code for one test instance.
@@ -221,6 +222,12 @@ def generate_cmake_instance(
             for key, val in define.items():
                 defines_list.append(f'"{key}={val}"')
 
+    # Add extra defines passed from CLI (e.g. --define IARA_DEBUGPRINT)
+    for define in (extra_defines or []):
+        # Strip leading -D if user passed -DFOO style
+        d = define[2:] if define.startswith('-D') else define
+        defines_list.append(f'"{d}"')
+
 
     # LINKER_ARGS
     linker_args = config.get('application', {}).get('build', {}).get('extra_linker_args', [])
@@ -232,6 +239,9 @@ def generate_cmake_instance(
     # Build the CMake code - wrap in conditional to only build selected instance
     # The build system will pass -DIARA_EXPERIMENT_INSTANCE=<instance_name>
     # Only the matching instance will be configured
+    # Regression tests build iara-opt as part of the test chain
+    is_regression = config.get('application', {}).get('app_type', '') == 'regression_test'
+
     lines = [
         f"# Instance: {instance_name}",
         f'if(NOT DEFINED IARA_EXPERIMENT_INSTANCE OR IARA_EXPERIMENT_INSTANCE STREQUAL "{instance_name}")',
@@ -242,7 +252,7 @@ def generate_cmake_instance(
         f'    ENTRY "{entry}"',
         f'    SCHEDULER "{scheduler}"',
         f'    MAIN_ACTOR "{main_actor}"',
-    ]
+    ] + (["    IS_REGRESSION_TEST"] if is_regression else [])
 
     # Add PARAMETERS if present
     if parameters_list:
@@ -268,7 +278,9 @@ def generate_cmake_instance(
 def generate_cmakelists(
     yaml_path: Path,
     output_path: Path,
-    experiment_set: str
+    experiment_set: str,
+    extra_defines: list = None,
+    scheduler_override: str = None,
 ) -> int:
     """
     Generate complete CMakeLists.txt for an experiment set.
@@ -306,7 +318,8 @@ def generate_cmakelists(
 
     # Step 3: Generate parameter combinations
     logger.debug(f"Generating parameter combinations for experiment set '{experiment_set}'")
-    combinations = get_parameter_combinations(config, experiment_set)
+    combinations = get_parameter_combinations(config, experiment_set,
+                                                scheduler_override=scheduler_override)
     logger.info(f"Generated {len(combinations)} parameter combinations")
 
     # Step 4: Generate CMake code for each instance
@@ -331,7 +344,7 @@ def generate_cmakelists(
     progress = ProgressBar(len(combinations), "Generating")
     for combo in combinations:
         instance_name = generate_instance_name(app_name, experiment_set, combo, computed_param_names, param_labels)
-        cmake_code = generate_cmake_instance(instance_name, combo, config, experiment_set)
+        cmake_code = generate_cmake_instance(instance_name, combo, config, experiment_set, extra_defines=extra_defines)
         cmake_code_blocks.append(cmake_code)
         progress.update()
 
@@ -351,10 +364,11 @@ def generate_cmakelists(
         "cmake_minimum_required(VERSION 3.20)",
         "",
         "# Set compilers to use LLVM/Clang toolchain (must be before project() call)",
-        "if(DEFINED ENV{LLVM_INSTALL})",
-        "    set(CMAKE_C_COMPILER \"$ENV{LLVM_INSTALL}/bin/clang\")",
-        "    set(CMAKE_CXX_COMPILER \"$ENV{LLVM_INSTALL}/bin/clang++\")",
+        "if(NOT DEFINED ENV{LLVM_INSTALL} OR \"$ENV{LLVM_INSTALL}\" STREQUAL \"\")",
+        "    message(FATAL_ERROR \"LLVM_INSTALL is not set. Source sorgan_env.sh before building.\")",
         "endif()",
+        "set(CMAKE_C_COMPILER \"$ENV{LLVM_INSTALL}/bin/clang\")",
+        "set(CMAKE_CXX_COMPILER \"$ENV{LLVM_INSTALL}/bin/clang++\")",
         "",
         "# Project definition - must come after compiler setup but names are relative to this file",
         "project(iara-experiment-instances LANGUAGES C CXX)",
@@ -367,6 +381,8 @@ def generate_cmakelists(
         "set(PROJECT_SOURCE_DIR \"${REPO_ROOT}\")",
         "",
         "include(${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/IaRaApplications.cmake)",
+        "",
+        "iara_setup_environment()",
         "",
         "enable_testing()",
         "",

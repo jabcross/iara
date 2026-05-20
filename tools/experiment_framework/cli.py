@@ -134,7 +134,8 @@ def setup_logging(
     return Path("/dev/null")
 
 
-def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path, extra_defines: list = None) -> int:
+def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
+                 extra_defines: list = None, scheduler_override: str = None) -> int:
     """
     Run Phase 1: Generate CMakeLists.txt.
 
@@ -161,7 +162,7 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path, extra_d
         return 2
 
     try:
-        count = generate_cmakelists(yaml_path, output_path, exp_set, extra_defines=extra_defines)
+        count = generate_cmakelists(yaml_path, output_path, exp_set, extra_defines=extra_defines, scheduler_override=scheduler_override)
         print(f"  ✓ Generated {count} instances")
         logger.info(f"Successfully generated {count} instances")
         return 0
@@ -175,8 +176,7 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path, extra_d
         return 2
 
 
-def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
-              scheduler_filter: str = None) -> int:
+def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
     """
     Run Phase 2: Build all instances.
 
@@ -229,14 +229,6 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
             print("ERROR: No instances found in CMakeLists.txt", file=sys.stderr)
             logger.error("No instances found in CMakeLists.txt")
             return 2
-
-        # Apply scheduler filter if specified
-        if scheduler_filter:
-            instances = [i for i in instances if scheduler_filter in i]
-            if not instances:
-                print(f"ERROR: No instances match scheduler filter '{scheduler_filter}'", file=sys.stderr)
-                return 2
-            logger.info(f"Scheduler filter '{scheduler_filter}': {len(instances)} instance(s) selected")
 
         logger.info(f"Found {len(instances)} instances to build")
 
@@ -607,7 +599,7 @@ def _batch_summary(results: list) -> int:
 def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) -> int:
     """Run the full pipeline (generate→build→execute→visualize) for one (app, set)."""
     extra_defines = getattr(args, 'defines', [])
-    scheduler_filter = getattr(args, 'scheduler', None)
+    scheduler_override = getattr(args, 'scheduler', None)
 
     onetime_script = Path("applications") / app / "onetime.sh"
     if onetime_script.exists():
@@ -618,16 +610,21 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
             return 2
 
     if not args.skip_generate:
-        rc = run_generate(app, exp_set, app_dir, yaml_path, extra_defines=extra_defines)
+        rc = run_generate(app, exp_set, app_dir, yaml_path, extra_defines=extra_defines, scheduler_override=scheduler_override)
         if rc != 0:
             return rc
     else:
+        if scheduler_override:
+            print(f"WARNING: --skip-generate is set but --scheduler overrides YAML choices.",
+                  file=sys.stderr)
+            print(f"         CMakeLists.txt may have instances with different schedulers.",
+                  file=sys.stderr)
         rc = validate_hash(yaml_path, app_dir)
         if rc != 0:
             return rc
 
     if not args.skip_build:
-        rc = run_build(app, exp_set, app_dir, yaml_path, scheduler_filter=scheduler_filter)
+        rc = run_build(app, exp_set, app_dir, yaml_path)
         if rc == 2:
             return 2
 
@@ -1099,7 +1096,8 @@ def main() -> int:
 
         try:
             count = generate_cmakelists(yaml_path, output_path, args.set,
-                                        extra_defines=getattr(args, 'defines', []))
+                                        extra_defines=getattr(args, 'defines', []),
+                                        scheduler_override=getattr(args, 'scheduler', None))
             print(f"Generated {count} instances in {output_path}")
             logger.info(f"Successfully generated {count} instances")
             return 0
@@ -1127,14 +1125,20 @@ def main() -> int:
         logger.info(f"Phase 2: Build - App: {args.app}, Set: {args.set}")
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
-        if getattr(args, 'defines', []):
-            # Regenerate CMakeLists.txt with extra defines before building
+        scheduler = getattr(args, 'scheduler', None)
+        if getattr(args, 'defines', []) or scheduler:
+            action = []
+            if getattr(args, 'defines', []):
+                action.append("extra defines")
+            if scheduler:
+                action.append(f"--scheduler {scheduler}")
+            print(f"WARNING: Regenerating CMakeLists.txt ({', '.join(action)})", file=sys.stderr)
             rc = run_generate(args.app, args.set, app_dir, yaml_path,
-                              extra_defines=args.defines)
+                              extra_defines=getattr(args, 'defines', []),
+                              scheduler_override=scheduler)
             if rc != 0:
                 return rc
-        return run_build(args.app, args.set, app_dir, yaml_path,
-                         scheduler_filter=getattr(args, 'scheduler', None))
+        return run_build(args.app, args.set, app_dir, yaml_path)
 
     # ============================================================================
     # execute command

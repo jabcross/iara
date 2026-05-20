@@ -182,6 +182,12 @@ def execute_single_run(
                 kbytes = gnu_time['max_rss_bytes'] // 1024
                 stdout = f"Maximum resident set size (kbytes): {kbytes}\n" + stdout
 
+            error_msg = None
+            if result.returncode != 0:
+                error_msg = f"Exit {result.returncode}"
+                if stderr:
+                    error_msg += f": {stderr[:200]}"
+
             return {
                 "run_number": run_number,
                 "stdout": stdout,
@@ -189,7 +195,7 @@ def execute_single_run(
                 "returncode": result.returncode,
                 "gnu_time": gnu_time,
                 "success": result.returncode == 0,
-                "error": None
+                "error": error_msg
             }
 
         finally:

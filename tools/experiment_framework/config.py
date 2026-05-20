@@ -298,7 +298,8 @@ def store_yaml_hash(yaml_path: Path, hash_file: Path) -> None:
 
 def get_parameter_combinations(
     config: Dict[str, Any],
-    experiment_set: str
+    experiment_set: str,
+    scheduler_override: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Generate all valid parameter combinations for an experiment set.
@@ -306,13 +307,16 @@ def get_parameter_combinations(
     Process:
         1. Extract parameter definitions from config
         2. Get parameter values from specified experiment set
-        3. Compute Cartesian product of all parameter values
-        4. Apply constraints to filter invalid combinations
-        5. Compute derived parameters for each combination
+        3. If scheduler_override is set, replace the scheduler choices
+        4. Compute Cartesian product of all parameter values
+        5. Apply constraints to filter invalid combinations
+        6. Compute derived parameters for each combination
 
     Args:
         config: Parsed configuration dictionary
         experiment_set: Name of the experiment set to generate combinations for
+        scheduler_override: If set, overrides the scheduler parameter choices
+                            (uses only this single scheduler value)
 
     Returns:
         List of parameter dictionaries, each representing one instance.
@@ -367,6 +371,15 @@ def get_parameter_combinations(
     if not param_values:
         logger.warning(f"Experiment set '{experiment_set}' has no parameters")
         return []
+
+    # Step 3b: Apply scheduler override (--scheduler on CLI replaces YAML choices)
+    if scheduler_override is not None and 'scheduler' in param_values:
+        allowed = param_values['scheduler']
+        if scheduler_override not in allowed:
+            raise ConfigError(
+                f"Scheduler '{scheduler_override}' not in experiment set "
+                f"'{experiment_set}' (available: {', '.join(allowed)})")
+        param_values['scheduler'] = [scheduler_override]
 
     # Step 4: Compute Cartesian product
     param_names = list(param_values.keys())
