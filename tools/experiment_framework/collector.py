@@ -993,10 +993,10 @@ def execute_instance_slurm(
 ) -> Dict[str, Any]:
     """Execute an instance via Slurm sbatch and collect measurements.
 
-    Submits a single sbatch job that runs the executable.  For multiple
-    repetitions the job is submitted multiple times sequentially (each
-    Slurm job handles one run).
+    Submits a single sbatch job per repetition, then parses output using
+    the same measurement pipeline as local execution.
     """
+    from .builder import parse_time_output
     from .slurm import submit_job
 
     if instance_name is None:
@@ -1029,7 +1029,20 @@ def execute_instance_slurm(
         )
 
         if result["success"]:
-            combined_output = result["stdout"] + "\n" + result["stderr"]
+            stdout = result["stdout"]
+            stderr = result["stderr"]
+
+            # Parse GNU time output (same as local execute_single_run does)
+            time_file = slurm_output_dir / f"{instance_name}_run{run_number}.time"
+            if time_file.exists():
+                gnu_time = parse_time_output(time_file)
+                if 'wall_time_s' in gnu_time:
+                    stdout = f"GNU Wall time: {gnu_time['wall_time_s']:.6f}\n" + stdout
+                if 'max_rss_bytes' in gnu_time:
+                    kbytes = gnu_time['max_rss_bytes'] // 1024
+                    stdout = f"Maximum resident set size (kbytes): {kbytes}\n" + stdout
+
+            combined_output = stdout + "\n" + stderr
             parsed_measurements = {}
             for measurement_spec in measurements:
                 measurement_name = measurement_spec.get('name', 'unknown')
@@ -1041,18 +1054,10 @@ def execute_instance_slurm(
                     if measurement_spec.get('required', True):
                         logger.warning(f"Slurm: failed to parse {measurement_name}: {e}")
 
-            # Inject structured metrics into stdout from GNU time output
-            time_file = slurm_output_dir / f"{instance_name}_run{run_number}.time"
-            if time_file.exists():
-                gnu_time = parse_time_output_str(time_file.read_text())
-                if 'wall_time_s' in gnu_time:
-                    parsed_measurements.setdefault('wall_time', gnu_time['wall_time_s'])
-                if 'max_rss_bytes' in gnu_time:
-                    parsed_measurements.setdefault('max_rss_mb', gnu_time['max_rss_bytes'] / 1024)
-
             runs.append({
                 "run_number": run_number,
                 "returncode": result["returncode"],
+                "gnu_time": gnu_time if 'gnu_time' in dir() else {},
                 "measurements": parsed_measurements
             })
         else:
@@ -1074,38 +1079,6 @@ def execute_instance_slurm(
     execution_result["statistics"] = statistics
 
     return execution_result
-
-
-def parse_time_output_str(content: str) -> Dict[str, Any]:
-    """Parse GNU time -v output from a string (same logic as builder.parse_time_output)."""
-    import re
-    result = {}
-    # Parse user time
-    match = re.search(r'User time \(seconds\):\s+(\d+\.?\d*)', content)
-    if match:
-        result['user_time_s'] = float(match.group(1))
-    # Parse system time
-    match = re.search(r'System time \(seconds\):\s+(\d+\.?\d*)', content)
-    if match:
-        result['system_time_s'] = float(match.group(1))
-    # Parse wall clock time
-    match = re.search(r'Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(.+?)$',
-                      content, re.MULTILINE)
-    if match:
-        wt = match.group(1).strip()
-        if ':' not in wt:
-            result['wall_time_s'] = float(wt)
-        else:
-            parts = wt.split(':')
-            if len(parts) == 2:
-                result['wall_time_s'] = int(parts[0]) * 60 + float(parts[1])
-            elif len(parts) == 3:
-                result['wall_time_s'] = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
-    # Parse max RSS
-    match = re.search(r'Maximum resident set size \(kbytes\):\s+(\d+)', content)
-    if match:
-        result['max_rss_bytes'] = int(match.group(1)) * 1024
-    return result
 
 
 def collect_all_measurements(
