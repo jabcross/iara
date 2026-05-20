@@ -137,6 +137,16 @@ experiment_sets:
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, preesm]
 
+  # Medium validation test — all schedulers, two core counts
+  - name: medium
+    description: "Medium validation test for framework integration and baseline comparison"
+    parameters:
+      SIZE: [small]
+      NUM_CORES: [1, 8]
+      NUM_CHUNK: [8]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp, vf-enkits, vf-sequential, preesm]
+
   # Sequential debug test
   - name: debug-sequential
     description: "Sequential execution for debugging"

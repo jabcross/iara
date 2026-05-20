@@ -186,6 +186,14 @@ experiment_sets:
       NUM_BLOCKS: [2]
       scheduler: [vf-omp]
 
+  # Medium validation test — all schedulers
+  - name: medium
+    description: "Medium validation test for framework integration and baseline comparison"
+    parameters:
+      MATRIX_SIZE: [4096]
+      NUM_BLOCKS: [4, 8]
+      scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
+
 
 # Execution configuration
 execution:
