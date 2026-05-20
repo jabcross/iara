@@ -16,32 +16,15 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 
+from .common import (log_subprocess_call, run_and_log,
+                       parse_time_output, convert_time_to_seconds,
+                       convert_memory_to_bytes)
 from .config import ConfigError
 from .progress import ProgressBar
 
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-
-def log_subprocess_call(
-    cmd: List[str],
-    cwd: Optional[Path] = None,
-    env: Optional[Dict[str, str]] = None,
-) -> None:
-    """
-    Log subprocess call details for debugging.
-
-    Args:
-        cmd: Command and arguments as list
-        cwd: Working directory for the subprocess
-        env: Environment variables (custom vars only, logs if non-empty)
-    """
-    logger.info(f"Executing subprocess: {' '.join(cmd)}")
-    if cwd:
-        logger.debug(f"  Working directory: {cwd}")
-    if env:
-        logger.debug(f"  Environment variables: {json.dumps(env, indent=2)}")
 
 
 @dataclass
@@ -196,282 +179,6 @@ def extract_build_errors(build_log: str) -> Dict[str, Any]:
     return {}
 
 
-def parse_time_output(time_file: Path) -> Dict[str, Any]:
-    r"""
-    Parse GNU time -v output with regex.
-
-    Handles multiple wall clock time formats:
-    - Seconds only: "0.12" → 0.12 seconds
-    - Minutes:seconds: "1:23.45" → 83.45 seconds
-    - Hours:minutes:seconds: "1:02:34.56" → 3754.56 seconds
-
-    Unit Conversions:
-        - Time: always seconds (float)
-        - Memory: kbytes → bytes (* 1024, int)
-
-    Error Handling:
-        - Missing fields: return None for that field, log warning
-        - Invalid format: raise ConfigError with line context
-
-    Args:
-        time_file: Path to GNU time output file
-
-    Returns:
-        Dict with keys: user_time_s, system_time_s, wall_time_s,
-                       max_rss_bytes, minor_faults, major_faults
-
-    Raises:
-        ConfigError: If file doesn't exist or has critical parsing errors
-    """
-    if not time_file.exists():
-        logger.warning(f"Time output file does not exist: {time_file}")
-        return {}
-
-    try:
-        content = time_file.read_text()
-    except Exception as e:
-        raise ConfigError(f"Failed to read time output file {time_file}: {e}")
-
-    result = {}
-
-    # Parse user time (seconds)
-    match = re.search(r'User time \(seconds\):\s+(\d+\.?\d*)', content)
-    if match:
-        result['user_time_s'] = float(match.group(1))
-    else:
-        logger.warning(f"Could not parse user time from {time_file}")
-
-    # Parse system time (seconds)
-    match = re.search(r'System time \(seconds\):\s+(\d+\.?\d*)', content)
-    if match:
-        result['system_time_s'] = float(match.group(1))
-    else:
-        logger.warning(f"Could not parse system time from {time_file}")
-
-    # Parse elapsed (wall clock) time - multiple formats possible
-    match = re.search(r'Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(.+?)$',
-                      content, re.MULTILINE)
-    if match:
-        wall_time_str = match.group(1).strip()
-        result['wall_time_s'] = _parse_wall_time(wall_time_str)
-    else:
-        logger.warning(f"Could not parse wall clock time from {time_file}")
-
-    # Parse maximum resident set size (kbytes → bytes)
-    match = re.search(r'Maximum resident set size \(kbytes\):\s+(\d+)', content)
-    if match:
-        kbytes = int(match.group(1))
-        result['max_rss_bytes'] = kbytes * 1024
-    else:
-        logger.warning(f"Could not parse max RSS from {time_file}")
-
-    # Parse minor page faults
-    match = re.search(r'Minor \(reclaiming a frame\) page faults:\s+(\d+)', content)
-    if match:
-        result['minor_faults'] = int(match.group(1))
-    else:
-        logger.warning(f"Could not parse minor page faults from {time_file}")
-
-    # Parse major page faults
-    match = re.search(r'Major \(requiring I/O\) page faults:\s+(\d+)', content)
-    if match:
-        result['major_faults'] = int(match.group(1))
-    else:
-        logger.warning(f"Could not parse major page faults from {time_file}")
-
-    return result
-
-
-def convert_time_to_seconds(value: float, unit: str) -> float:
-    """
-    Convert time values from various units to seconds.
-
-    Supported units:
-    - "us" or "μs" - microseconds (× 1e-6)
-    - "ms" - milliseconds (× 1e-3)
-    - "s" or "sec" - seconds (× 1.0)
-    - "min" - minutes (× 60)
-    - "h" or "hour" - hours (× 3600)
-
-    Args:
-        value: Numeric value to convert
-        unit: Time unit string
-
-    Returns:
-        Value in seconds (float)
-
-    Raises:
-        ValueError: If unit is not recognized
-    """
-    TIME_FACTORS = {
-        'us': 1e-6,
-        'μs': 1e-6,
-        'ms': 1e-3,
-        's': 1.0,
-        'sec': 1.0,
-        'min': 60.0,
-        'h': 3600.0,
-        'hour': 3600.0,
-    }
-
-    if unit not in TIME_FACTORS:
-        raise ValueError(f"Unknown time unit: {unit}")
-
-    return value * TIME_FACTORS[unit]
-
-
-def convert_memory_to_bytes(value: float, unit: str) -> int:
-    """
-    Convert memory values from various units to bytes.
-
-    Supported units (binary, 1024-based):
-    - "B" or "byte" - bytes (× 1)
-    - "KB" or "KiB" - kilobytes (× 1024)
-    - "MB" or "MiB" - megabytes (× 1024²)
-    - "GB" or "GiB" - gigabytes (× 1024³)
-    - "TB" or "TiB" - terabytes (× 1024⁴)
-
-    Args:
-        value: Numeric value to convert
-        unit: Memory unit string
-
-    Returns:
-        Value in bytes (int)
-
-    Raises:
-        ValueError: If unit is not recognized
-    """
-    MEMORY_FACTORS = {
-        'B': 1,
-        'byte': 1,
-        'KB': 1024,
-        'KiB': 1024,
-        'MB': 1024 ** 2,
-        'MiB': 1024 ** 2,
-        'GB': 1024 ** 3,
-        'GiB': 1024 ** 3,
-        'TB': 1024 ** 4,
-        'TiB': 1024 ** 4,
-    }
-
-    if unit not in MEMORY_FACTORS:
-        raise ValueError(f"Unknown memory unit: {unit}")
-
-    bytes_value = value * MEMORY_FACTORS[unit]
-    return int(bytes_value)
-
-
-def normalize_units(measurement: Dict[str, Any], unit_specs: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Normalize measurement values to base SI units.
-
-    For each field specified in unit_specs, converts the measurement value
-    from the given unit to the base SI unit and adds a suffix indicating
-    the unit type:
-    - Time units: adds "_s" suffix (seconds)
-    - Memory units: adds "_bytes" suffix
-    - Unknown units: copied as-is
-
-    Args:
-        measurement: Dict with measurement values
-                    (e.g., {"user_time": 1000, "max_rss": 512})
-        unit_specs: Dict mapping field names to their current units
-                   (e.g., {"user_time": "ms", "max_rss": "KB"})
-
-    Returns:
-        Dict with normalized values and unit suffixes
-
-    Example:
-        >>> measurement = {
-        ...     'init_time': 500,
-        ...     'compute_time': 1200,
-        ...     'max_memory': 256
-        ... }
-        >>> unit_specs = {
-        ...     'init_time': 'ms',
-        ...     'compute_time': 'ms',
-        ...     'max_memory': 'MB'
-        ... }
-        >>> result = normalize_units(measurement, unit_specs)
-        >>> result['init_time_s']
-        0.5
-        >>> result['compute_time_s']
-        1.2
-        >>> result['max_memory_bytes']
-        268435456
-    """
-    result = {}
-
-    for field_name, unit in unit_specs.items():
-        if field_name not in measurement:
-            continue
-
-        value = measurement[field_name]
-
-        # Identify if it's a time or memory unit
-        if unit in ['us', 'μs', 'ms', 's', 'sec', 'min', 'h', 'hour']:
-            # It's a time unit
-            normalized_value = convert_time_to_seconds(value, unit)
-            result[f"{field_name}_s"] = normalized_value
-        elif unit in ['B', 'byte', 'KB', 'KiB', 'MB', 'MiB', 'GB', 'GiB', 'TB', 'TiB']:
-            # It's a memory unit
-            normalized_value = convert_memory_to_bytes(value, unit)
-            result[f"{field_name}_bytes"] = normalized_value
-        else:
-            # Unknown unit, just copy the value
-            result[field_name] = value
-
-    return result
-
-
-def _parse_wall_time(wall_time_str: str) -> float:
-    """
-    Parse wall clock time in various formats.
-
-    Formats:
-    - "0.12" → 0.12 seconds
-    - "1:23.45" → 1*60 + 23.45 = 83.45 seconds
-    - "1:02:34.56" → 1*3600 + 2*60 + 34.56 = 3754.56 seconds
-
-    Args:
-        wall_time_str: Wall clock time string
-
-    Returns:
-        Time in seconds (float)
-
-    Raises:
-        ConfigError: If format is invalid
-    """
-    wall_time_str = wall_time_str.strip()
-
-    # Try seconds only format (e.g., "0.12" or "12")
-    if ':' not in wall_time_str:
-        try:
-            return float(wall_time_str)
-        except ValueError:
-            raise ConfigError(f"Invalid wall time format: {wall_time_str}")
-
-    # Try h:mm:ss or m:ss format
-    parts = wall_time_str.split(':')
-
-    try:
-        if len(parts) == 2:
-            # m:ss format
-            minutes = int(parts[0])
-            seconds = float(parts[1])
-            return minutes * 60 + seconds
-        elif len(parts) == 3:
-            # h:mm:ss format
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            seconds = float(parts[2])
-            return hours * 3600 + minutes * 60 + seconds
-        else:
-            raise ConfigError(f"Invalid wall time format: {wall_time_str}")
-    except (ValueError, TypeError) as e:
-        raise ConfigError(f"Failed to parse wall time '{wall_time_str}': {e}")
-
-
 def get_binary_size(executable: Path) -> int:
     """
     Extract binary size using 'size -A' command.
@@ -526,11 +233,54 @@ def get_binary_size(executable: Path) -> int:
     raise ConfigError(f"Could not find 'Total' line in size output for {executable}")
 
 
+def _ctest_test_exists(build_dir: Path, test_name: str) -> bool:
+    """Check if a named test exists in the generated CTestTestfile.cmake."""
+    testfile = build_dir / 'CTestTestfile.cmake'
+    if not testfile.exists():
+        return False
+    return f'add_test([=[{test_name}]=' in testfile.read_text()
+
+
+def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int) -> tuple:
+    """Run a single named CTest test. Writes full output to <build_dir>/<test_name>.log.
+
+    Application tests must run serially (profiling multi-core apps requires
+    exclusive CPU access). This function never introduces parallelism.
+
+    Returns:
+        (success: bool, log_path: Path) — log_path always points to the full output.
+    """
+    log_path = build_dir / f'{test_name}.log'
+    cmd = [
+        'ctest',
+        '--test-dir', str(build_dir),
+        '-R', f'^{test_name}$',
+        '--output-on-failure',
+        '-V',
+    ]
+    try:
+        with open(log_path, 'w') as log_file:
+            result = subprocess.run(
+                cmd,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                env=os.environ.copy(),
+            )
+        return result.returncode == 0, log_path
+    except subprocess.TimeoutExpired:
+        with open(log_path, 'a') as log_file:
+            log_file.write(f'\n[TIMEOUT] Phase {test_name} exceeded {timeout}s\n')
+        return False, log_path
+
+
 def build_instance(
     instance_name: str,
     build_dir: Path,
     cmake_source: Path,
-    attempt: int = 1
+    attempt: int = 1,
+    app_type: str = 'experiment',
+    codegen_timeout: int = 300,
 ) -> BuildResult:
     """
     Build a single instance with timing measurement.
@@ -644,47 +394,63 @@ def build_instance(
         logger.info("CMake configuration successful")
         logger.debug(f"CMake output: {result.stdout[:200]}")
 
-        # Step 3: Build via CTest (mirrors clicking "play" in VSCode Testing sidebar)
-        logger.info(f"Running CTest for {instance_name}")
-        ctest_cmd = [
-            'ctest',
-            '--test-dir', str(build_dir),
-            '--output-on-failure',
+        # Step 3: Run CTest phases individually in order.
+        # Application tests run serially (profiling requires exclusive CPU).
+        # Regression tests additionally build iara-opt first.
+        is_regression = (app_type == 'regression_test')
+
+        phases = [
+            # (phase_key,   test_name,                       timeout,          required)
+            ('clean',       f'clean-{instance_name}',         30,               True),
+            ('iara-build',  f'iara-build-{instance_name}',    300,              is_regression),
+            ('setup',       f'setup-{instance_name}',         codegen_timeout,  False),
+            ('build',       f'build-{instance_name}',         120,              False),
+            ('lower',       f'lower-{instance_name}',         600,              True),
+            ('run',         f'run-{instance_name}',           600,              True),
         ]
 
-        log_subprocess_call(ctest_cmd, cwd=Path.cwd())
-
-        # Time the build command
-        import time
         build_start_time = time.time()
-        result = subprocess.run(
-            ctest_cmd,
-            capture_output=True,
-            text=True,
-            timeout=600
-        )
+
+        for phase_key, test_name, phase_timeout, required in phases:
+            if not _ctest_test_exists(build_dir, test_name):
+                if required:
+                    error_msg = f"Required CTest test '{test_name}' not found in CTestTestfile.cmake"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                    return BuildResult(
+                        success=False,
+                        instance_name=instance_name,
+                        attempt=attempt,
+                        timestamp=timestamp,
+                        compilation=compilation,
+                        binary_size_bytes=binary_size_bytes,
+                        errors=errors
+                    )
+                logger.debug(f"Phase '{phase_key}' not present, skipping")
+                continue
+
+            logger.info(f"Running phase '{phase_key}' for {instance_name}")
+            ok, log_path = _run_ctest_phase(build_dir, test_name, phase_timeout)
+
+            if ok:
+                logger.info(f"Phase '{phase_key}': PASS  (log: {log_path})")
+            else:
+                logger.error(f"Phase '{phase_key}': FAIL  (log: {log_path})")
+                error_msg = f"Phase '{phase_key}' failed. Full output: {log_path}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                return BuildResult(
+                    success=False,
+                    instance_name=instance_name,
+                    attempt=attempt,
+                    timestamp=timestamp,
+                    compilation=compilation,
+                    binary_size_bytes=binary_size_bytes,
+                    errors=errors
+                )
+
         build_end_time = time.time()
         build_time_s = build_end_time - build_start_time
-
-        if result.returncode != 0:
-            logger.error(f"Build failed with return code {result.returncode}")
-            logger.error(f"Stdout: {result.stdout[:500]}")
-            logger.error(f"Stderr: {result.stderr[:500]}")
-            if len(result.stderr) > 500:
-                logger.debug(f"Full stderr: {result.stderr}")
-            error_msg = f"Build failed: {result.stderr}"
-            logger.error(error_msg)
-            errors.append(error_msg)
-            return BuildResult(
-                success=False,
-                instance_name=instance_name,
-                attempt=attempt,
-                timestamp=timestamp,
-                compilation=compilation,
-                binary_size_bytes=binary_size_bytes,
-                errors=errors
-            )
-
         logger.info(f"Build successful (took {build_time_s:.2f}s)")
         logger.debug(f"Build output: {result.stdout[:200]}")
 
@@ -826,7 +592,9 @@ def build_all_instances(
     instances: List[str],
     base_build_dir: Path,
     cmake_source: Path,
-    max_retries: int = 2
+    max_retries: int = 2,
+    app_type: str = 'experiment',
+    codegen_timeout: int = 300,
 ) -> BuildResults:
     """
     Build all instances sequentially with retry logic and error tracking.
@@ -892,7 +660,9 @@ def build_all_instances(
                 instance_name=instance_name,
                 build_dir=build_dir,
                 cmake_source=cmake_source,
-                attempt=attempt
+                attempt=attempt,
+                app_type=app_type,
+                codegen_timeout=codegen_timeout,
             )
 
             if result.success:

@@ -125,6 +125,19 @@ def submit_job(
         job_id = int(result.stdout.strip())
         logger.info(f'Submitted job {job_id} ({job_name})')
 
+        # Query which node the job was assigned to
+        node = 'unknown'
+        try:
+            node_result = subprocess.run(
+                ['squeue', '-j', str(job_id), '-h', '-o', '%N'],
+                capture_output=True, text=True, timeout=10
+            )
+            node = node_result.stdout.strip() or 'unknown'
+        except Exception:
+            pass
+        print(f"  [Slurm] Job {job_id} → {node}", file=sys.stderr)
+        logger.info(f'Job {job_id} assigned to node(s): {node}')
+
         # Poll until the job finishes
         start = time.time()
         while True:
@@ -177,6 +190,7 @@ def submit_job(
 
         return {
             'job_id': job_id,
+            'node': node,
             'success': returncode == 0,
             'error': None if returncode == 0 else f'Exit code {returncode}',
             'stdout': stdout,

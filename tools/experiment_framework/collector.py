@@ -17,10 +17,10 @@ from typing import Dict, List, Any, Optional, Union
 
 # Support both relative and absolute imports
 try:
-    from .builder import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
+    from .common import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
     from .progress import ProgressBar
 except ImportError:
-    from builder import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
+    from common import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
     from progress import ProgressBar
 
 
