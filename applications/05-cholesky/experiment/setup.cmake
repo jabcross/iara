@@ -6,8 +6,9 @@
 # OpenBLAS may be built with USE64BITINT (ILP64), making all LAPACK
 # integer arguments 64-bit.  Detect this and add -DLAPACK_ILP64 so
 # source code uses the correct lapack_int type.
+string(REPLACE ":" ";" _prefix_list "${CMAKE_PREFIX_PATH}")
 find_path(_openblas_include_dir NAMES openblas_config.h
-    PATHS "${CMAKE_PREFIX_PATH}"
+    PATHS ${_prefix_list}
     PATH_SUFFIXES include
     NO_DEFAULT_PATH)
 if(_openblas_include_dir)
