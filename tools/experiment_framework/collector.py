@@ -26,7 +26,8 @@ except ImportError:
     from progress import ProgressBar
 
 
-
+# Configure logging
+logger = logging.getLogger(__name__)
 class MeasurementError(Exception):
     """Raised when required measurement cannot be parsed."""
     pass
