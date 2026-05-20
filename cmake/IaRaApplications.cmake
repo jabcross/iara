@@ -59,6 +59,19 @@ function(iara_setup_environment)
     endif()
 
     set(IARA_CLANG_INCLUDE_DIR "${IARA_CLANG_RESOURCE_DIR}/include" PARENT_SCOPE)
+
+    # Detect OpenBLAS ILP64 interface (64-bit integers for LAPACK/BLAS).
+    # This is automatic and application-agnostic — any app linking OpenBLAS
+    # with USE64BITINT needs -DLAPACK_ILP64 to avoid segfaults from
+    # integer-size mismatch between C code (32-bit int) and Fortran API (64-bit).
+    include(CheckCSourceCompiles)
+    check_c_source_compiles("
+        #include <openblas_config.h>
+        #ifndef OPENBLAS_USE64BITINT
+        #error not ILP64
+        #endif
+        int main(void) { return 0; }
+    " OPENBLAS_USES_ILP64)
 endfunction()
 
 # ==============================================================================
@@ -97,6 +110,9 @@ function(iara_runtime_sources iara_opt_sched runtime_backend out_var out_compile
                 ${PROJECT_SOURCE_DIR}/external/enkiTS/TaskScheduler.cpp
             )
             set(compile_defs "IARA_PARALLELISM_ENKITS")
+        elseif("${runtime_backend}" STREQUAL "none")
+            # Sequential execution: no OMP or EnkiTS runtime needed
+            set(compile_defs "IARA_PARALLELISM_NONE")
         else()
             # Default to OpenMP
             set(compile_defs "IARA_PARALLELISM_OMP")
@@ -138,9 +154,9 @@ function(iara_map_scheduler scheduler iara_opt_var runtime_backend_var scheduler
         # Sequential baseline scheduler (direct C compilation)
         set(SCHEDULER_FLAG "-DSCHEDULER_SEQUENTIAL")
     elseif("${scheduler}" STREQUAL "vf-sequential")
-        # Virtual FIFO without OpenMP - sequential execution of generated code
+        # Virtual FIFO with sequential execution — no OMP or EnkiTS runtime
         set(IARA_OPT_SCHEDULER "virtual-fifo")
-        set(IARA_RUNTIME_BACKEND "omp")
+        set(IARA_RUNTIME_BACKEND "none")
         set(SCHEDULER_FLAG "-DSCHEDULER_VF_SEQUENTIAL")
     elseif("${scheduler}" STREQUAL "omp-for")
         set(SCHEDULER_FLAG "-DSCHEDULER_OMP_FOR")
@@ -757,6 +773,13 @@ function(iara_add_application)
 
     # Link options
     target_link_directories(${target_name} PRIVATE $ENV{LLVM_INSTALL}/lib)
+    # Always add the arch-specific LLVM lib dir so that -fopenmp can find libomp
+    # even when find_library didn't populate OpenMP_CXX_LIBRARY_DIR.
+    if(NOT DEFINED ENV{LLVM_INSTALL} OR "$ENV{LLVM_INSTALL}" STREQUAL "")
+        message(FATAL_ERROR "LLVM_INSTALL is not set. Source sorgan_env.sh before building.")
+    endif()
+    target_link_directories(${target_name} PRIVATE
+        $ENV{LLVM_INSTALL}/lib/x86_64-unknown-linux-gnu)
     if(OpenMP_CXX_LIBRARY_DIR)
         target_link_directories(${target_name} PRIVATE ${OpenMP_CXX_LIBRARY_DIR})
     endif()
@@ -805,7 +828,7 @@ endfunction()
 function(iara_add_test_instance)
     # Parse arguments
     cmake_parse_arguments(TEST
-        ""  # No boolean options
+        "IS_REGRESSION_TEST"  # Boolean options
         "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR"  # Single-value args
         "PARAMETERS;DEFINES;LINKER_ARGS"  # Multi-value args
         ${ARGN}
@@ -831,6 +854,15 @@ function(iara_add_test_instance)
     set(instance_name "${TEST_NAME}")
     set(target_name "run-${instance_name}")
     set(build_target_name "build-${instance_name}")
+    set(_test_label "${TEST_ENTRY}/${instance_name}")
+
+    # Per-application hook: if <APPLICATION_DIR>/experiment/setup.cmake
+    # exists, include it to allow app-specific CMake logic (e.g. LAPACK ILP64
+    # detection).  The hook can append to TEST_DEFINES.
+    set(_app_hook "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/experiment/setup.cmake")
+    if(EXISTS "${_app_hook}")
+        include("${_app_hook}")
+    endif()
 
     # Set environment variables for compilation (for parameter defines)
     foreach(param ${TEST_PARAMETERS})
@@ -881,19 +913,63 @@ function(iara_add_test_instance)
     )
 
     # ===========================================================================
-    # CTest integration — 4 independent tests per instance.
+    # CTest integration — tests per instance, run in this order:
+    #   clean-*      — removes compiled artifacts (always first)
+    #   iara-build-* — builds iara-opt (regression tests only)
+    #   setup-*      — runs codegen.sh / preesm-codegen.sh (if present)
+    #   build-*      — runs iara-opt → schedule.mlir (IaRa schedulers only)
+    #   lower-*      — cmake --build: schedule.mlir → a.out
+    #   run-*        — runs a.out (smoke test)
     #
-    # Each test clears its own outputs on rerun; downstream tests do not
-    # retrigger upstream ones as long as upstream outputs already exist.
-    #
-    # Debugger-friendly tests (direct executable COMMAND):
-    #   build-*  — runs iara-opt directly → schedule.mlir
-    #   run-*    — runs a.out directly
-    #
-    # Script-wrapper tests (cmake -P):
-    #   setup-*  — runs codegen.sh (omitted when no codegen script)
-    #   lower-*  — deletes schedule.ll/schedule.o/a.out, then cmake --build
+    # DEPENDS chains (enforced by CTest even when tests run in parallel):
+    #   regression: clean → iara-build → [setup] → [build] → lower → run
+    #   application: clean → [setup] → [build] → lower → run
     # ===========================================================================
+
+    # Define paths used by multiple phases (needed early for clean-* and lower-*)
+    set(_iara_opt_bin "$ENV{IARA_DIR}/build/bin/iara-opt")
+    set(_schedule_mlir "${TEST_BUILD_DIR}/schedule.mlir")
+    set(_schedule_ll   "${TEST_BUILD_DIR}/schedule.ll")
+    set(_schedule_o    "${TEST_BUILD_DIR}/schedule.o")
+    set(_aout          "${TEST_BUILD_DIR}/a.out")
+
+    # --------------------------------------------------------------------------
+    # clean-* — removes compiled artifacts so each run starts from a clean slate
+    # --------------------------------------------------------------------------
+    set(_clean_cmake "${TEST_BUILD_DIR}/clean-${instance_name}.cmake")
+    file(GENERATE OUTPUT "${_clean_cmake}" CONTENT
+"# Auto-generated clean script for ${instance_name}
+cmake_minimum_required(VERSION 3.20)
+file(REMOVE
+    \"${_schedule_mlir}\"
+    \"${_schedule_ll}\"
+    \"${_schedule_o}\"
+    \"${_aout}\")
+message(STATUS \"Cleaned build artifacts for ${instance_name}\")
+")
+    add_test(NAME "clean-${instance_name}"
+        COMMAND ${CMAKE_COMMAND} -P "${_clean_cmake}"
+        WORKING_DIRECTORY "${TEST_BUILD_DIR}")
+    set_tests_properties("clean-${instance_name}" PROPERTIES
+        TIMEOUT 30
+        LABELS "${_test_label}")
+
+    # Track the "first real dependency" after clean (varies by test type)
+    set(_after_clean_dep "clean-${instance_name}")
+
+    # --------------------------------------------------------------------------
+    # iara-build-* — builds iara-opt compiler (regression tests only)
+    # --------------------------------------------------------------------------
+    if(TEST_IS_REGRESSION_TEST)
+        add_test(NAME "iara-build-${instance_name}"
+            COMMAND ${CMAKE_COMMAND} --build "${PROJECT_SOURCE_DIR}/build" --target iara-opt
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+        set_tests_properties("iara-build-${instance_name}" PROPERTIES
+            TIMEOUT 300
+            LABELS "${_test_label}"
+            DEPENDS "clean-${instance_name}")
+        set(_after_clean_dep "iara-build-${instance_name}")
+    endif()
 
     # Collect the iara-opt invocation used by iara_add_application so that the
     # build-* CTest test mirrors it exactly.
@@ -919,12 +995,6 @@ function(iara_add_test_instance)
     else()
         set(_test_topology "${TEST_BUILD_DIR}/topology.mlir")
     endif()
-
-    set(_iara_opt_bin "$ENV{IARA_DIR}/build/bin/iara-opt")
-    set(_schedule_mlir "${TEST_BUILD_DIR}/schedule.mlir")
-    set(_schedule_ll   "${TEST_BUILD_DIR}/schedule.ll")
-    set(_schedule_o    "${TEST_BUILD_DIR}/schedule.o")
-    set(_aout          "${TEST_BUILD_DIR}/a.out")
 
     # --------------------------------------------------------------------------
     # setup-* (only when codegen_script exists for this application)
@@ -1038,13 +1108,21 @@ execute_process(
     set_tests_properties("${target_name}" PROPERTIES TIMEOUT 600)
 
     # --------------------------------------------------------------------------
-    # Sequential ordering: setup- → build- → lower- → run-
-    # DEPENDS ensures tests run in order when CTest uses parallel execution
+    # Sequential ordering (enforced via DEPENDS):
+    #   clean → [iara-build] → [setup] → [build] → lower → run
+    # DEPENDS ensures tests run in order even with parallel CTest execution
     # (e.g. VSCode "Run All Tests" button in an instance directory).
     # --------------------------------------------------------------------------
+    if(_codegen_script)
+        set_tests_properties("setup-${instance_name}" PROPERTIES
+            DEPENDS "${_after_clean_dep}")
+    endif()
     if(_codegen_script AND _test_iara_opt AND _test_topology)
         set_tests_properties("${build_target_name}" PROPERTIES
             DEPENDS "setup-${instance_name}")
+    elseif(_test_iara_opt AND _test_topology)
+        set_tests_properties("${build_target_name}" PROPERTIES
+            DEPENDS "${_after_clean_dep}")
     endif()
     if(_test_iara_opt AND _test_topology)
         set_tests_properties("lower-${instance_name}" PROPERTIES
@@ -1052,14 +1130,17 @@ execute_process(
     elseif(_codegen_script)
         set_tests_properties("lower-${instance_name}" PROPERTIES
             DEPENDS "setup-${instance_name}")
+    else()
+        set_tests_properties("lower-${instance_name}" PROPERTIES
+            DEPENDS "${_after_clean_dep}")
     endif()
     set_tests_properties("${target_name}" PROPERTIES
         DEPENDS "lower-${instance_name}")
 
     # --------------------------------------------------------------------------
     # Hierarchical LABELS for VSCode CTest tree: app/instance
+    # (clean-* and iara-build-* already have LABELS set at creation time)
     # --------------------------------------------------------------------------
-    set(_test_label "${TEST_ENTRY}/${instance_name}")
     if(_codegen_script)
         set_tests_properties("setup-${instance_name}" PROPERTIES LABELS "${_test_label}")
     endif()

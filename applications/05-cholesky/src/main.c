@@ -1,9 +1,13 @@
 // adapted from tdg-benchs
 
 #include "cholesky.h"
-// adapted from tdg-benchs
-
-#include "cholesky.h"
+// ILP64 compatibility: OpenBLAS can be built with USE64BITINT, making
+// all LAPACK integer arguments 64-bit (lapack_int = int64_t).  Using
+// plain int (32-bit) causes LAPACK to read garbage for sizes and
+// leading dimensions, producing segfaults or wrong results.  Always
+// use lapack_int for LAPACK/BLAS integer arguments for portability.
+// Build systems must define -DLAPACK_ILP64 when linking against an
+// ILP64 OpenBLAS.
 #ifdef SCHEDULER_IARA
   #include <IaraRuntime/common/Scheduler.h>
 #endif
@@ -30,22 +34,22 @@ const int num_blocks = NUM_BLOCKS;
   #error "MUST DEFINE MATRIX SIZE"
 #endif
 
-const int matrix_size = MATRIX_SIZE;
+const lapack_int matrix_size = MATRIX_SIZE;
 
 #ifndef BLOCK_SIZE
   #define BLOCK_SIZE (MATRIX_SIZE / NUM_BLOCKS)
 #endif
 
-const int block_size = BLOCK_SIZE; // side of the square
+const lapack_int block_size = BLOCK_SIZE; // side of the square
 
-const int block_size_doubles = block_size * block_size; // area of the square
+const lapack_int block_size_doubles = block_size * block_size; // area of the square
 
-const int block_size_bytes = block_size_doubles * sizeof(double);
+const lapack_int block_size_bytes = block_size_doubles * sizeof(double);
 
 // #define VERBOSE
 
 void omp_potrf(double *inout_A) {
-  static int INFO;
+  static lapack_int INFO;
   static const char L = 'L';
   dpotrf_(&L, &block_size, inout_A, &block_size, &INFO, 1);
 }
@@ -58,7 +62,7 @@ void kernel_potrf(double *inout_A) { //
 void omp_trsm(double *A, double *B) {
   static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
   static double DONE = 1.0;
-  int bs = block_size;
+  lapack_int bs = block_size;
   dtrsm_(&RI, &LO, &TR, &NU, &bs, &bs, &DONE, A, &bs, B, &bs);
 }
 
@@ -70,7 +74,7 @@ void kernel_trsm(double *in_A, double *inout_B) {
 void omp_syrk(double *A, double *B) {
   static char LO = 'L', NT = 'N';
   static double DONE = 1.0, DMONE = -1.0;
-  int bs = block_size;
+  lapack_int bs = block_size;
   dsyrk_(&LO, &NT, &bs, &bs, &DMONE, A, &bs, &DONE, B, &bs);
 }
 
@@ -82,7 +86,7 @@ void kernel_syrk(double *in_A, double *inout_B) {
 void omp_gemm(double *A, double *B, double *C) {
   static const char TR = 'T', NT = 'N';
   static double DONE = 1.0, DMONE = -1.0;
-  int bs = block_size;
+  lapack_int bs = block_size;
   dgemm_(&NT, &TR, &bs, &bs, &bs, &DMONE, A, &bs, B, &bs, &DONE, C, &bs);
 }
 
@@ -96,9 +100,14 @@ void add_to_diag(double *matrix, const double alpha) {
     matrix[i + i * matrix_size] += alpha;
 }
 
+// ILP64 compatibility: OpenBLAS can be built with USE64BITINT, making
+// all LAPACK integer arguments 64-bit (lapack_int = int64_t).  Using
+// plain int (32-bit) causes LAPACK to read garbage for sizes and
+// leading dimensions, producing segfaults or wrong results.  Always
+// use lapack_int for LAPACK/BLAS integer arguments for portability.
 void initialize_matrix(double *matrix) {
-  int ISEED[4] = {0, 0, 0, 1};
-  int intONE = 1;
+  lapack_int ISEED[4] = {0, 0, 0, 1};
+  lapack_int intONE = 1;
 
 #ifdef VERBOSE
   printf("Initializing matrix with random values ...\n");
@@ -393,7 +402,7 @@ double *allocate_matrix() {
 static void convert_to_blocks(double const *RESTRICT input_linear_matrix,
                               double *RESTRICT output_blocked_matrix) {
 
-  int matrix_size = num_blocks * block_size;
+  lapack_int matrix_size = num_blocks * block_size;
 
   double *out = output_blocked_matrix;
   for (int b_i = 0; b_i < num_blocks; b_i++) {
@@ -414,7 +423,7 @@ static void convert_to_blocks(double const *RESTRICT input_linear_matrix,
 static void convert_to_linear(double const *RESTRICT input_blocked_matrix,
                               double *RESTRICT output_linear_matrix) {
 
-  int matrix_size = num_blocks * block_size;
+  lapack_int matrix_size = num_blocks * block_size;
 
   double const *in = input_blocked_matrix;
   for (int b_i = 0; b_i < num_blocks; b_i++) {
