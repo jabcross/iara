@@ -17,68 +17,14 @@ from typing import Dict, List, Any, Optional, Union
 
 # Support both relative and absolute imports
 try:
-    from .common import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
+    from .common import (parse_time_output, convert_time_to_seconds,
+                           convert_memory_to_bytes, run_and_log, log_subprocess_call)
     from .progress import ProgressBar
 except ImportError:
-    from common import parse_time_output, convert_time_to_seconds, convert_memory_to_bytes
+    from common import (parse_time_output, convert_time_to_seconds,
+                          convert_memory_to_bytes, run_and_log, log_subprocess_call)
     from progress import ProgressBar
 
-
-# Configure logging
-logger = logging.getLogger(__name__)
-
-
-# Standard measurements always collected for every experiment.
-# These are injected into stdout by execute_single_run() from GNU time output,
-# so no per-app yaml configuration is required.
-STANDARD_MEASUREMENTS = [
-    {
-        "name": "wall_time",
-        "type": "float",
-        "parser": {
-            "type": "regex",
-            "pattern": r"GNU Wall time:\s+(\d+\.?\d*)",
-            "group": 1
-        },
-        "unit": "s",
-        "required": True,
-        "description": "Total wall clock execution time (from GNU time)"
-    },
-    # NOTE: no "unit" key — converter already yields MB;
-    # adding "unit": "MB" would trigger a second bytes conversion on top.
-    {
-        "name": "max_rss_mb",
-        "type": "float",
-        "parser": {
-            "type": "regex",
-            "pattern": r"Maximum resident set size.*:\s+(\d+)",
-            "group": 1,
-            "converter": "lambda x: float(x) / 1024"
-        },
-        "required": False,
-        "description": "Peak resident set size in MB"
-    }
-]
-
-
-def log_subprocess_call(
-    cmd: List[str],
-    cwd: Optional[Path] = None,
-    env: Optional[Dict[str, str]] = None,
-) -> None:
-    """
-    Log subprocess call details for debugging.
-
-    Args:
-        cmd: Command and arguments as list
-        cwd: Working directory for the subprocess
-        env: Environment variables (custom vars only, logs if non-empty)
-    """
-    logger.info(f"Executing subprocess: {' '.join(cmd)}")
-    if cwd:
-        logger.debug(f"  Working directory: {cwd}")
-    if env:
-        logger.debug(f"  Environment variables: {json.dumps(env, indent=2)}")
 
 
 class MeasurementError(Exception):
