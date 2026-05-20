@@ -982,11 +982,139 @@ def _substitute_env_params(env_vars: dict, params: dict) -> dict:
     return result
 
 
+def execute_instance_slurm(
+    executable: Path,
+    repetitions: int,
+    timeout: int,
+    env_vars: Dict[str, str],
+    measurements: List[Dict[str, Any]],
+    nodelist: Optional[str] = None,
+    instance_name: str = None
+) -> Dict[str, Any]:
+    """Execute an instance via Slurm sbatch and collect measurements.
+
+    Submits a single sbatch job that runs the executable.  For multiple
+    repetitions the job is submitted multiple times sequentially (each
+    Slurm job handles one run).
+    """
+    from .slurm import submit_job
+
+    if instance_name is None:
+        instance_name = executable.stem
+
+    if not executable.exists():
+        return {
+            "instance_name": instance_name,
+            "runs": [],
+            "failures": [{"run_number": 1, "error": f"Executable not found: {executable}"}],
+            "total_runs": repetitions,
+            "successful_runs": 0,
+            "failed_runs": repetitions
+        }
+
+    runs = []
+    failures = []
+    slurm_output_dir = Path("slurm_output") / instance_name
+
+    for run_number in range(1, repetitions + 1):
+        logger.info(f"Slurm run {run_number}/{repetitions} for {instance_name}")
+
+        result = submit_job(
+            executable=executable,
+            env_vars=env_vars,
+            timeout=timeout,
+            job_name=f"{instance_name}_run{run_number}",
+            output_dir=slurm_output_dir,
+            nodelist=nodelist,
+        )
+
+        if result["success"]:
+            combined_output = result["stdout"] + "\n" + result["stderr"]
+            parsed_measurements = {}
+            for measurement_spec in measurements:
+                measurement_name = measurement_spec.get('name', 'unknown')
+                try:
+                    value = parse_measurement(combined_output, measurement_spec)
+                    if value is not None:
+                        parsed_measurements[measurement_name] = value
+                except Exception as e:
+                    if measurement_spec.get('required', True):
+                        logger.warning(f"Slurm: failed to parse {measurement_name}: {e}")
+
+            # Inject structured metrics into stdout from GNU time output
+            time_file = slurm_output_dir / f"{instance_name}_run{run_number}.time"
+            if time_file.exists():
+                gnu_time = parse_time_output_str(time_file.read_text())
+                if 'wall_time_s' in gnu_time:
+                    parsed_measurements.setdefault('wall_time', gnu_time['wall_time_s'])
+                if 'max_rss_bytes' in gnu_time:
+                    parsed_measurements.setdefault('max_rss_mb', gnu_time['max_rss_bytes'] / 1024)
+
+            runs.append({
+                "run_number": run_number,
+                "returncode": result["returncode"],
+                "measurements": parsed_measurements
+            })
+        else:
+            failures.append({
+                "run_number": run_number,
+                "error": result.get("error", "Slurm job failed")
+            })
+
+    execution_result = {
+        "instance_name": instance_name,
+        "runs": runs,
+        "failures": failures,
+        "total_runs": repetitions,
+        "successful_runs": len(runs),
+        "failed_runs": len(failures)
+    }
+
+    statistics = compute_all_statistics(execution_result)
+    execution_result["statistics"] = statistics
+
+    return execution_result
+
+
+def parse_time_output_str(content: str) -> Dict[str, Any]:
+    """Parse GNU time -v output from a string (same logic as builder.parse_time_output)."""
+    import re
+    result = {}
+    # Parse user time
+    match = re.search(r'User time \(seconds\):\s+(\d+\.?\d*)', content)
+    if match:
+        result['user_time_s'] = float(match.group(1))
+    # Parse system time
+    match = re.search(r'System time \(seconds\):\s+(\d+\.?\d*)', content)
+    if match:
+        result['system_time_s'] = float(match.group(1))
+    # Parse wall clock time
+    match = re.search(r'Elapsed \(wall clock\) time \(h:mm:ss or m:ss\):\s+(.+?)$',
+                      content, re.MULTILINE)
+    if match:
+        wt = match.group(1).strip()
+        if ':' not in wt:
+            result['wall_time_s'] = float(wt)
+        else:
+            parts = wt.split(':')
+            if len(parts) == 2:
+                result['wall_time_s'] = int(parts[0]) * 60 + float(parts[1])
+            elif len(parts) == 3:
+                result['wall_time_s'] = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+    # Parse max RSS
+    match = re.search(r'Maximum resident set size \(kbytes\):\s+(\d+)', content)
+    if match:
+        result['max_rss_bytes'] = int(match.group(1)) * 1024
+    return result
+
+
 def collect_all_measurements(
     build_results: Dict[str, Any],
     config: Dict[str, Any],
     repetitions: Optional[int] = None,
-    timeout: Optional[int] = None
+    timeout: Optional[int] = None,
+    slurm: bool = False,
+    nodelist: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute all successful instances and collect measurements.
@@ -1004,6 +1132,8 @@ def collect_all_measurements(
         config: Complete configuration dictionary
         repetitions: Number of executions per instance (overrides YAML config)
         timeout: Timeout in seconds per execution (overrides YAML config)
+        slurm: If True, submit executions to Slurm instead of running locally
+        nodelist: Slurm node(s) to use (requires slurm=True)
 
     Returns:
         CollectionResults dict with:
@@ -1090,15 +1220,26 @@ def collect_all_measurements(
             instance_params = _extract_instance_params(instance_name, config)
             env_vars = _substitute_env_params(base_env_vars, instance_params)
 
-            # Execute instance with all repetitions
-            exec_result = execute_instance(
-                executable,
-                final_repetitions,
-                final_timeout,
-                env_vars,
-                measurements,
-                instance_name=instance_name
-            )
+            if slurm:
+                exec_result = execute_instance_slurm(
+                    executable,
+                    final_repetitions,
+                    final_timeout,
+                    env_vars,
+                    measurements,
+                    nodelist=nodelist,
+                    instance_name=instance_name
+                )
+            else:
+                # Execute instance with all repetitions (local)
+                exec_result = execute_instance(
+                    executable,
+                    final_repetitions,
+                    final_timeout,
+                    env_vars,
+                    measurements,
+                    instance_name=instance_name
+                )
 
             execution_results.append(exec_result)
             logger.info(f"Executed {instance_name}: {len(exec_result['runs'])} successful runs")

@@ -134,7 +134,7 @@ def setup_logging(
     return Path("/dev/null")
 
 
-def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
+def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path, extra_defines: list = None) -> int:
     """
     Run Phase 1: Generate CMakeLists.txt.
 
@@ -161,7 +161,7 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
         return 2
 
     try:
-        count = generate_cmakelists(yaml_path, output_path, exp_set)
+        count = generate_cmakelists(yaml_path, output_path, exp_set, extra_defines=extra_defines)
         print(f"  ✓ Generated {count} instances")
         logger.info(f"Successfully generated {count} instances")
         return 0
@@ -175,7 +175,8 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
         return 2
 
 
-def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
+def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
+              scheduler_filter: str = None) -> int:
     """
     Run Phase 2: Build all instances.
 
@@ -229,6 +230,14 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
             logger.error("No instances found in CMakeLists.txt")
             return 2
 
+        # Apply scheduler filter if specified
+        if scheduler_filter:
+            instances = [i for i in instances if scheduler_filter in i]
+            if not instances:
+                print(f"ERROR: No instances match scheduler filter '{scheduler_filter}'", file=sys.stderr)
+                return 2
+            logger.info(f"Scheduler filter '{scheduler_filter}': {len(instances)} instance(s) selected")
+
         logger.info(f"Found {len(instances)} instances to build")
 
     except Exception as e:
@@ -240,9 +249,15 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
     build_dir = Path("build_experiments") / app
     cmake_source = app_dir
 
-    # Build all instances
+    # Build all instances (always sequential — profiling requires exclusive CPU)
+    app_type = config.get('application', {}).get('app_type', 'experiment')
+    codegen_timeout = config.get('execution', {}).get('codegen_timeout', 300)
     try:
-        build_results = build_all_instances(instances, build_dir, cmake_source)
+        build_results = build_all_instances(
+            instances, build_dir, cmake_source,
+            app_type=app_type,
+            codegen_timeout=codegen_timeout,
+        )
     except Exception as e:
         print(f"ERROR: Build failed: {e}", file=sys.stderr)
         logger.error(f"Build error: {e}", exc_info=True)
@@ -271,7 +286,8 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
 
 
 def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
-               repetitions: Optional[int] = None, timeout: Optional[int] = None) -> int:
+               repetitions: Optional[int] = None, timeout: Optional[int] = None,
+               slurm: bool = False, nodelist: Optional[str] = None) -> int:
     """
     Run Phase 3: Execute instances and collect measurements.
 
@@ -352,7 +368,9 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         collection_results = collect_all_measurements(
             build_results_dict, config,
             repetitions=repetitions,
-            timeout=timeout
+            timeout=timeout,
+            slurm=slurm,
+            nodelist=nodelist
         )
     except Exception as e:
         print(f"ERROR: Execution failed: {e}", file=sys.stderr)
@@ -588,6 +606,9 @@ def _batch_summary(results: list) -> int:
 
 def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) -> int:
     """Run the full pipeline (generate→build→execute→visualize) for one (app, set)."""
+    extra_defines = getattr(args, 'defines', [])
+    scheduler_filter = getattr(args, 'scheduler', None)
+
     onetime_script = Path("applications") / app / "onetime.sh"
     if onetime_script.exists():
         try:
@@ -597,7 +618,7 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
             return 2
 
     if not args.skip_generate:
-        rc = run_generate(app, exp_set, app_dir, yaml_path)
+        rc = run_generate(app, exp_set, app_dir, yaml_path, extra_defines=extra_defines)
         if rc != 0:
             return rc
     else:
@@ -606,12 +627,15 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
             return rc
 
     if not args.skip_build:
-        rc = run_build(app, exp_set, app_dir, yaml_path)
+        rc = run_build(app, exp_set, app_dir, yaml_path, scheduler_filter=scheduler_filter)
         if rc == 2:
             return 2
 
     if not args.skip_execute:
-        rc = run_execute(app, exp_set, app_dir, yaml_path)
+        slurm = getattr(args, 'slurm', False)
+        nodelist = getattr(args, 'nodelist', None)
+        rc = run_execute(app, exp_set, app_dir, yaml_path,
+                         slurm=slurm, nodelist=nodelist)
         if rc == 2:
             return 2
 
@@ -712,6 +736,15 @@ def main() -> int:
         help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
     )
 
+    generate_parser.add_argument(
+        "--define", "-D",
+        action="append",
+        metavar="NAME[=VALUE]",
+        dest="defines",
+        default=[],
+        help="Extra compile define (e.g. -DIARA_DEBUGPRINT or --define IARA_DEBUGPRINT=1); repeatable",
+    )
+
     # ============================================================================
     # build command
     # ============================================================================
@@ -749,6 +782,22 @@ def main() -> int:
         default=True,
         metavar="BOOL",
         help="Force clean build (default: true)",
+    )
+
+    build_parser.add_argument(
+        "--define", "-D",
+        action="append",
+        metavar="NAME[=VALUE]",
+        dest="defines",
+        default=[],
+        help="Extra compile define (e.g. -DIARA_DEBUGPRINT); repeatable",
+    )
+
+    build_parser.add_argument(
+        "--scheduler",
+        type=str,
+        metavar="NAME",
+        help="Filter instances by scheduler name (e.g. vf-sequential, vf-omp, preesm)",
     )
 
     # ============================================================================
@@ -794,6 +843,19 @@ def main() -> int:
         type=int,
         metavar="SECONDS",
         help="Execution timeout in seconds (default: from YAML)",
+    )
+
+    execute_parser.add_argument(
+        "--slurm",
+        action="store_true",
+        help="Submit execution to Slurm instead of running locally",
+    )
+
+    execute_parser.add_argument(
+        "--nodelist",
+        type=str,
+        metavar="NODES",
+        help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
     )
 
     # ============================================================================
@@ -897,6 +959,35 @@ def main() -> int:
         "--skip-execute",
         action="store_true",
         help="Use existing measurements (skip execution)",
+    )
+
+    run_parser.add_argument(
+        "--define", "-D",
+        action="append",
+        metavar="NAME[=VALUE]",
+        dest="defines",
+        default=[],
+        help="Extra compile define (e.g. -DIARA_DEBUGPRINT); repeatable",
+    )
+
+    run_parser.add_argument(
+        "--scheduler",
+        type=str,
+        metavar="NAME",
+        help="Filter instances by scheduler name (e.g. vf-sequential, vf-omp, preesm)",
+    )
+
+    run_parser.add_argument(
+        "--slurm",
+        action="store_true",
+        help="Submit execution to Slurm instead of running locally",
+    )
+
+    run_parser.add_argument(
+        "--nodelist",
+        type=str,
+        metavar="NODES",
+        help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
     )
 
     # Register completers and activate argcomplete (no-op if not installed)
@@ -1007,7 +1098,8 @@ def main() -> int:
         output_path = app_dir / "CMakeLists.txt"
 
         try:
-            count = generate_cmakelists(yaml_path, output_path, args.set)
+            count = generate_cmakelists(yaml_path, output_path, args.set,
+                                        extra_defines=getattr(args, 'defines', []))
             print(f"Generated {count} instances in {output_path}")
             logger.info(f"Successfully generated {count} instances")
             return 0
@@ -1035,7 +1127,14 @@ def main() -> int:
         logger.info(f"Phase 2: Build - App: {args.app}, Set: {args.set}")
         app_dir = Path("applications") / args.app / "experiment"
         yaml_path = app_dir / "experiments.yaml"
-        return run_build(args.app, args.set, app_dir, yaml_path)
+        if getattr(args, 'defines', []):
+            # Regenerate CMakeLists.txt with extra defines before building
+            rc = run_generate(args.app, args.set, app_dir, yaml_path,
+                              extra_defines=args.defines)
+            if rc != 0:
+                return rc
+        return run_build(args.app, args.set, app_dir, yaml_path,
+                         scheduler_filter=getattr(args, 'scheduler', None))
 
     # ============================================================================
     # execute command
@@ -1047,7 +1146,9 @@ def main() -> int:
                 print(f"\n=== {app_name} / {set_name} ===")
                 rc = run_execute(app_name, set_name, exp_dir, yaml_path,
                                  repetitions=getattr(args, 'repetitions', None),
-                                 timeout=getattr(args, 'timeout', None))
+                                 timeout=getattr(args, 'timeout', None),
+                                 slurm=getattr(args, 'slurm', False),
+                                 nodelist=getattr(args, 'nodelist', None))
                 results.append((app_name, set_name, rc))
             return _batch_summary(results)
 
@@ -1056,7 +1157,9 @@ def main() -> int:
         yaml_path = app_dir / "experiments.yaml"
         return run_execute(args.app, args.set, app_dir, yaml_path,
                            repetitions=getattr(args, 'repetitions', None),
-                           timeout=getattr(args, 'timeout', None))
+                           timeout=getattr(args, 'timeout', None),
+                           slurm=getattr(args, 'slurm', False),
+                           nodelist=getattr(args, 'nodelist', None))
 
     # ============================================================================
     # visualize command
