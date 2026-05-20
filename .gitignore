@@ -33,3 +33,4 @@ applications/*/experiment/*.hash
 applications/*/experiment/results
 applications/13*/data
 *.hs
+agent_workspace/
