@@ -32,6 +32,39 @@ class MeasurementError(Exception):
     pass
 
 
+# Standard measurements always collected for every experiment.
+# These are injected into stdout by execute_single_run() from GNU time output,
+# so no per-app yaml configuration is required.
+STANDARD_MEASUREMENTS = [
+    {
+        "name": "wall_time",
+        "type": "float",
+        "parser": {
+            "type": "regex",
+            "pattern": r"GNU Wall time:\s+(\d+\.?\d*)",
+            "group": 1
+        },
+        "unit": "s",
+        "required": True,
+        "description": "Total wall clock execution time (from GNU time)"
+    },
+    # NOTE: no "unit" key — converter already yields MB;
+    # adding "unit": "MB" would trigger a second bytes conversion on top.
+    {
+        "name": "max_rss_mb",
+        "type": "float",
+        "parser": {
+            "type": "regex",
+            "pattern": r"Maximum resident set size.*:\s+(\d+)",
+            "group": 1,
+            "converter": "lambda x: float(x) / 1024"
+        },
+        "required": False,
+        "description": "Peak resident set size in MB"
+    }
+]
+
+
 def execute_single_run(
     executable: Path,
     run_number: int,
