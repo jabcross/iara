@@ -34,3 +34,10 @@ applications/*/experiment/results
 applications/13*/data
 *.hs
 agent_workspace/
+*.md
+pdfs/
+*.md
+!CLAUDE.md
+!SPRINT.md
+!MEMORY.md
+!TODO.md
