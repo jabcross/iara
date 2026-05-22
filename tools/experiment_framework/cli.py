@@ -684,23 +684,24 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
     if not nodelist:
         nodelist = os.environ.get('SACI_SLURM_NODE_LIST')
 
-    # Reconstruct command without --slurm and --nodelist, replace 'python3' with venv python
-    cmd_argv = []
+    # Reconstruct command without --slurm and --nodelist
+    # sys.argv[0] is the __main__.py path (or -c when testing), not 'python3',
+    # so reconstruct as python3 -m tools.experiment_framework ...
+    # NOTE: python3 resolves to the venv python because sorgan_env.sh sources the venv
+    cmd_argv = ["python3", "-m", "tools.experiment_framework"]
     skip_next = False
     for i, arg in enumerate(argv):
         if skip_next:
             skip_next = False
             continue
+        if i == 0:
+            continue  # skip sys.argv[0] (__main__.py path or -c)
         if arg == "--slurm":
             continue
         if arg == "--nodelist":
             skip_next = True
             continue
-        # Replace python3 with sourced venv python path
-        if arg == "python3":
-            cmd_argv.append("${VENV_DIR}/bin/python")
-        else:
-            cmd_argv.append(arg)
+        cmd_argv.append(arg)
 
     # Get IARA_DIR now (in Python) before building sbatch script
     iara_dir = os.environ.get('IARA_DIR', str(Path(__file__).parent.parent.parent))
