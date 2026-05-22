@@ -684,7 +684,7 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
     if not nodelist:
         nodelist = os.environ.get('SACI_SLURM_NODE_LIST')
 
-    # Reconstruct command without --slurm and --nodelist
+    # Reconstruct command without --slurm and --nodelist, replace 'python3' with venv python
     cmd_argv = []
     skip_next = False
     for i, arg in enumerate(argv):
@@ -696,7 +696,14 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
         if arg == "--nodelist":
             skip_next = True
             continue
-        cmd_argv.append(arg)
+        # Replace python3 with sourced venv python path
+        if arg == "python3":
+            cmd_argv.append("${VENV_DIR}/bin/python")
+        else:
+            cmd_argv.append(arg)
+
+    # Get IARA_DIR now (in Python) before building sbatch script
+    iara_dir = os.environ.get('IARA_DIR', str(Path(__file__).parent.parent.parent))
 
     # Build sbatch script with proper shell quoting
     cmd_str = ' '.join(shlex.quote(arg) for arg in cmd_argv)
@@ -712,9 +719,9 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
 set -e
 
 # Restore IaRa environment on compute node
-source "${{IARA_DIR:-/scratch/$USER/repos/iara}}/sorgan_env.sh"
+source {shlex.quote(iara_dir)}/sorgan_env.sh
 
-# Execute framework command with environment active
+# Execute framework command
 {cmd_str}
 '''
 
@@ -724,6 +731,7 @@ source "${{IARA_DIR:-/scratch/$USER/repos/iara}}/sorgan_env.sh"
         script_path = f.name
 
     try:
+
         cmd = ['sbatch', '--parsable']
         if nodelist:
             cmd += [f'--nodelist={nodelist}']
