@@ -43,6 +43,7 @@ export LLVM_INSTALL="$PROJECTS_DIR/llvm-install"
 export LLVM_BUILD="$LLVM_SOURCES/build"
 
 export PATH="$IARA_DIR/scripts:$LLVM_INSTALL/bin:$IARA_DIR/build/bin:$LLVM_SOURCES/build/bin:$PATH"
+export PYTHONPATH="$IARA_DIR:$PYTHONPATH"
 export PS1="(iara)$PS1"
 
 SPACK_VIEW_PATH="$IARA_DIR/spack/var/spack/environments/iara_env/.spack-env/view"

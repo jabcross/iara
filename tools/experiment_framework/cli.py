@@ -675,6 +675,7 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
         Exit code from sbatch job
     """
     import os
+    import shlex
     import subprocess
     import tempfile
     import time
@@ -697,8 +698,8 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
             continue
         cmd_argv.append(arg)
 
-    # Build sbatch script
-    cmd_str = ' '.join(subprocess.list2cmdline([a]) if ' ' in a else a for a in cmd_argv)
+    # Build sbatch script with proper shell quoting
+    cmd_str = ' '.join(shlex.quote(arg) for arg in cmd_argv)
     script = f'''#!/bin/bash
 #SBATCH --job-name=iara-framework
 #SBATCH --output=iara-slurm-%j.out
@@ -713,6 +714,7 @@ set -e
 # Restore IaRa environment on compute node
 source "${{IARA_DIR:-/scratch/$USER/repos/iara}}/sorgan_env.sh"
 
+# Execute framework command with environment active
 {cmd_str}
 '''
 
