@@ -660,6 +660,108 @@ def _list_available_sets(yaml_path: Path) -> list:
         return []
 
 
+def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
+    """
+    Submit the entire framework command to Slurm via sbatch.
+
+    Creates an sbatch script that runs the same command on a compute node,
+    removing --slurm to prevent infinite recursion.
+
+    Args:
+        argv: Command-line arguments (sys.argv)
+        nodelist: Optional Slurm nodelist
+
+    Returns:
+        Exit code from sbatch job
+    """
+    import subprocess
+    import tempfile
+    import time
+
+    # Reconstruct command without --slurm and --nodelist
+    cmd_argv = []
+    skip_next = False
+    for i, arg in enumerate(argv):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--slurm":
+            continue
+        if arg == "--nodelist":
+            skip_next = True
+            continue
+        cmd_argv.append(arg)
+
+    # Build sbatch script
+    cmd_str = ' '.join(subprocess.list2cmdline([a]) if ' ' in a else a for a in cmd_argv)
+    script = f'''#!/bin/bash
+#SBATCH --job-name=iara-framework
+#SBATCH --output=iara-slurm-%j.out
+#SBATCH --error=iara-slurm-%j.err
+#SBATCH --time=48:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=48
+#SBATCH --exclusive
+
+set -e
+
+# Restore IaRa environment on compute node
+source "${{IARA_DIR:-/scratch/$USER/repos/iara}}/sorgan_env.sh"
+
+{cmd_str}
+'''
+
+    # Submit to Slurm
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, prefix='sbatch_iara_') as f:
+        f.write(script)
+        script_path = f.name
+
+    try:
+        cmd = ['sbatch', '--parsable']
+        if nodelist:
+            cmd += [f'--nodelist={nodelist}']
+        cmd += [script_path]
+
+        print(f"Submitting to Slurm: {' '.join(cmd)}", file=sys.stderr)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if result.returncode != 0:
+            print(f"ERROR: sbatch failed: {result.stderr}", file=sys.stderr)
+            return 2
+
+        job_id = int(result.stdout.strip())
+        print(f"Slurm job {job_id} submitted. Output: iara-slurm-{job_id}.out", file=sys.stderr)
+
+        # Poll until job completes
+        while True:
+            status_result = subprocess.run(
+                ['squeue', '-j', str(job_id), '-h', '-o', '%T'],
+                capture_output=True, text=True, timeout=10
+            )
+            status = status_result.stdout.strip()
+            if not status:
+                break  # Job finished
+            time.sleep(5)
+
+        # Check exit code
+        sacct_result = subprocess.run(
+            ['sacct', '-j', str(job_id), '--format=ExitCode', '--noheader', '-P', '-n'],
+            capture_output=True, text=True, timeout=10
+        )
+        returncode = 0
+        for line in sacct_result.stdout.strip().split('\n'):
+            if line:
+                try:
+                    returncode = int(line.split(':')[0])
+                    break
+                except (ValueError, IndexError):
+                    pass
+
+        return returncode
+    finally:
+        Path(script_path).unlink(missing_ok=True)
+
+
 def main() -> int:
     """
     Main entry point for the CLI.
@@ -697,6 +799,19 @@ def main() -> int:
         "--no-log-file",
         action="store_true",
         help="Disable default log file creation (only log to stderr)",
+    )
+
+    parser.add_argument(
+        "--slurm",
+        action="store_true",
+        help="Submit pipeline to Slurm (entire run command executes on compute node)",
+    )
+
+    parser.add_argument(
+        "--nodelist",
+        type=str,
+        metavar="NODES",
+        help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
     )
 
     # Subcommands
@@ -974,19 +1089,6 @@ def main() -> int:
         help="Filter instances by scheduler name (e.g. vf-sequential, vf-omp, preesm)",
     )
 
-    run_parser.add_argument(
-        "--slurm",
-        action="store_true",
-        help="Submit execution to Slurm instead of running locally",
-    )
-
-    run_parser.add_argument(
-        "--nodelist",
-        type=str,
-        metavar="NODES",
-        help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
-    )
-
     # Register completers and activate argcomplete (no-op if not installed)
     if _ARGCOMPLETE:
         def _app_completer(prefix, **kw):
@@ -1071,6 +1173,13 @@ def main() -> int:
                     for s in available_sets:
                         print(f"  {s}", file=sys.stderr)
                 return 2
+
+    # ============================================================================
+    # Check for --slurm flag (submit entire command to compute node)
+    # ============================================================================
+    if getattr(args, 'slurm', False):
+        logger.info("Submitting command to Slurm")
+        return _submit_command_to_slurm(sys.argv, nodelist=getattr(args, 'nodelist', None))
 
     # ============================================================================
     # generate command
