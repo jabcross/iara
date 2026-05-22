@@ -669,14 +669,19 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
 
     Args:
         argv: Command-line arguments (sys.argv)
-        nodelist: Optional Slurm nodelist
+        nodelist: Optional Slurm nodelist (overrides SACI_SLURM_NODE_LIST env var)
 
     Returns:
         Exit code from sbatch job
     """
+    import os
     import subprocess
     import tempfile
     import time
+
+    # Use nodelist from arg, env var, or None
+    if not nodelist:
+        nodelist = os.environ.get('SACI_SLURM_NODE_LIST')
 
     # Reconstruct command without --slurm and --nodelist
     cmd_argv = []
