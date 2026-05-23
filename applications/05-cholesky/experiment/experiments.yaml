@@ -190,6 +190,14 @@ experiment_sets:
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
+  # Non-uniform block test - small instance for debugging ceiling division
+  - name: nonuniform_test
+    description: "Small test for non-uniform block sizes (non-evenly-divisible blocks)"
+    parameters:
+      MATRIX_SIZE: [256]
+      NUM_BLOCKS: [20]
+      scheduler: [vf-enkits]
+
   # Paper evaluation set - larger block counts for scalability analysis
   - name: tg_paper
     description: "Paper evaluation set with large block counts for scalability analysis"
