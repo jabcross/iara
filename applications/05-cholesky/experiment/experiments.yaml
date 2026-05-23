@@ -200,7 +200,7 @@ experiment_sets:
     parameters:
       MATRIX_SIZE: [2048, 4096, 8192]
       NUM_BLOCKS: [20, 24, 28, 32]
-      scheduler: [vf-sequential, vf-omp, vf-enkits]
+      scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
 
 # Execution configuration

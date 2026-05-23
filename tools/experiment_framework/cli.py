@@ -176,7 +176,7 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         return 2
 
 
-def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
+def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path, fail_fast: bool = False) -> int:
     """
     Run Phase 2: Build all instances.
 
@@ -185,9 +185,10 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
         exp_set: Experiment set name
         app_dir: Application experiment directory
         yaml_path: Path to experiments.yaml
+        fail_fast: If True, stop pipeline on any failure (return 2 instead of 1)
 
     Returns:
-        0 on success, 1 on partial failure, 2 on critical error
+        0 on success, 1 on partial failure, 2 on critical error (or if fail_fast and any failure)
     """
     logger = logging.getLogger(__name__)
 
@@ -272,14 +273,14 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path) -> int:
     if build_results.failed_instances:
         print(f"  ⚠ Warning: {len(build_results.failed_instances)} instance(s) failed to build", file=sys.stderr)
         logger.warning(f"{len(build_results.failed_instances)} instances failed")
-        return 1
+        return 2 if fail_fast else 1
 
     return 0
 
 
 def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
                repetitions: Optional[int] = None, timeout: Optional[int] = None,
-               slurm: bool = False, nodelist: Optional[str] = None) -> int:
+               slurm: bool = False, nodelist: Optional[str] = None, fail_fast: bool = False) -> int:
     """
     Run Phase 3: Execute instances and collect measurements.
 
@@ -290,9 +291,12 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         yaml_path: Path to experiments.yaml
         repetitions: Override YAML repetitions count (optional)
         timeout: Override YAML timeout in seconds (optional)
+        slurm: Submit executions to Slurm (optional)
+        nodelist: Slurm nodelist (optional)
+        fail_fast: If True, stop pipeline on any failure (return 2 instead of 1)
 
     Returns:
-        0 on success, 1 on partial failure, 2 on critical error
+        0 on success, 1 on partial failure, 2 on critical error (or if fail_fast and any failure)
     """
     logger = logging.getLogger(__name__)
 
@@ -398,7 +402,7 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
     if summary['errors'] > 0:
         print(f"  ⚠ Warning: {summary['errors']} instance(s) had errors", file=sys.stderr)
         logger.warning(f"{summary['errors']} instances had errors")
-        return 1
+        return 2 if fail_fast else 1
 
     return 0
 
@@ -600,6 +604,7 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
     """Run the full pipeline (generate→build→execute→visualize) for one (app, set)."""
     extra_defines = getattr(args, 'defines', [])
     scheduler_override = getattr(args, 'scheduler', None)
+    fail_fast = getattr(args, 'fail_fast', False)
 
     onetime_script = Path("applications") / app / "onetime.sh"
     if onetime_script.exists():
@@ -624,7 +629,7 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
             return rc
 
     if not args.skip_build:
-        rc = run_build(app, exp_set, app_dir, yaml_path)
+        rc = run_build(app, exp_set, app_dir, yaml_path, fail_fast=fail_fast)
         if rc == 2:
             return 2
 
@@ -632,7 +637,7 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
         slurm = getattr(args, 'slurm', False)
         nodelist = getattr(args, 'nodelist', None)
         rc = run_execute(app, exp_set, app_dir, yaml_path,
-                         slurm=slurm, nodelist=nodelist)
+                         slurm=slurm, nodelist=nodelist, fail_fast=fail_fast)
         if rc == 2:
             return 2
 
@@ -1103,6 +1108,12 @@ def main() -> int:
         type=str,
         metavar="NAME",
         help="Filter instances by scheduler name (e.g. vf-sequential, vf-omp, preesm)",
+    )
+
+    run_parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop pipeline on first failed stage (any instance failure halts further processing)",
     )
 
     # Register completers and activate argcomplete (no-op if not installed)
