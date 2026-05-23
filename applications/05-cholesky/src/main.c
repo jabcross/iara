@@ -37,7 +37,9 @@ const int num_blocks = NUM_BLOCKS;
 const lapack_int matrix_size = MATRIX_SIZE;
 
 #ifndef BLOCK_SIZE
-  #define BLOCK_SIZE (MATRIX_SIZE / NUM_BLOCKS)
+  // Ceiling division: supports non-uniform block sizes (e.g. 2048/20=102.4 -> 103)
+  // Remainder rows/cols are padded with zeros; blocks on edges may be smaller
+  #define BLOCK_SIZE ((MATRIX_SIZE + NUM_BLOCKS - 1) / NUM_BLOCKS)
 #endif
 
 const lapack_int block_size = BLOCK_SIZE; // side of the square

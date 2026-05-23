@@ -19,6 +19,43 @@ from .config import ConfigError
 logger = logging.getLogger(__name__)
 
 
+# ── Parameter name normalization ────────────────────────────────────
+
+
+def normalize_parameter_name(
+    param_name: str,
+    param_labels: Optional[Dict[str, str]] = None
+) -> str:
+    """
+    Normalize parameter name to match what appears in results JSON.
+
+    Instance names (and thus results JSON parameters) use labels when available:
+    - If label exists: label.lower().replace(' ', '-'), alphanumeric+hyphens only
+    - Otherwise: param_name.lower()
+
+    Examples:
+        normalize_parameter_name("MATRIX_SIZE", {"MATRIX_SIZE": "Matrix Size"})
+        → "matrix-size"
+
+        normalize_parameter_name("NUM_BLOCKS", {"NUM_BLOCKS": "Number of Blocks"})
+        → "number-of-blocks"
+
+        normalize_parameter_name("scheduler")
+        → "scheduler"
+
+    Args:
+        param_name: Config parameter name (e.g., "MATRIX_SIZE")
+        param_labels: Optional dict mapping param names to their labels
+
+    Returns:
+        Normalized name as it appears in results JSON
+    """
+    if param_labels and param_name in param_labels:
+        label = param_labels[param_name].lower().replace(' ', '-')
+        return ''.join(c for c in label if c.isalnum() or c == '-')
+    return param_name.lower()
+
+
 # ── Subprocess helpers ──────────────────────────────────────────────
 
 

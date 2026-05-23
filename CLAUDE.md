@@ -10,7 +10,7 @@ See `SPRINT.md` for the current task plan. See `agent_workspace/PROJECT_CONTEXT.
 
 - Use `agent_workspace/` for all agent-generated files (notes, scratch, analysis).
 - Create `agent_workspace/Sprint-<YYYY-MM-DD>/` for each sprint session.
-- **Do not place markdown or documentation files in the main `iara/` directory.** CLAUDE.md is the sole exception.
+- **Do not place markdown or documentation files in the main `iara/` directory.** CLAUDE.md, SPRINT.md, and MEMORY.md are the sole exceptions.
 - Do not commit agent workspace files to git unless explicitly asked.
 
 ## Context Strategy

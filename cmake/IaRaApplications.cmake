@@ -581,8 +581,7 @@ function(iara_add_application)
             -o
             ${schedule_obj}
         )
-        # vf-sequential (without OpenMP) doesn't need OpenMP flags
-        if(NOT "${scheduler}" STREQUAL "vf-sequential")
+        if("${scheduler}" MATCHES "omp")
             list(APPEND schedule_compile_args ${OpenMP_CXX_FLAGS})
         endif()
 
@@ -751,9 +750,8 @@ function(iara_add_application)
     target_include_directories(${target_name} PRIVATE ${test_include_dirs})
 
     # Compile options
-    # vf-sequential (without OpenMP) doesn't need OpenMP flags
     set(common_compile_options "")
-    if(NOT "${scheduler}" STREQUAL "vf-sequential")
+    if("${scheduler}" MATCHES "omp")
         list(APPEND common_compile_options ${OpenMP_CXX_FLAGS})
     endif()
     list(APPEND common_compile_options ${build_type_cxx_flags})
@@ -797,15 +795,14 @@ function(iara_add_application)
             endif()
         endforeach()
     endif()
-    # vf-sequential doesn't need OpenMP library
     set(link_libraries "m" "pthread")
-    if(NOT "${scheduler}" STREQUAL "vf-sequential")
+    if("${scheduler}" MATCHES "omp")
         list(APPEND link_libraries ${OpenMP_CXX_LIBRARY})
     endif()
     target_link_libraries(${target_name} PRIVATE ${link_libraries})
 
     set(link_options "-stdlib=libstdc++" "-Wl,--gc-sections")
-    if(NOT "${scheduler}" STREQUAL "vf-sequential")
+    if("${scheduler}" MATCHES "omp")
         list(APPEND link_options ${OpenMP_CXX_FLAGS})
     endif()
     target_link_options(${target_name} PRIVATE ${link_options})

@@ -383,9 +383,10 @@ def create_statistics_cell(measurements: List[str]) -> Dict[str, Any]:
 # Extract instances into DataFrame
 data_rows = []
 for instance in results_data['instances']:
+    params = instance.get('parameters', {{}})
     row = {{
         'name': instance['name'],
-        'scheduler': instance.get('scheduler', 'unknown')
+        'scheduler': params.get('scheduler', 'unknown')
     }}
 
     # Extract execution data if available

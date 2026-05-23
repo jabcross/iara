@@ -86,28 +86,16 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
   }
 }
 
-// NOTE: This must be a simple inline implementation because taskwait
-// needs to be directly at the call site to see tasks in the current context
-#define IARA_WAIT_FOR_TASKS()                                                  \
-  do {                                                                         \
-    _Pragma("omp taskwait")                                                    \
-  } while (0)
-
-extern "C" void iara_runtime_wait() { IARA_WAIT_FOR_TASKS(); }
+extern "C" void iara_runtime_wait() { iara_task_wait(); }
 
 extern "C" void iara_runtime_exec(void (*exec)()) {
-
-  auto &nodes = iara_runtime_nodes;
-  auto &edges = iara_runtime_edges;
-
-  // Use pragmas directly so OpenMP compiler sees the structure
 #pragma omp parallel
   {
 #pragma omp single
     {
       exec();
     }
-#pragma omp taskwait
+    iara_task_wait();
   }
 }
 

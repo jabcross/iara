@@ -57,7 +57,7 @@ experiment_sets:
     description: "Quick sanity check: 1 core, both schedulers"
     parameters:
       NUM_CORES: [1]
-      scheduler: [vf-omp, preesm]
+      scheduler: [vf-omp, vf-sequential, preesm]
 
   # IaRa vs Preesm across core counts (original repo: 1-core and 4-core scenarios)
   - name: compare

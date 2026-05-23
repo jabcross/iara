@@ -1225,6 +1225,14 @@ def generate_vegalite_json(
         - Missing output dir: Create it
         - File write error: Raise IOError
     """
+    # Build parameter name mapping: config names (e.g., MATRIX_SIZE) → results names (e.g., matrix-size)
+    from .common import normalize_parameter_name
+    param_labels = {p['name']: p.get('label', '') for p in yaml_config.get('parameters', [])}
+    param_name_map = {
+        name: normalize_parameter_name(name, param_labels)
+        for name in param_labels.keys()
+    }
+
     # Step 1: Build plot specs — standard plots always first, yaml-defined plots added on top.
     app_name = yaml_config.get("application", {}).get("name", "")
     specs = _default_plot_specs(app_name)
@@ -1376,9 +1384,11 @@ def generate_vegalite_json(
             # Get unique values of the facet parameter from results
             facet_values = []
             if facet_param and results.get("instances"):
+                # Normalize facet_param name to match results JSON (e.g., MATRIX_SIZE → matrix-size)
+                normalized_facet_param = param_name_map.get(facet_param, facet_param)
                 facet_set = set()
                 for instance in results["instances"]:
-                    value = instance.get("parameters", {}).get(facet_param)
+                    value = instance.get("parameters", {}).get(normalized_facet_param)
                     if value is not None:
                         facet_set.add(value)
                 facet_values = sorted(list(facet_set))
@@ -1397,9 +1407,9 @@ def generate_vegalite_json(
                     if "transform" not in facet_spec:
                         facet_spec["transform"] = []
 
-                    # Insert filter at the beginning (after the existing transforms)
+                    # Insert filter at the beginning (use bracket notation for property names with hyphens)
                     facet_spec["transform"].insert(0, {
-                        "filter": f"datum.parameters.{facet_param} == {facet_value}"
+                        "filter": f"datum.parameters['{normalized_facet_param}'] == {facet_value}"
                     })
 
                     # Validate spec

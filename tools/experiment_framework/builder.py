@@ -963,9 +963,13 @@ def write_build_results(
         binary_sections = extract_binary_sections(build_result)
         parameters = _parse_instance_name(build_result.instance_name)
 
+        # Flatten parameters for Vega-Lite (e.g., parameters.scheduler, parameters.matrix-size)
+        flattened = {f"parameters.{k}": v for k, v in parameters.items()}
+
         instance_obj = {
             "name": build_result.instance_name,
-            "parameters": parameters,
+            "parameters": parameters,  # Keep nested for notebook extraction
+            **flattened,  # Add flattened fields for Vega-Lite
             "compilation": build_result.compilation,
             "binary": binary_sections
         }
@@ -997,9 +1001,13 @@ def write_build_results(
             }
             errors_list.append(error_obj)
 
+        # Flatten parameters for Vega-Lite (e.g., parameters.scheduler, parameters.matrix-size)
+        flattened = {f"parameters.{k}": v for k, v in parameters.items()}
+
         failed_instance_obj = {
             "name": failed_result.instance_name,
-            "parameters": parameters,
+            "parameters": parameters,  # Keep nested for notebook extraction
+            **flattened,  # Add flattened fields for Vega-Lite
             "attempts": failed_result.attempts,
             "errors": errors_list
         }

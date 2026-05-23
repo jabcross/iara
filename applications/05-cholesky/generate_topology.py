@@ -26,7 +26,8 @@ kernels = {
 
 def generate(dim: int, nb: int):
     tasks = []
-    ts = dim // nb
+    # Ceiling division: supports non-uniform block sizes (e.g. 2048/20=102.4 -> 103)
+    ts = (dim + nb - 1) // nb
     for k in range(nb):
         tasks.append({"kernel": "kernel_potrf", "A": (k, k)})
         for i in range(k + 1, nb):
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     assert (len(sys.argv) == 3)
     dim = int(sys.argv[1])
     nb = int(sys.argv[2])
-    ts = dim // nb
+    ts = (dim + nb - 1) // nb
     tasks = generate(dim, nb)
     deps = {}
     edges = {}

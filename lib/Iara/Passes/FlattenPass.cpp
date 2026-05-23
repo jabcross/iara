@@ -118,25 +118,26 @@ public:
     actor->setAttr("flat", OpBuilder(actor).getUnitAttr());
   }
 
-  // If successful, node will be erased.
+  // If successful, node will be erased. Leaves double edges on interface
+  // boundaries.
   void flatten(ModuleOp module, NodeOp node) {
     if (node->hasAttr("flat")) {
       return;
     }
     auto impl = node.getImpl();
-    auto actor_op = module.lookupSymbol<ActorOp>(impl);
-    if (!actor_op) {
+    auto impl_actor_op = module.lookupSymbol<ActorOp>(impl);
+    if (!impl_actor_op) {
       return;
     }
     // If a node is referring to it, it can't be the top level, can it?
-    m_top_level_candidates.erase(actor_op);
-    if (actor_op.isKernelDeclaration()) {
+    m_top_level_candidates.erase(impl_actor_op);
+    if (impl_actor_op.isKernelDeclaration()) {
       return;
     }
-    if (!node.signatureMatches(actor_op)) {
+    if (!node.signatureMatches(impl_actor_op)) {
       node->emitError("Signature of node does not match actor");
       for (auto [i, n, a] :
-           enumerate(node.getAllInputs(), actor_op.getOps<InPortOp>())) {
+           enumerate(node.getAllInputs(), impl_actor_op.getOps<InPortOp>())) {
         auto n_t = n.getType();
         auto a_t = a.getResult().getType();
         if (n_t != a_t) {
@@ -145,7 +146,7 @@ public:
         }
       }
       for (auto [i, n, a] :
-           enumerate(node.getAllOutputs(), actor_op.getOps<OutPortOp>())) {
+           enumerate(node.getAllOutputs(), impl_actor_op.getOps<OutPortOp>())) {
         auto n_t = n.getType();
         auto a_t = a.getValue().getType();
         if (n_t != a_t) {
@@ -156,12 +157,12 @@ public:
       llvm::errs() << "Node: ";
       node.dump();
       llvm::errs() << "Actor: ";
-      actor_op.dump();
+      impl_actor_op.dump();
       signalPassFailure();
       llvm_unreachable("Error");
       return;
     }
-    if (actor_op.getOps<NodeOp>().empty()) {
+    if (impl_actor_op.getOps<NodeOp>().empty()) {
       node->emitError("Actor does not have any nodes (is this a declaration?)");
       signalPassFailure();
       llvm_unreachable("should have been caught by signature check");
@@ -171,7 +172,7 @@ public:
     auto next_op = node->getNextNode();
 
     OpBuilder builder(node);
-    ActorOp new_actor{actor_op->clone()};
+    ActorOp new_actor{impl_actor_op->clone()};
     assert(new_actor->getParentOp() == nullptr);
 
     SmallVector<InPortOp> in_ops{new_actor.getOps<InPortOp>()};
@@ -188,9 +189,11 @@ public:
       return;
     }
 
-    for (auto [in_op, in_port] : llvm::zip(in_ops, node.getOperands())) {
-      in_op.getResult().replaceAllUsesWith(in_port);
-      in_op->erase();
+    for (auto [inner_input_port_op, outer_input_value] :
+         llvm::zip(in_ops, node.getOperands())) {
+
+      inner_input_port_op.getResult().replaceAllUsesWith(outer_input_value);
+      inner_input_port_op->erase();
     }
 
     SmallVector<OutPortOp> out_ops{new_actor.getOps<OutPortOp>()};
@@ -206,10 +209,11 @@ public:
       return;
     }
 
-    for (auto [out_op, out_port] :
+    for (auto [inner_output_port, outer_node_result] :
          llvm::to_vector(llvm::zip(out_ops, node.getResults()))) {
-      out_port.replaceAllUsesWith(out_op.getValue());
-      out_op.erase();
+
+      outer_node_result.replaceAllUsesWith(inner_output_port.getValue());
+      inner_output_port.erase();
     }
 
     for (auto node : new_actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>()) {
@@ -224,20 +228,54 @@ public:
   }
 
   void fixDoubleEdge(EdgeOp edge, DenseSet<EdgeOp> &to_erase) {
+    assert(edge.getResult().getNumUses() == 1);
     if (auto next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin())) {
       // two consecutive edges
       if (edge.getIn().getType() == edge.getOut().getType()) {
-        // Can remove this edge.
+        // Edge is single-rate. Can remove it.
+
+        // First, check for delays.
+
+        auto edge_delay = edge->getAttr("delay");
+        auto next_edge_delay = next_edge->getAttr("delay");
+
+        if (edge_delay and next_edge_delay) {
+          llvm_unreachable("Unimplemented: merge delays");
+        } else if (edge_delay) {
+          // move attr to next edge since we're removing this one.
+          next_edge->setAttr("delay", edge_delay);
+          edge->removeAttr("delay");
+        } else {
+          //  next attr will keep its delay if it has one.
+        }
+
         edge.getOut().replaceAllUsesWith(edge.getIn());
         to_erase.insert(edge);
+
+        // Follow chain of double edges.
         return fixDoubleEdge(next_edge, to_erase);
       }
       if (next_edge.getIn().getType() == next_edge.getOut().getType()) {
-        // Can remove the next edge.
+        // Next edge is single-rate. Can remove it.
+
+        auto edge_delay = edge->getAttr("delay");
+        auto next_edge_delay = next_edge->getAttr("delay");
+
+        if (edge_delay and next_edge_delay) {
+          llvm_unreachable("Unimplemented: merge delays");
+        } else if (next_edge_delay) {
+          // move attr to next edge since we're removing this one.
+          edge->setAttr("delay", next_edge_delay);
+          next_edge->removeAttr("delay");
+        } else {
+          //  current edge will keep its delay if it has one.
+        }
+
         next_edge.getOut().replaceAllUsesWith(edge.getOut());
         to_erase.insert(next_edge);
         if (auto next_next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin()))
-          // triple edge?
+
+          // Follow chain of double edges.
           return fixDoubleEdge(edge, to_erase);
         return;
       }

@@ -54,10 +54,6 @@ computed_parameters:
 
 # Constraints on parameter combinations
 constraints:
-  # num_blocks must divide matrix_size evenly
-  - expression: "MATRIX_SIZE % NUM_BLOCKS == 0"
-    description: "Matrix size must be divisible by number of blocks"
-
   # num_blocks must be at least 1
   - expression: "NUM_BLOCKS >= 1"
     description: "Must have at least one block"
@@ -193,6 +189,14 @@ experiment_sets:
       MATRIX_SIZE: [4096]
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
+
+  # Paper evaluation set - larger block counts for scalability analysis
+  - name: tg_paper
+    description: "Paper evaluation set with large block counts for scalability analysis"
+    parameters:
+      MATRIX_SIZE: [2048, 4096, 8192]
+      NUM_BLOCKS: [20, 24, 28, 32]
+      scheduler: [vf-sequential, vf-omp, vf-enkits]
 
 
 # Execution configuration

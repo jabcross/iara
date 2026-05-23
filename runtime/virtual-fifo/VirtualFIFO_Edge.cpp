@@ -1,11 +1,16 @@
+#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "Iara/Util/CommonTypes.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <utility>
+#ifdef IARA_DEBUGPRINT
+  #include "IaraRuntime/util/DebugPrint.h"
+  #include <mutex>
+extern std::mutex debug_mutex;
+#endif
 
 bool is_first_chunk(VirtualFIFO_Edge &fifo,
                     VirtualFIFO_Chunk &,
@@ -34,6 +39,12 @@ void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
         static_info.getConsumerSlice(remaining_data.virtual_offset);
     auto front =
         remaining_data.take_front(std::min(size, remaining_data.data_size));
+#ifdef IARA_DEBUGPRINT
+    debugPrintThreadColor("push(): %s -> %s[%ld] (seq %ld, chunk %ld:%ld, cons_rate %ld, slice %ld)\n",
+                          codegen_info.name, codegen_info.consumer->codegen_info.name,
+                          static_info.cons_arg_idx, seq, front.virtual_offset,
+                          front.virtual_offset + front.data_size, static_info.cons_rate, size);
+#endif
     codegen_info.consumer->consume(seq, front, static_info.cons_arg_idx, off);
   }
   assert(remaining_data.data_size == 0);

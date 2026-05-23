@@ -97,7 +97,7 @@ iara.actor @Htop_sift {
   %e46_d = iara.edge %e46_s : tensor<1xi32> -> tensor<1xi32>
   %e88_d = iara.edge %e88_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
   %e90_d = iara.edge %e90_s : tensor<«parallelismLevel»xi32> -> tensor<«parallelismLevel»xi32>
-  %e66_d = iara.edge %e66_s : tensor<1xi32> -> tensor<«nGpyrLayers»xi32>
+  %e66_d = iara.edge %e66_s : tensor<«nGpyrLayers»xi32> -> tensor<«nGpyrLayers»xi32>
 
   %e56_s, %e57_s = iara.node @iara_broadcast in ( %e55_d:tensor<1xi32> ) out ( tensor<1xi32>, tensor<«nGpyrLayers»xi32> )
   %e56_d = iara.edge %e56_s : tensor<1xi32> -> tensor<1xi32>
