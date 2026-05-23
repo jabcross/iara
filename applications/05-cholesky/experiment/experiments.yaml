@@ -62,10 +62,6 @@ constraints:
   - expression: "MATRIX_SIZE > 0"
     description: "Matrix size must be positive"
 
-  # Block size should be reasonable for BLAS performance
-  - expression: "BLOCK_SIZE >= 32"
-    description: "Block size should be at least 32 for efficient BLAS operations"
-
 # Measurement definitions
 # wall_time and max_rss_mb are standard — collected automatically by the framework.
 measurements:
