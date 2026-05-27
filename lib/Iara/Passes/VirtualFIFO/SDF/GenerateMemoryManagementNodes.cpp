@@ -127,7 +127,7 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
         cast<EdgeOp>(dealloc_node.getIn().front().getDefiningOp());
     auto last_node = getProducerNode(dealloc_edge);
     auto &last_node_info = data.node_static_info[last_node];
-    auto last_edge = followInoutChainBackwards(dealloc_edge);
+    auto last_edge = cast<EdgeOp>(followInoutChainBackwards(dealloc_edge));
     auto &last_edge_info = data.edge_static_info[last_edge];
     auto &dealloc_node_info = data.node_static_info[dealloc_node];
 

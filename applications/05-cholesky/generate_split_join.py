@@ -5,7 +5,7 @@ if __name__ == "__main__":
     assert (len(sys.argv) == 3)
     matrix_size = int(sys.argv[1])
     num_blocks = int(sys.argv[2])
-    ts = matrix_size // num_blocks
+    ts = (matrix_size + num_blocks - 1) // num_blocks
 
     print(f"void kernel_split({", ".join([f"double *out_{i}_{j}" for j in range(num_blocks)
                                           for i in range(num_blocks)])}) {{")

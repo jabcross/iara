@@ -48,8 +48,8 @@ computed_parameters:
   - name: BLOCK_SIZE
     type: int
     label: "Block Size"
-    expression: "MATRIX_SIZE // NUM_BLOCKS"
-    description: "Size of each block"
+    expression: "(MATRIX_SIZE + NUM_BLOCKS - 1) // NUM_BLOCKS"
+    description: "Size of each block (padded to uniform size)"
     unit: ""
 
 # Constraints on parameter combinations
@@ -186,13 +186,13 @@ experiment_sets:
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
-  # Non-uniform block test - small instance for debugging ceiling division
-  - name: nonuniform_test
-    description: "Small test for non-uniform block sizes (non-evenly-divisible blocks)"
+  # Non-uniform block test - all vf schedulers with non-uniform sizes
+  - name: nonuniform_vf
+    description: "Non-uniform block sizes (MATRIX_SIZE % NUM_BLOCKS != 0) for all IaRa schedulers"
     parameters:
-      MATRIX_SIZE: [256]
-      NUM_BLOCKS: [20]
-      scheduler: [vf-enkits]
+      MATRIX_SIZE: [2048]
+      NUM_BLOCKS: [24]
+      scheduler: [vf-sequential, vf-omp, vf-enkits]
 
   # Paper evaluation set - larger block counts for scalability analysis
   - name: tg_paper
