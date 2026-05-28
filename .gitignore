@@ -41,3 +41,27 @@ pdfs/
 !SPRINT.md
 !MEMORY.md
 !TODO.md
+
+# Secrets / local env
+.ssh/
+.env.cached
+
+# Slurm job output
+iara-slurm-*.out
+iara-slurm-*.err
+slurm-*.out
+slurm_output/
+
+# Local agent / claude session artifacts
+oldclaude*
+skills-lock.json
+
+# Generated IR / build dirs not previously covered
+build-sift/
+build-03/
+manual-builds/
+*.llvm.mlir
+*.llvm.mlir.2
+
+# Misc
+preesm_run_large.log
