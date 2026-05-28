@@ -126,9 +126,12 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     auto dealloc_edge =
         cast<EdgeOp>(dealloc_node.getIn().front().getDefiningOp());
     auto last_node = getProducerNode(dealloc_edge);
-    auto &last_node_info = data.node_static_info[last_node];
-    auto last_edge = cast<EdgeOp>(followInoutChainBackwards(dealloc_edge));
-    auto &last_edge_info = data.edge_static_info[last_edge];
+    // Copy, not ref: inserts below grow these DenseMaps and invalidate refs.
+    const auto last_node_info = data.node_static_info[last_node];
+    auto last_edge = followInoutChainBackwards(dealloc_edge);
+    // Invariant: every dealloc edge has a preceding regular edge in its inout chain.
+    assert(isa<EdgeOp>(last_edge) && "dealloc edge missing inout-chain predecessor");
+    const auto last_edge_info = data.edge_static_info[last_edge];
     auto &dealloc_node_info = data.node_static_info[dealloc_node];
 
     auto dealloc_node_id = [&]() {
@@ -238,8 +241,9 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     populateAllocEdgeData(alloc_edge, data);
     auto first_edge = followInoutChainForwards(alloc_edge);
     auto &alloc_node_info = data.node_static_info[alloc_node];
-    auto &first_edge_info = data.edge_static_info[first_edge];
-    auto &first_node_info = data.node_static_info[first_node];
+    // Copy, not ref: the alloc_edge insert below grows this DenseMap and invalidates refs.
+    const auto first_edge_info = data.edge_static_info[first_edge];
+    const auto first_node_info = data.node_static_info[first_node];
 
     auto operand_index =
         alloc_edge.getOut().getUses().begin()->getOperandNumber();
@@ -323,7 +327,10 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
                          new_node_inputs);
 
   assert(new_node_inputs.size() == new_result_types.size());
-  data.node_static_info[new_node] = data.node_static_info[old_node];
+  // Copy out first: the [new_node] insert can grow the map and invalidate a
+  // reference to [old_node] read in the same statement.
+  const auto old_node_info = data.node_static_info[old_node];
+  data.node_static_info[new_node] = old_node_info;
 
   new_node->setDiscardableAttrs(old_node->getDiscardableAttrDictionary());
 
