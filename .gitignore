@@ -58,6 +58,8 @@ oldclaude*
 skills-lock.json
 .claude/
 .continue/
+.agents/
+.aider*
 
 # IDE config
 .vscode/
