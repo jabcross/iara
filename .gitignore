@@ -34,6 +34,7 @@ applications/*/experiment/results
 applications/13*/data
 *.hs
 agent_workspace/
+agent_history/
 *.md
 pdfs/
 *.md
