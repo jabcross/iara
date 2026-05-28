@@ -56,6 +56,17 @@ slurm_output/
 # Local agent / claude session artifacts
 oldclaude*
 skills-lock.json
+.claude/
+.continue/
+
+# IDE config
+.vscode/
+
+# CTest artifacts
+Testing/
+
+# Log files
+*.log
 
 # Generated IR / build dirs not previously covered
 build-sift/

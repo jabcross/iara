@@ -1,3 +1,0 @@
-Log file: logs/framework_20260523T005110Z.log
-Submitting to Slurm: sbatch --parsable /tmp/sbatch_iara_k9qg3pf2.sh
-Slurm job 2091 submitted. Output: iara-slurm-2091.out
