@@ -44,64 +44,22 @@ def generate(dim: int, nb: int):
     return tasks
 
 
+# Generates blocked cholesky topology (upper triangle version)
+
 if __name__ == "__main__":
     assert (len(sys.argv) == 3)
     dim = int(sys.argv[1])
     nb = int(sys.argv[2])
+
+    # pad to next multiple of nb
     ts = (dim + nb - 1) // nb
     tasks = generate(dim, nb)
+
+    # accumulate state as in-out edges. Track the next id for that i,j block
     deps = {}
     edges = {}
 
-    # print("dif main {")
-
-#     for kernel, val in kernels.items():
-#         print(f"""
-# iara.actor @{kernel} {{
-#               """)
-#         ins = val["in"]
-#         outs = val["out"]
-
-#         counter = 1
-#         for i in val["in"]:
-#             inout = "inout" if i in val["out"] else ""
-#             print(f" %{counter} = iara.in {
-#                   inout} : tensor<{ts * ts}x{datatype}>")
-#             counter += 1
-#         for i in outs:
-#             print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
-#         print("""} { kernel }
-# """)
-
-#     print("""
-# iara.actor @kernel_split {
-# """)
-
-#     for x in range(nb):
-#         for y in range(nb):
-#             print(f"  iara.out : tensor<{ts * ts}x{datatype}>")
-
-#     print("""
-# } { kernel }
-# """)
-
-#     print("""
-# iara.actor @kernel_join {
-# """)
-
-#     for x in range(nb):
-#         for y in range(nb):
-#             print(f"    iara.in : tensor<{ts * ts}x{datatype}>")
-
-#     print("""} { kernel }
-# """)
-
     print("iara.actor @run {")
-
-    # print(f"  %in = iara.in inout : tensor<{ts*ts}x{datatype}>")
-
-    # print("  ", end="")
-    # # print(labels)
 
     labels = ", ".join(
         [f"%e_{row}_{col}_0" for col in range(nb) for row in range(nb)])
@@ -133,19 +91,20 @@ if __name__ == "__main__":
         input_types = []
         inouts = []
         inout_types = []
-        for i in kernels[task['kernel']]['in']:
+        kernel_inputs = kernels[task['kernel']]['in']
+        kernel_outputs = kernels[task['kernel']]['out']
+        for i in kernel_inputs:
             row, col = task[i]
             edge_name = f"e_{row}_{col}_{edges[(row, col)]}"
-            # print(f"    interface {edge_name}->in_{i};")
             reads[edge_name] += 1
             input_edges.append((row, col))
-            if (i not in kernels[task['kernel']]['out']):
+            if (i not in kernel_outputs): # not inout
                 inputs.append(f"%{edge_name}")
                 input_types.append(f"tensor<{ts*ts}x{datatype}>")
             else:
                 inouts.append(f"%{edge_name}")
                 inout_types.append(f"tensor<{ts*ts}x{datatype}>")
-        for i in kernels[task['kernel']]['out']:
+        for i in kernel_outputs:
             row, col = task[i]
             edges[(row, col)] += 1
             edge_name = f"e_{row}_{col}_{edges[(row, col)]}"
