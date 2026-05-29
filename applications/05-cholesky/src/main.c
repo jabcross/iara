@@ -401,21 +401,28 @@ double *allocate_matrix() {
   return (double *)calloc(matrix_size * matrix_size, sizeof(double));
 }
 
+// Blocked layout uses num_blocks*num_blocks blocks of block_size*block_size.
+// When MATRIX_SIZE is not divisible by NUM_BLOCKS (ceiling division), the
+// padded side num_blocks*block_size exceeds MATRIX_SIZE.  Edge elements are
+// zero-padded on convert_to_blocks and ignored on convert_to_linear.
+static const lapack_int padded_size = (lapack_int)NUM_BLOCKS * BLOCK_SIZE;
+
+double *allocate_blocked_matrix() {
+  return (double *)calloc((size_t)padded_size * padded_size, sizeof(double));
+}
+
 static void convert_to_blocks(double const *RESTRICT input_linear_matrix,
                               double *RESTRICT output_blocked_matrix) {
-
-  lapack_int matrix_size = num_blocks * block_size;
-
   double *out = output_blocked_matrix;
   for (int b_i = 0; b_i < num_blocks; b_i++) {
     for (int b_j = 0; b_j < num_blocks; b_j++) {
       for (int i = 0; i < block_size; i++) {
         for (int j = 0; j < block_size; j++) {
-          int line = b_i * block_size + i;
+          int line   = b_i * block_size + i;
           int column = b_j * block_size + j;
-          double value = input_linear_matrix[line * matrix_size + column];
-          *out = value;
-          out++;
+          *out++ = (line < matrix_size && column < matrix_size)
+                       ? input_linear_matrix[line * matrix_size + column]
+                       : 0.0;
         }
       }
     }
@@ -424,17 +431,15 @@ static void convert_to_blocks(double const *RESTRICT input_linear_matrix,
 
 static void convert_to_linear(double const *RESTRICT input_blocked_matrix,
                               double *RESTRICT output_linear_matrix) {
-
-  lapack_int matrix_size = num_blocks * block_size;
-
   double const *in = input_blocked_matrix;
   for (int b_i = 0; b_i < num_blocks; b_i++) {
     for (int b_j = 0; b_j < num_blocks; b_j++) {
       for (int i = 0; i < block_size; i++) {
         for (int j = 0; j < block_size; j++) {
-          int line = b_i * block_size + i;
+          int line   = b_i * block_size + i;
           int column = b_j * block_size + j;
-          output_linear_matrix[line * matrix_size + column] = *in;
+          if (line < matrix_size && column < matrix_size)
+            output_linear_matrix[line * matrix_size + column] = *in;
           in++;
         }
       }
@@ -515,8 +520,8 @@ int main(int argc, char *argv[]) {
 
   fprintf(stderr, "Compiled scheduler: %s\n", scheduler);
 
-  double *input_matrix_linear = allocate_matrix();
-  double *inout_matrix_blocked = allocate_matrix();
+  double *input_matrix_linear  = allocate_matrix();
+  double *inout_matrix_blocked = allocate_blocked_matrix();
   double *output_matrix_linear = allocate_matrix();
 
   // Measure initialization time

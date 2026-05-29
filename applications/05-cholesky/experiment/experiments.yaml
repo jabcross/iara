@@ -195,11 +195,11 @@ experiment_sets:
       scheduler: [vf-sequential, vf-omp, vf-enkits]
 
   # Paper evaluation set - larger block counts for scalability analysis
-  - name: tg_paper
+  - name: tg-paper
     description: "Paper evaluation set with large block counts for scalability analysis"
     parameters:
       MATRIX_SIZE: [2048, 4096, 8192]
-      NUM_BLOCKS: [20, 24, 28, 32]
+      NUM_BLOCKS: [20, 24, 28]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
 
