@@ -85,7 +85,7 @@ using namespace iara::passes::common::codegen;
 
 std::string getDebugName(NodeOp node) {
 #ifdef IARA_DEBUG_NAMES
-  return llvm::formatv("node_{0}_{1}\0", (i64)node["id"], node.getImpl());
+  return llvm::formatv("node_{0}_{1}\0", (void*)node.getOperation(), node.getImpl());
 #else
   return "";
 #endif
@@ -102,9 +102,9 @@ std::string getDebugName(EdgeOp edge) {
                        prod_index,
                        cons.getImpl(),
                        cons_index,
-                       (i64)prod["id"],
-                       (i64)cons["id"],
-                       (i64)edge["id"]);
+                       (void*)prod.getOperation(),
+                       (void*)cons.getOperation(),
+                       (void*)edge.getOperation());
 #else
   return "";
 #endif

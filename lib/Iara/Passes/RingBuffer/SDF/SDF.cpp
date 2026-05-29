@@ -65,7 +65,6 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
         .rank = -1,
         .total_iter_firings = -1,
     };
-    node["id"] = info.id;
   }
   return success(annotateNodeRanks(actor, data).succeeded() &&
                  annotateTotalFirings(actor, data).succeeded());
@@ -118,7 +117,6 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
         edge->getUses().begin()->getOperandNumber(),
         delay_size,
     };
-    edge["id"] = info.id;
   }
   return success();
 }

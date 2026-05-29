@@ -101,6 +101,7 @@ function(iara_runtime_sources iara_opt_sched runtime_backend out_var out_compile
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Edge.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Node.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Scheduler.cpp
+            ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/StaticDataAccess_Inline.cpp
         )
 
         # Add backend-specific sources

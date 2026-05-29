@@ -120,7 +120,7 @@ struct VirtualFIFOSchedulerPass::Impl {
     }
 
     auto sym_name = llvm::formatv("iara_node_wrapper_{0}_{1}",
-                                  node_codegen_data.static_info.id,
+                                  node_codegen_data.index,
                                   node_op.getImpl())
                         .str();
 
@@ -318,14 +318,12 @@ struct VirtualFIFOSchedulerPass::Impl {
       auto &codegen_data = node_codegen_datas.emplace_back();
       codegen_data.index = i;
       codegen_data.node_op = node;
-      codegen_data.static_info = data.node_static_info[node];
     }
 
     for (auto [i, edge] : llvm::enumerate(edge_ops)) {
       auto &codegen_data = edge_codegen_datas.emplace_back();
       codegen_data.index = i;
       codegen_data.edge_op = edge;
-      codegen_data.static_info = data.edge_static_info[edge];
     }
 
     // validate the ptrs

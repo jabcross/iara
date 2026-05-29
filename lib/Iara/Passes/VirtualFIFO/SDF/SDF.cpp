@@ -1,5 +1,6 @@
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Node.h"
 #include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
@@ -23,6 +24,7 @@
 namespace iara::passes::virtualfifo::sdf {
 using namespace iara::util::mlir;
 using namespace iara::util::range;
+using namespace iara::dialect;
 
 enum class Direction { Forward, Backward };
 
@@ -60,10 +62,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data);
 
 LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
   auto nodes = actor.getOps<NodeOp>() | IntoVector();
-  auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, node] : enumerate(nodes)) {
-    auto &info = data.node_static_info[node];
-
     i64 arg_bytes = 0;
     i64 num_args = 0;
 
@@ -80,51 +79,36 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
       num_args += 1;
     }
 
-    info = {
-        .id = (i64)(i + 1 + id_range),
-        .arg_bytes = arg_bytes,
-        .num_args = num_args,
-        .rank = -1,
-        .total_iter_firings = -1,
-        .needs_priming = 1,
-    };
-    node["id"] = info.id;
+    Node n(node);
+    n.setArgBytes(arg_bytes);
+    n.setNumArgs(num_args);
+    n.setRank(-1);
+    n.setTotalIterFirings(-1);
+    n.setNeedsPriming(1);
   }
   return success(annotateNodeRanks(actor, data).succeeded() &&
                  annotateTotalFirings(actor, data).succeeded());
 } // namespace iara::sdf
 
-// Sets the ids of the nodes and edges, as well as the position of each edge in
-// its inout chain.
+// Sets the position of each edge in its inout chain.
 LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
-  auto nodes = actor.getOps<NodeOp>() | IntoVector();
-  auto id_range = getNextPowerOf10(nodes.size() + 1);
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
-    auto &info = data.edge_static_info[edge];
-    auto prod_info = data.node_static_info[getProducerNode(edge)];
-    auto cons_info = data.node_static_info[getConsumerNode(edge)];
-    auto id = prod_info.id * id_range * 10 + cons_info.id;
-    // if first of chain
-
-    info.id = id;
+    Edge e(edge);
     // To fill in after alloc and dealloc generation.
-    info.local_index = -1;
-    info.prod_rate = getProdRateBytes(edge);
-    info.cons_rate = getConsRateBytes(edge);
-    info.cons_arg_idx = edge->getUses().begin()->getOperandNumber();
+    e.setLocalIndex(-1);
+    e.setProdRate(getProdRateBytes(edge));
+    e.setConsRate(getConsRateBytes(edge));
+    e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
 
     // These should be already set.
-
-    assert(info.delay_offset != -1);
-    assert(info.delay_size != -1);
-    assert(info.block_size_with_delays != -1);
-    assert(info.block_size_no_delays != -1);
-    assert(info.prod_alpha != -1);
-    assert(info.prod_beta != -1);
-    assert(info.cons_alpha != -1);
-    assert(info.cons_beta != -1);
-
-    edge["id"] = info.id;
+    assert(e.delayOffset() != -1);
+    assert(e.delaySize() != -1);
+    assert(e.blockSizeWithDelays() != -1);
+    assert(e.blockSizeNoDelays() != -1);
+    assert(e.prodAlpha() != -1);
+    assert(e.prodBeta() != -1);
+    assert(e.consAlpha() != -1);
+    assert(e.consBeta() != -1);
   }
 
   return success();
@@ -148,15 +132,13 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   // run bfs on graph to get rank
 
   auto getRank = [&](NodeOp node) -> std::optional<i64> {
-    if (auto entry = data.node_static_info.find(node);
-        entry != data.node_static_info.end()) {
-      if (entry->second.rank != -1)
-        return entry->second.rank;
-    }
+    i64 rank = Node(node).rank();
+    if (rank != -1)
+      return rank;
     return {};
   };
   auto setRank = [&](NodeOp node, i64 value) {
-    data.node_static_info[node].rank = value;
+    Node(node).setRank(value);
   };
 
   std::queue<std::pair<Operation *, int>> bfs{};
@@ -191,8 +173,8 @@ LogicalResult annotateNodeRanks(ActorOp actor, StaticAnalysisData &data) {
   }
 
   for (auto edge : actor.getOps<EdgeOp>()) {
-    if (data.node_static_info[getConsumerNode(edge)].rank <=
-        data.node_static_info[getProducerNode(edge)].rank) {
+    if (Node(getConsumerNode(edge)).rank() <=
+        Node(getProducerNode(edge)).rank()) {
       if (isInout(edge)) {
         breakInout(edge);
       }
@@ -287,7 +269,7 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
     firings = firings * mult;
     firings = firings.normalized();
     assert(firings.denom == 1);
-    data.node_static_info[node].total_iter_firings = firings.num;
+    Node(node).setTotalIterFirings(firings.num);
   }
   return success();
 }

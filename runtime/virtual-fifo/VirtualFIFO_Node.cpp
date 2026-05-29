@@ -2,6 +2,7 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include "IaraRuntime/common/WorkStealingBackend.h"
 #include "IaraRuntime/virtual-fifo/SDFSemaphores.h"
+#include "IaraRuntime/virtual-fifo/StaticDataAccess.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include <cassert>
@@ -96,7 +97,7 @@ void VirtualFIFO_Node::prime(i64 seq) {
 
   i64 last_block = -1;
 
-  for (auto fifo : codegen_info.input_fifos) {
+  for (auto fifo : iara::runtime::virtualfifo::getInputFifos(this)) {
     auto [b, e] = fifo->firingOfConsToVirtualOffsetRange(seq);
 
 #ifdef IARA_DEBUGPRINT
@@ -120,7 +121,7 @@ void VirtualFIFO_Node::prime(i64 seq) {
         codegen_info.name);
 #endif
 
-    fifo->codegen_info.alloc_node->ensureAlloc(block);
+    iara::runtime::virtualfifo::getAllocNode(fifo)->ensureAlloc(block);
   }
 
   auto f = VirtualFIFO_NormalSemaphore::FirstArgs{this};
@@ -166,10 +167,10 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       _this->codegen_info.wrapper(seq, args);
 
       // output_fifos is empty if it's a dealloc node.
-      assert(_this->codegen_info.output_fifos.size() == 0 ||
-             (_this->codegen_info.output_fifos.size() == args.size()));
-      for (size_t i = 0; i < _this->codegen_info.output_fifos.size(); i++) {
-        _this->codegen_info.output_fifos[i]->push(args[i]);
+      auto outputs = iara::runtime::virtualfifo::getOutputFifos(_this);
+      assert(outputs.size() == 0 || (outputs.size() == args.size()));
+      for (size_t i = 0; i < outputs.size(); i++) {
+        outputs[i]->push(args[i]);
       }
     }
 #ifdef IARA_DEBUGPRINT
@@ -180,7 +181,8 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
 }
 
 void VirtualFIFO_Node::fireAlloc(i64 seq) {
-  VirtualFIFO_Edge *alloc_fifo = codegen_info.output_fifos.front();
+  VirtualFIFO_Edge *alloc_fifo =
+      iara::runtime::virtualfifo::getOutputFifos(this).front();
 
 #ifdef IARA_DEBUGPRINT
   debugPrintThreadColor(

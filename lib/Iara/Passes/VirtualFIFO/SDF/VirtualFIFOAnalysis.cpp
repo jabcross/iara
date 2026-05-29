@@ -1,5 +1,6 @@
 #include "Iara/Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.h"
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Node.h"
 #include "Iara/Passes/VirtualFIFO/SDF/BufferSizeCalculator.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Util/CompilerTypes.h"
@@ -14,6 +15,8 @@
 #include <mlir/IR/BuiltinOps.h>
 
 namespace iara::passes::virtualfifo::sdf {
+
+using namespace iara::dialect;
 
 std::string getDelayCopyName() { return "iara_delay_copy"; }
 
@@ -53,7 +56,7 @@ LLVM::LLVMFuncOp getOrCodegenDelayCopyImpl(ModuleOp module, Location loc) {
 PairOf<EdgeOp> insertDelayCopy(Vec<EdgeOp> &chain, StaticAnalysisData &data) {
   Vec<EdgeOp> edges_with_buffers;
   for (auto edge : chain) {
-    if (data.edge_static_info[edge].delay_size > 0) {
+    if (Edge(edge).delaySize() > 0) {
       edges_with_buffers.push_back(edge);
     }
   }
@@ -113,8 +116,6 @@ PairOf<EdgeOp> insertDelayCopy(Vec<EdgeOp> &chain, StaticAnalysisData &data) {
 
   edge.getOut().replaceAllUsesWith(new_edge_out.getOut());
 
-  data.edge_static_info.erase(edge);
-
   LLVM::LLVMFuncOp _ = getOrCodegenDelayCopyImpl(
       edge->getParentOfType<ModuleOp>(), edge.getLoc());
 
@@ -141,12 +142,12 @@ LogicalResult analyzeVirtualInoutChain(Vec<EdgeOp> &chain,
   rates.push_back(getProdRateBytes(chain.front()));
 
   for (auto edge : chain) {
-    auto &info = data.edge_static_info[edge];
-    info.cons_rate = getConsRateBytes(edge);
-    info.prod_rate = getProdRateBytes(edge);
-    info.delay_size = getDelaySizeBytes(edge);
-    rates.push_back(info.cons_rate);
-    delays.push_back(info.delay_size);
+    Edge e(edge);
+    e.setConsRate(getConsRateBytes(edge));
+    e.setProdRate(getProdRateBytes(edge));
+    e.setDelaySize(getDelaySizeBytes(edge));
+    rates.push_back(e.consRate());
+    delays.push_back(e.delaySize());
   }
 
   assert(rates.size() == chain.size() + 1);
@@ -164,16 +165,16 @@ LogicalResult analyzeVirtualInoutChain(Vec<EdgeOp> &chain,
   i64 offset = 0;
   for (i64 i = chain.size() - 1; i >= 0; i--) {
     auto edge = chain[i];
-    auto &info = data.edge_static_info[edge];
-    info.delay_size = getDelaySizeBytes(edge);
-    info.delay_offset = offset;
-    offset += info.delay_size;
-    info.block_size_with_delays = first_buffer_size;
-    info.block_size_no_delays = next_buffer_sizes;
-    info.prod_alpha = buffer_values.value()->alpha[i];
-    info.prod_beta = buffer_values.value()->beta[i];
-    info.cons_alpha = buffer_values.value()->alpha[i + 1];
-    info.cons_beta = buffer_values.value()->beta[i + 1];
+    Edge e(edge);
+    e.setDelaySize(getDelaySizeBytes(edge));
+    e.setDelayOffset(offset);
+    offset += e.delaySize();
+    e.setBlockSizeWithDelays(first_buffer_size);
+    e.setBlockSizeNoDelays(next_buffer_sizes);
+    e.setProdAlpha(buffer_values.value()->alpha[i]);
+    e.setProdBeta(buffer_values.value()->beta[i]);
+    e.setConsAlpha(buffer_values.value()->alpha[i + 1]);
+    e.setConsBeta(buffer_values.value()->beta[i + 1]);
   }
 
   return success();

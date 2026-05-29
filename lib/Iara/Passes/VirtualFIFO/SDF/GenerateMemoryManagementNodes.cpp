@@ -1,4 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Node.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Util/CommonTypes.h"
@@ -22,6 +23,7 @@ namespace iara::passes::virtualfifo::sdf {
 
 using namespace util::mlir;
 using namespace util::range;
+using namespace iara::dialect;
 
 struct BufferSizeInfo {
   i64 total_size;
@@ -30,19 +32,18 @@ struct BufferSizeInfo {
 
 void populateAllocEdgeData(EdgeOp edge, StaticAnalysisData &data) {
   auto first_edge = followInoutChainForwards(edge);
-  auto &alloc_edge_info = data.edge_static_info[edge];
-  auto &first_edge_info = data.edge_static_info[first_edge];
-  alloc_edge_info.prod_rate = -1;
-  alloc_edge_info.cons_rate = first_edge_info.prod_rate;
-  alloc_edge_info.prod_alpha = -1;
-  alloc_edge_info.prod_beta = -1;
-  alloc_edge_info.cons_alpha = first_edge_info.prod_alpha;
-  alloc_edge_info.cons_beta = first_edge_info.prod_beta;
-  alloc_edge_info.delay_offset = first_edge_info.delay_offset;
-  alloc_edge_info.delay_size = 0;
-  alloc_edge_info.block_size_with_delays =
-      first_edge_info.block_size_with_delays;
-  alloc_edge_info.block_size_no_delays = first_edge_info.block_size_no_delays;
+  Edge alloc_e(edge);
+  Edge first_e(first_edge);
+  alloc_e.setProdRate(-1);
+  alloc_e.setConsRate(first_e.prodRate());
+  alloc_e.setProdAlpha(-1);
+  alloc_e.setProdBeta(-1);
+  alloc_e.setConsAlpha(first_e.prodAlpha());
+  alloc_e.setConsBeta(first_e.prodBeta());
+  alloc_e.setDelayOffset(first_e.delayOffset());
+  alloc_e.setDelaySize(0);
+  alloc_e.setBlockSizeWithDelays(first_e.blockSizeWithDelays());
+  alloc_e.setBlockSizeNoDelays(first_e.blockSizeNoDelays());
 }
 
 EdgeOp createEdgeAdaptor(Value produced, Type consumed) {
@@ -126,71 +127,42 @@ void annotateDeallocations(SmallVector<NodeOp> &dealloc_nodes,
     auto dealloc_edge =
         cast<EdgeOp>(dealloc_node.getIn().front().getDefiningOp());
     auto last_node = getProducerNode(dealloc_edge);
-    // Copy, not ref: inserts below grow these DenseMaps and invalidate refs.
-    const auto last_node_info = data.node_static_info[last_node];
     auto last_edge = followInoutChainBackwards(dealloc_edge);
     // Invariant: every dealloc edge has a preceding regular edge in its inout chain.
     assert(isa<EdgeOp>(last_edge) && "dealloc edge missing inout-chain predecessor");
-    const auto last_edge_info = data.edge_static_info[last_edge];
-    auto &dealloc_node_info = data.node_static_info[dealloc_node];
 
-    auto dealloc_node_id = [&]() {
-      std::string id =
-          llvm::formatv("40{0}0{1}",
-                        last_node_info.id,
-                        util::mlir::getResultIndex(dealloc_edge.getIn()) + 1);
-      i64 rv;
-      bool failed = StringRef(id).getAsInteger(10, rv);
-      assert(!failed);
-      return rv;
-    }();
+    Node last_n(last_node);
+    Edge last_e(last_edge);
+    Node dealloc_n(dealloc_node);
+    Edge dealloc_e(dealloc_edge);
 
-    dealloc_node_info = VirtualFIFO_Node_StaticInfo{
-        .id = dealloc_node_id,
-        .arg_bytes = -3,
-        .num_args = 1,
-        .rank = last_node_info.rank + 2,
-        .total_iter_firings = -3,
-        .needs_priming = 0,
-    };
-
-    dealloc_node["id"] = dealloc_node_id;
-
-    auto dealloc_edge_id = [&]() {
-      std::string id = llvm::formatv("2{0}", dealloc_node_id);
-      i64 rv;
-      bool failed = StringRef(id).getAsInteger(10, rv);
-      assert(!failed);
-      return rv;
-    }();
-
-    auto &dealloc_edge_info = data.edge_static_info[dealloc_edge];
+    dealloc_n.setArgBytes(-3);
+    dealloc_n.setNumArgs(1);
+    dealloc_n.setRank(last_n.rank() + 2);
+    dealloc_n.setTotalIterFirings(-3);
+    dealloc_n.setNeedsPriming(0);
 
     // -1 = fill out later
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    dealloc_edge_info = VirtualFIFO_Edge_StaticInfo{
-        .id = dealloc_edge_id,
-        .local_index = -1, // fill out later
-        .prod_rate = last_edge_info.cons_rate,
-        .cons_rate = -3,
-        .cons_arg_idx = 1,
-        .delay_offset = 0,
-        .delay_size = 0,
-        .block_size_with_delays = last_edge_info.block_size_with_delays,
-        .block_size_no_delays = last_edge_info.block_size_no_delays,
-        .prod_alpha = last_edge_info.cons_alpha,
-        .prod_beta = last_edge_info.cons_beta,
-        .cons_alpha = -3,
-        .cons_beta = -3};
-
-    dealloc_edge["id"] = dealloc_edge_id;
+    dealloc_e.setLocalIndex(-1); // fill out later
+    dealloc_e.setProdRate(last_e.consRate());
+    dealloc_e.setConsRate(-3);
+    dealloc_e.setConsArgIdx(1);
+    dealloc_e.setDelayOffset(0);
+    dealloc_e.setDelaySize(0);
+    dealloc_e.setBlockSizeWithDelays(last_e.blockSizeWithDelays());
+    dealloc_e.setBlockSizeNoDelays(last_e.blockSizeNoDelays());
+    dealloc_e.setProdAlpha(last_e.consAlpha());
+    dealloc_e.setProdBeta(last_e.consBeta());
+    dealloc_e.setConsAlpha(-3);
+    dealloc_e.setConsBeta(-3);
   }
 }
 
 void updateLocalIndices(EdgeOp edge, StaticAnalysisData &data, i64 start) {
-  data.edge_static_info[edge].local_index = start;
+  Edge(edge).setLocalIndex(start);
   if (auto next = followInoutChainForwards(edge)) {
     updateLocalIndices(next, data, start + 1);
   }
@@ -202,10 +174,9 @@ i64 calculateFiringsPerBlock(NodeOp alloc_node, StaticAnalysisData &data) {
   auto alloc_edge = cast<EdgeOp>(*alloc_node->getUsers().begin());
   auto first_edge = followInoutChainForwards(alloc_edge);
 
-  auto first_edge_info = data.edge_static_info[first_edge];
-
-  auto begin = first_edge_info.block_size_with_delays;
-  auto end = begin + first_edge_info.block_size_no_delays;
+  Edge first_e(first_edge);
+  auto begin = first_e.blockSizeWithDelays();
+  auto end = begin + first_e.blockSizeNoDelays();
 
   i64 dependent_firings_count = 0;
 
@@ -213,9 +184,33 @@ i64 calculateFiringsPerBlock(NodeOp alloc_node, StaticAnalysisData &data) {
   for (auto edge : chain) {
     if (isDeallocEdge(edge))
       continue;
-    auto &edge_info = data.edge_static_info[edge];
+    // Check if edge has been fully initialized with attributes
+    if (!edge->hasAttr("local_index") || !edge->hasAttr("prod_rate") ||
+        !edge->hasAttr("cons_rate") || !edge->hasAttr("cons_arg_idx") ||
+        !edge->hasAttr("delay_offset") || !edge->hasAttr("delay_size") ||
+        !edge->hasAttr("block_size_with_delays") || !edge->hasAttr("block_size_no_delays") ||
+        !edge->hasAttr("prod_alpha") || !edge->hasAttr("prod_beta") ||
+        !edge->hasAttr("cons_alpha") || !edge->hasAttr("cons_beta")) {
+      // Edge attributes not yet initialized, skip this edge in calculation
+      continue;
+    }
+    Edge e(edge);
+    VirtualFIFO_Edge_StaticInfo si{};
+    si.id = 0;
+    si.local_index = e.localIndex();
+    si.prod_rate = e.prodRate();
+    si.cons_rate = e.consRate();
+    si.cons_arg_idx = e.consArgIdx();
+    si.delay_offset = e.delayOffset();
+    si.delay_size = e.delaySize();
+    si.block_size_with_delays = e.blockSizeWithDelays();
+    si.block_size_no_delays = e.blockSizeNoDelays();
+    si.prod_alpha = e.prodAlpha();
+    si.prod_beta = e.prodBeta();
+    si.cons_alpha = e.consAlpha();
+    si.cons_beta = e.consBeta();
     auto [bf, ef] = VirtualFIFO_Edge::getConsFiringsFromVirtualOffsetRange(
-        edge_info, begin, end);
+        si, begin, end);
     auto count = ef - bf;
     assert(count >= 0);
     dependent_firings_count += count;
@@ -240,64 +235,37 @@ void annotateAllocations(SmallVector<Value> &vals, StaticAnalysisData &data) {
     auto alloc_node = (NodeOp)alloc_edge.getIn().getDefiningOp();
     populateAllocEdgeData(alloc_edge, data);
     auto first_edge = followInoutChainForwards(alloc_edge);
-    auto &alloc_node_info = data.node_static_info[alloc_node];
-    // Copy, not ref: the alloc_edge insert below grows this DenseMap and invalidates refs.
-    const auto first_edge_info = data.edge_static_info[first_edge];
-    const auto first_node_info = data.node_static_info[first_node];
+
+    Edge first_e(first_edge);
+    Node first_n(first_node);
+    Node alloc_n(alloc_node);
+    Edge alloc_e(alloc_edge);
 
     auto operand_index =
         alloc_edge.getOut().getUses().begin()->getOperandNumber();
 
-    auto alloc_node_id = [&]() {
-      std::string id =
-          llvm::formatv("30{0}0{1}", first_node_info.id, operand_index);
-      i64 rv;
-      bool failed = StringRef(id).getAsInteger(10, rv);
-      assert(!failed);
-      return rv;
-    }();
-
-    alloc_node_info = VirtualFIFO_Node_StaticInfo{
-        .id = alloc_node_id,
-        .arg_bytes = -2,
-        .num_args = 0,
-        .rank = first_node_info.rank - 2,
-        .total_iter_firings = calculateFiringsPerBlock(alloc_node, data),
-        .needs_priming = 0};
-
-    alloc_node["id"] = alloc_node_id;
-
-    auto &alloc_edge_info = data.edge_static_info[alloc_edge];
-
-    auto alloc_edge_id = [&]() {
-      std::string id = llvm::formatv("2{0}", alloc_node_id);
-      i64 rv;
-      bool failed = StringRef(id).getAsInteger(10, rv);
-      assert(!failed);
-      return rv;
-    }();
+    alloc_n.setArgBytes(-2);
+    alloc_n.setNumArgs(0);
+    alloc_n.setRank(first_n.rank() - 2);
+    alloc_n.setTotalIterFirings(calculateFiringsPerBlock(alloc_node, data));
+    alloc_n.setNeedsPriming(0);
 
     // -1 = fill out later
     // -2 = N/A (alloc)
     // -3 = N/A (dealloc)
 
-    alloc_edge_info = VirtualFIFO_Edge_StaticInfo{
-        .id = alloc_edge_id,
-        .local_index = -1, // fill out later
-        .prod_rate = -2,
-        .cons_rate = first_edge_info.prod_rate,
-        .cons_arg_idx = alloc_edge->getUses().begin()->getOperandNumber(),
-        .delay_offset =
-            first_edge_info.delay_offset + first_edge_info.delay_size,
-        .delay_size = 0,
-        .block_size_with_delays = first_edge_info.block_size_with_delays,
-        .block_size_no_delays = first_edge_info.block_size_no_delays,
-        .prod_alpha = -2,
-        .prod_beta = -2,
-        .cons_alpha = first_edge_info.prod_alpha,
-        .cons_beta = first_edge_info.prod_beta};
-
-    alloc_edge["id"] = alloc_node_id;
+    alloc_e.setLocalIndex(-1); // fill out later
+    alloc_e.setProdRate(-2);
+    alloc_e.setConsRate(first_e.prodRate());
+    alloc_e.setConsArgIdx(alloc_edge->getUses().begin()->getOperandNumber());
+    alloc_e.setDelayOffset(first_e.delayOffset() + first_e.delaySize());
+    alloc_e.setDelaySize(0);
+    alloc_e.setBlockSizeWithDelays(first_e.blockSizeWithDelays());
+    alloc_e.setBlockSizeNoDelays(first_e.blockSizeNoDelays());
+    alloc_e.setProdAlpha(-2);
+    alloc_e.setProdBeta(-2);
+    alloc_e.setConsAlpha(first_e.prodAlpha());
+    alloc_e.setConsBeta(first_e.prodBeta());
 
     updateLocalIndices(alloc_edge, data, 0);
   }
@@ -327,10 +295,15 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
                          new_node_inputs);
 
   assert(new_node_inputs.size() == new_result_types.size());
-  // Copy out first: the [new_node] insert can grow the map and invalidate a
-  // reference to [old_node] read in the same statement.
-  const auto old_node_info = data.node_static_info[old_node];
-  data.node_static_info[new_node] = old_node_info;
+
+  // Copy attributes from old_node to new_node
+  Node old_n(old_node);
+  Node new_n(new_node);
+  new_n.setArgBytes(old_n.argBytes());
+  new_n.setNumArgs(old_n.numArgs());
+  new_n.setRank(old_n.rank());
+  new_n.setTotalIterFirings(old_n.totalIterFirings());
+  new_n.setNeedsPriming(old_n.needsPriming());
 
   new_node->setDiscardableAttrs(old_node->getDiscardableAttrDictionary());
 
@@ -342,7 +315,6 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
     old.replaceAllUsesWith(new_);
   }
   old_node->erase();
-  data.node_static_info.erase(old_node);
 
   annotateDeallocations(new_dealloc_nodes, data);
   annotateAllocations(alloc_inputs, data);

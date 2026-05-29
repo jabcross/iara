@@ -1,5 +1,6 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "Iara/Util/CommonTypes.h"
+#include "IaraRuntime/virtual-fifo/StaticDataAccess.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstring>
@@ -18,14 +19,14 @@ bool is_first_chunk(VirtualFIFO_Edge &fifo,
   return virtual_offset < fifo.static_info.block_size_with_delays;
 }
 
-// Reads some data and partitions it into the pieces that will be consumed in
+// Reads some data and partitions it into the pieces that will be consumed by
 // the different firings of the consumer actor.
 void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
   VirtualFIFO_Chunk remaining_data = std::move(chunk);
   auto cons_rate = static_info.cons_rate;
   // dealloc
   if (cons_rate < 0) {
-    ((VirtualFIFO_Node *)codegen_info.consumer)
+    iara::runtime::virtualfifo::getConsumer(this)
         ->dealloc(((chunk.virtual_offset < static_info.block_size_with_delays)
                        ? static_info.block_size_with_delays
                        : static_info.block_size_no_delays),
@@ -41,11 +42,11 @@ void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
         remaining_data.take_front(std::min(size, remaining_data.data_size));
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("push(): %s -> %s[%ld] (seq %ld, chunk %ld:%ld, cons_rate %ld, slice %ld)\n",
-                          codegen_info.name, codegen_info.consumer->codegen_info.name,
+                          codegen_info.name, iara::runtime::virtualfifo::getConsumer(this)->codegen_info.name,
                           static_info.cons_arg_idx, seq, front.virtual_offset,
                           front.virtual_offset + front.data_size, static_info.cons_rate, size);
 #endif
-    codegen_info.consumer->consume(seq, front, static_info.cons_arg_idx, off);
+    iara::runtime::virtualfifo::getConsumer(this)->consume(seq, front, static_info.cons_arg_idx, off);
   }
   assert(remaining_data.data_size == 0);
   remaining_data.release();
@@ -61,7 +62,8 @@ void VirtualFIFO_Edge::propagate_delays(VirtualFIFO_Chunk chunk) {
            codegen_info.delay_data.size_bytes());
     push(this_delay);
   }
-  if (chunk.data_size == 0 || codegen_info.next_in_chain == nullptr)
+  auto *next = iara::runtime::virtualfifo::getNextInChain(this);
+  if (chunk.data_size == 0 || next == nullptr)
     return;
-  codegen_info.next_in_chain->propagate_delays(chunk);
+  next->propagate_delays(chunk);
 }
