@@ -38,9 +38,6 @@ agent_history/
 *.md
 pdfs/
 *.md
-!CLAUDE.md
-!SPRINT.md
-!MEMORY.md
 !TODO.md
 
 # Secrets / local env
