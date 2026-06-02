@@ -105,6 +105,27 @@ Full notes: `agent_workspace/Sprint-2026-05-28/virtualfifo-memory-optimizations.
 
 Root cause: static single-rate expansion emits one MLIR node + per-firing semaphore per task firing → O(NB³) for Cholesky. Drives 349 MB schedule.mlir, 347s LLVM compile time, 6.3 MB rela section.
 
+## 🔥 Tonight — §1b + §2 + kernel_id dispatch (single bundled change)
+
+Goal: kill `.rela` and shrink `schedule.mlir` in one go.
+
+**Design:**
+
+1. **`kernel_id: u8` on `VirtualFIFO_Node_CodegenInfo`** — index into a per-app symbol table covering every callable the runtime dispatches: user kernels (`kernel_potrf`, …) + deduped synthetic broadcasts (`iara_broadcast_<type>_<sig>`) + the alloc/dealloc singletons. Total per app: dozens; cap 255 asserted at codegen.
+2. **Codegen-emitted dispatch fn** `iara_dispatch_kernel(u8 kid, i64 seq, std::span<VirtualFIFO_Chunk> args)` — single function with `switch(kid)` over u8 ids. Each case spreads `args` per its symbol's C signature and calls the symbol directly. Per-node wrappers eliminated. PIE jump table → `.text` (PC-relative), no per-case `.rela`. Replaces all `iara_node_wrapper_*` symbols.
+3. **u16 cross-ref indices on `VirtualFIFO_Edge_CodegenInfo`** — `consumer` / `producer` / `alloc_node` → `u16` index into `iara_runtime_nodes`; `next_in_chain` → `u16` index into `iara_runtime_edges`. Cap at codegen: nodes ≤ 65535, edges ≤ 65535 (~NB=56 for Cholesky).
+4. **Spans → `{u16 offset, u16 count}`** on `VirtualFIFO_Node_CodegenInfo` for `input_fifos` / `output_fifos`. Backed by a single global `iara_runtime_fifo_indices: u16[]` emitted alongside the node/edge arrays.
+5. **`StaticDataAccess.h` + `_Inline.cpp`** — accessors do `iara_runtime_nodes[idx]` / `iara_runtime_edges[idx]` lookups; new accessor `fireKernel(node*, seq, args)` calls `iara_dispatch_kernel`.
+6. **Runtime call site** `VirtualFIFO_Node.cpp:167` → `iara::runtime::virtualfifo::fireKernel(_this, seq, args)`.
+7. **§2 sidecar** — node / edge / fifo-index arrays serialized to `data.bin`; codegen emits `data.c` with `#embed "data.bin"` + extern array symbols. `schedule.mlir` keeps only the dispatch fn, scheduler init, and `extern` decls. CMake builds `data.c -O0` and links `data.o`.
+8. **Strings (`name` fields)** — keep as pointers for tonight (small residual `.rela`; possible follow-up: offsets into a strings blob).
+
+**Gate:** `15-dealloc-rehash` + cholesky `medium` set both green post-change. Compare `.rela` / `schedule.mlir` size / LLVM compile time vs `main` baseline.
+
+**Out of scope tonight:** §1a (chain-contiguous), §3 (constant dedup), §4 (field widths), §6 (reserve), §7 (`iara` unification). §1a may become moot once §2 ships.
+
+---
+
 **Incremental (paper-deadline safe):**
 - [ ] **#6 `reserve()` on DenseMaps** — 1h, belt-and-suspenders UAF fix (`SDF.cpp:65`, `VirtualFIFOAnalysis.cpp:144`)
 - [ ] **#3 constant dedup in codegen** — 1-2d, cache `arith.constant` by value in `makeEdgeInfo`/`makeNodeInfo` → ~2× schedule.mlir reduction for uniform topologies

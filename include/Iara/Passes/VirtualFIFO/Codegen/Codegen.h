@@ -41,6 +41,7 @@ struct NodeCodegenData {
   i64 index = -1;
   NodeOp node_op = nullptr;
   LLVMFuncOp wrapper = nullptr;
+  u8 kernel_id = 0; // index into the per-module iara_dispatch_kernel switch
   std::string name;
   std::vector<EdgeCodegenData *> inputs = {};
   std::vector<EdgeCodegenData *> outputs = {};

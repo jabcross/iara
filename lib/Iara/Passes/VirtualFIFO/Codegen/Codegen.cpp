@@ -132,7 +132,7 @@ struct CodegenStaticData::Impl {
        std::span<NodeCodegenData> node_pairs,
        std::span<EdgeCodegenData> edge_pairs)
       : module(module), module_builder(module_builder), node_pairs(node_pairs),
-        edge_codegen_datas(edge_pairs), strategy(makeMlirInlineStrategy()) {
+        edge_codegen_datas(edge_pairs), strategy(makeEmbedSidecarStrategy()) {
     fillOutPairPointers(node_pairs, edge_pairs);
   }
 

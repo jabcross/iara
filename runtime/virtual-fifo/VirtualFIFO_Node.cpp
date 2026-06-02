@@ -1,18 +1,43 @@
-// #include "IaraRuntime/virtual-fifo/KeyedSemaphore.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
-#include "IaraRuntime/common/WorkStealingBackend.h"
 #include "IaraRuntime/virtual-fifo/SDFSemaphores.h"
 #include "IaraRuntime/virtual-fifo/StaticDataAccess.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/common/WorkStealingBackend.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <gtl/phmap.hpp>
 
+iara::int_edge VirtualFIFO_Node::getNumOutputs() const {
+  if (runtime_info.isAlloc())
+    return 1;
+  if (runtime_info.isDealloc())
+    return 0;
+  return runtime_info.num_args;
+}
+
+iara::int_edge VirtualFIFO_Node::getOutputEdge(iara::int_edge idx) const {
+  if (runtime_info.isAlloc())
+    return codegen_info.input_fifos.inline_inputs[0];
+  auto *in_e = iara::runtime::virtualfifo::getEdge(getInputEdge(idx));
+  auto *out_e = iara::runtime::virtualfifo::getNextInChain(in_e);
+  return iara::runtime::virtualfifo::getEdgeIndex(out_e);
+}
+
+iara::int_edge VirtualFIFO_Node::getNumInputs() const {
+  return runtime_info.num_args;
+}
+
+iara::int_edge VirtualFIFO_Node::getInputEdge(iara::int_edge idx) const {
+  return (runtime_info.flags & IARA_NODE_INPUTS_INLINE)
+      ? codegen_info.input_fifos.inline_inputs[idx]
+      : iara_runtime_node_input_fifos_flat[
+            codegen_info.input_fifos.indirect.start + idx];
+}
+
 #ifdef IARA_DEBUGPRINT
   #include "IaraRuntime/util/DebugPrint.h"
-
   #include <mutex>
 std::mutex debug_mutex;
 #endif
@@ -29,30 +54,21 @@ void VirtualFIFO_Node::consume(i64 seq,
 
   bool may_fire = false;
   std::span<VirtualFIFO_Chunk> args;
-
   auto l = VirtualFIFO_NormalSemaphore::LastArgs{&may_fire, &args};
 
 #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor("Consume %ld of %s[%ld] (chunk %ld:%ld)\n",
-                        seq,
-                        codegen_info.name,
-                        arg_idx,
-                        chunk.virtual_offset,
-                        chunk.virtual_offset + chunk.data_size);
+  debugPrintThreadColor("Consume %ld of node[%lu][%ld] (chunk %ld:%ld)\n",
+                        seq, (size_t)this, arg_idx,
+                        chunk.virtual_offset, chunk.virtual_offset + chunk.data_size);
 #endif
 
-  // will set may_fire to true if it's the last dependency.
+  i64 arrive_count = runtime_info.arg_bytes
+      + ((runtime_info.flags & IARA_NODE_NEEDS_PRIMING) ? 1 : 0);
   runtime_info.sema_variant.normal->semaphore.arrive(
-      seq,
-      chunk.data_size,
-      static_info.arg_bytes + static_info.needs_priming,
-      f,
-      e,
-      l);
+      seq, chunk.data_size, arrive_count, f, e, l);
 
-  if (may_fire) {
+  if (may_fire)
     fire(seq, args);
-  }
 }
 
 void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
@@ -62,8 +78,7 @@ void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
   i64 seq = 0;
   i64 off = chunk.virtual_offset;
   if (chunk.virtual_offset >= first_buffer_size) {
-    auto pair =
-        lldiv(chunk.virtual_offset - first_buffer_size, next_buffer_sizes);
+    auto pair = lldiv(chunk.virtual_offset - first_buffer_size, next_buffer_sizes);
     seq = pair.quot + 1;
     off = pair.rem;
   }
@@ -73,106 +88,61 @@ void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
 
   bool may_fire = false;
   std::span<VirtualFIFO_Chunk> args = {};
-
   auto l = VirtualFIFO_NormalSemaphore::LastArgs{&may_fire, &args};
 
   runtime_info.sema_variant.normal->semaphore.arrive(
       seq, chunk.data_size, current_buffer_size, f, e, l);
 
-  if (may_fire) {
+  if (may_fire)
     fire(seq, args);
-  }
 }
 
 void VirtualFIFO_Node::prime(i64 seq) {
 
 #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor("prime(): Priming %ld of %s (total firings %ld)\n",
-                        seq,
-                        codegen_info.name,
-                        static_info.total_iter_firings);
+  debugPrintThreadColor("prime(): Priming %ld of node[%lu] (total firings %u)\n",
+                        seq, (size_t)this, runtime_info.total_iter_firings);
 #endif
 
-  // Schedule the allocation of the memory, if needed
-
-  i64 last_block = -1;
-
-  for (auto fifo : iara::runtime::virtualfifo::getInputFifos(this)) {
-    auto [b, e] = fifo->firingOfConsToVirtualOffsetRange(seq);
-
-#ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor(
-        "prime(): virtual offset of firing %ld of node %s is %ld:%ld\n",
-        seq,
-        codegen_info.name,
-        b,
-        e);
-#endif
-
+  for (iara::int_edge i = 0; i < getNumInputs(); i++) {
+    auto *fifo = iara::runtime::virtualfifo::getEdge(getInputEdge(i));
+    auto [b, e_off] = fifo->firingOfConsToVirtualOffsetRange(seq);
     auto block = fifo->getSingleBlockNumberFromVirtualOffset(b);
-
-#ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor(
-        "prime(): block number of range %ld:%ld is %ld\n", b, e, block);
-
-    debugPrintThreadColor(
-        "prime(): firing %ld of node %s calling ensureAlloc\n",
-        seq,
-        codegen_info.name);
-#endif
-
     iara::runtime::virtualfifo::getAllocNode(fifo)->ensureAlloc(block);
   }
 
   auto f = VirtualFIFO_NormalSemaphore::FirstArgs{this};
   auto e = VirtualFIFO_NormalSemaphore::EveryTimeArgs{
-      .data = VirtualFIFO_Chunk::make_empty(),
-      .arg_idx = -1,
-      .first_of_firing = 0};
+      .data = VirtualFIFO_Chunk::make_empty(), .arg_idx = -1, .first_of_firing = 0};
 
   bool may_fire = false;
   std::span<VirtualFIFO_Chunk> args;
-
   auto l = VirtualFIFO_NormalSemaphore::LastArgs{&may_fire, &args};
-  runtime_info.sema_variant.normal->semaphore.arrive(
-      seq, 1, static_info.arg_bytes + static_info.needs_priming, f, e, l);
 
-  if (may_fire) {
+  i64 arrive_count = runtime_info.arg_bytes
+      + ((runtime_info.flags & IARA_NODE_NEEDS_PRIMING) ? 1 : 0);
+  runtime_info.sema_variant.normal->semaphore.arrive(
+      seq, 1, arrive_count, f, e, l);
+
+  if (may_fire)
     fire(seq, args);
-  }
 }
 
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   auto _this = this;
   iara_submit_task([_this, args, seq]() {
-
 #ifdef IARA_DEBUGPRINT
-    {
-      auto offset = std::hash<std::thread::id>{};
-      (std::this_thread::get_id());
-      debugPrintThreadColor("fire(): Firing %ld of %s from thread %lu\n",
-                            seq,
-                            _this->codegen_info.name,
-                            offset);
-    }
+    debugPrintThreadColor("fire(): Firing %ld of node[%lu]\n", seq, (size_t)_this);
 #endif
-    assert((i64)args.size() == _this->static_info.num_args);
+    assert((i64)args.size() == (i64)_this->runtime_info.num_args);
 
-#ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor("Parallelism is enabled, num threads = %d\n",
-                          iara_get_num_threads());
-#endif
-    {
-      // Regular node - call the kernel wrapper
-      _this->codegen_info.wrapper(seq, args);
+    iara::runtime::virtualfifo::fireKernel(_this, seq, args);
 
-      // output_fifos is empty if it's a dealloc node.
-      auto outputs = iara::runtime::virtualfifo::getOutputFifos(_this);
-      assert(outputs.size() == 0 || (outputs.size() == args.size()));
-      for (size_t i = 0; i < outputs.size(); i++) {
-        outputs[i]->push(args[i]);
-      }
+    for (iara::int_edge idx = 0; idx < _this->getNumOutputs(); idx++) {
+      auto *out = iara::runtime::virtualfifo::getEdge(_this->getOutputEdge(idx));
+      out->push(args[idx]);
     }
+
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
 #endif
@@ -181,26 +151,18 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
 }
 
 void VirtualFIFO_Node::fireAlloc(i64 seq) {
-  VirtualFIFO_Edge *alloc_fifo =
-      iara::runtime::virtualfifo::getOutputFifos(this).front();
+  auto *alloc_fifo = iara::runtime::virtualfifo::getEdge(getOutputEdge(0));
 
 #ifdef IARA_DEBUGPRINT
-  debugPrintThreadColor(
-      "fireAlloc(): fireAlloc %ld of %s\n", seq, codegen_info.name);
+  debugPrintThreadColor("fireAlloc(): fireAlloc %ld of node[%lu]\n", seq, (size_t)this);
 #endif
 
   if (seq == 0) {
     i64 virtual_offset = 0;
-    i64 block_size = alloc_fifo->static_info.block_size_with_delays;
-    i64 total_delays = alloc_fifo->static_info.delay_offset +
-                       alloc_fifo->static_info.delay_size;
+    i64 block_size  = alloc_fifo->runtime_info.block_size_with_delays;
+    i64 total_delays = alloc_fifo->runtime_info.delay_offset
+                     + alloc_fifo->runtime_info.delay_size;
     auto chunk = VirtualFIFO_Chunk::allocate(block_size, virtual_offset);
-
-#ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor("fireAlloc(): alloc %#016lx of size %ld\n",
-                          (size_t)chunk.allocated,
-                          block_size);
-#endif
 
     if (total_delays > 0) {
       auto delays = chunk.take_front(total_delays);
@@ -209,61 +171,41 @@ void VirtualFIFO_Node::fireAlloc(i64 seq) {
     }
     alloc_fifo->push(chunk);
   } else {
-    i64 virtual_offset =
-        ((seq - 1) * alloc_fifo->static_info.block_size_no_delays +
-         alloc_fifo->static_info.block_size_with_delays);
-    i64 block_size = alloc_fifo->static_info.block_size_no_delays;
+    i64 virtual_offset = ((seq - 1) * alloc_fifo->runtime_info.block_size_no_delays
+                          + alloc_fifo->runtime_info.block_size_with_delays);
+    i64 block_size = alloc_fifo->runtime_info.block_size_no_delays;
     auto chunk = VirtualFIFO_Chunk::allocate(block_size, virtual_offset);
     alloc_fifo->push(chunk);
-
-#ifdef IARA_DEBUGPRINT
-    debugPrintThreadColor("fireAlloc(): alloc %#016lx of size %ld\n",
-                          (size_t)chunk.allocated,
-                          block_size);
-#endif
   }
 }
 
-// Uses the alloc node's semaphore to schedule the allocation.
 void VirtualFIFO_Node::ensureAlloc(i64 firing) {
-
-  // Placeholder: figure out a way to keep which blocks were already allocated
-  // without an infinitely growing map.
-  // All first allocs run on init.
   if (firing == 0)
     return;
 
 #ifdef IARA_DEBUGPRINT
   debugPrintThreadColor(
-      "ensureAlloc(): firing %ld of %s (expected dependents = %ld)\n",
-      firing,
-      codegen_info.name,
-      static_info.total_iter_firings);
-
+      "ensureAlloc(): firing %ld of node[%lu] (expected dependents = %u)\n",
+      firing, (size_t)this, runtime_info.total_iter_firings);
 #endif
 
   bool may_alloc = false;
-
   VirtualFIFO_AllocSemaphore::FirstArgs f{&may_alloc};
   VirtualFIFO_AllocSemaphore::EveryTimeArgs e{};
   VirtualFIFO_AllocSemaphore::LastArgs l{};
 
   runtime_info.sema_variant.alloc->semaphore.arrive(
-      firing, 1, static_info.total_iter_firings, f, e, l);
+      firing, 1, runtime_info.total_iter_firings, f, e, l);
 
   auto _this = this;
-
-  if (may_alloc) {
+  if (may_alloc)
     iara_submit_task([_this, firing]() { _this->fireAlloc(firing); });
-  }
 }
 
 void VirtualFIFO_Node::init() {
-
-  if (static_info.isAlloc()) {
+  if (runtime_info.isAlloc()) {
     runtime_info.sema_variant.alloc = new VirtualFIFO_AllocSemaphore{};
   } else {
     runtime_info.sema_variant.normal = new VirtualFIFO_NormalSemaphore{};
   }
-  // todo: free this later
-};
+}

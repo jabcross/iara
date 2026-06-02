@@ -195,8 +195,7 @@ i64 calculateFiringsPerBlock(NodeOp alloc_node, StaticAnalysisData &data) {
       continue;
     }
     Edge e(edge);
-    VirtualFIFO_Edge_StaticInfo si{};
-    si.id = 0;
+    VirtualFIFO_Edge_RuntimeInfo si{};
     si.local_index = e.localIndex();
     si.prod_rate = e.prodRate();
     si.cons_rate = e.consRate();

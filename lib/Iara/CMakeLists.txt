@@ -19,7 +19,8 @@ add_mlir_dialect_library(MLIRIara
 
 
         Passes/VirtualFIFO/Codegen/Codegen.cpp
-        Passes/VirtualFIFO/Codegen/MlirInlineStrategy.cpp
+        # MlirInlineStrategy.cpp excluded: replaced by EmbedSidecarStrategy.
+        Passes/VirtualFIFO/Codegen/EmbedSidecarStrategy.cpp
         Passes/VirtualFIFO/SDF/VirtualFIFOAnalysis.cpp
         Passes/VirtualFIFO/SDF/BufferSizeCalculator.cpp
         Passes/VirtualFIFO/SDF/BufferSizeCalculatorPresburger.cpp
@@ -28,7 +29,7 @@ add_mlir_dialect_library(MLIRIara
         Passes/VirtualFIFO/BreakLoops.cpp
         Passes/VirtualFIFO/VirtualFIFOSchedulerPass.cpp
 
-        ../../runtime/virtual-fifo/Common.cpp
+        # Common.cpp excluded: getConsumerSlice is now inline in VirtualFIFO_Edge_Embed.h.
         # ../../runtime/virtual-fifo/VirtualFIFO_Edge.cpp
 
         Util/Mlir.cpp

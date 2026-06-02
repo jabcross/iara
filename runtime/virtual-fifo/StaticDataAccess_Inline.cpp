@@ -44,4 +44,8 @@ std::span<VirtualFIFO_Edge *> getOutputFifos(const VirtualFIFO_Node *n) {
   return n->codegen_info.output_fifos;
 }
 
+void fireKernel(VirtualFIFO_Node *node, i64 seq, std::span<VirtualFIFO_Chunk> args) {
+  node->codegen_info.wrapper(seq, args);
+}
+
 } // namespace iara::runtime::virtualfifo

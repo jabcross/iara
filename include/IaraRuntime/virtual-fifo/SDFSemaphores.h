@@ -27,7 +27,7 @@ struct VirtualFIFO_NormalSemaphore {
 
     auto p_kernel_args = &kernel_args;
 
-    size_t size = f_args._this->static_info.num_args;
+    size_t size = f_args._this->runtime_info.num_args;
     auto data = (VirtualFIFO_Chunk *)calloc(sizeof(VirtualFIFO_Chunk), size);
     *p_kernel_args = {data, size};
 

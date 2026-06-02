@@ -96,13 +96,14 @@ function(iara_runtime_sources iara_opt_sched runtime_backend out_var out_compile
     if("${iara_opt_sched}" STREQUAL "virtual-fifo")
         # Virtual FIFO runtime sources
         set(srcs
-            ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/Common.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Chunk.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Edge.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Node.cpp
             ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/VirtualFIFO_Scheduler.cpp
-            ${PROJECT_SOURCE_DIR}/runtime/virtual-fifo/StaticDataAccess_Inline.cpp
+            # StaticDataAccess_Inline.cpp excluded: accessors are now header-inline.
+            # Common.cpp (getConsumerSlice) excluded: inline in VirtualFIFO_Edge_Embed.h.
         )
+        list(APPEND compile_defs IARA_VFIFO_DATA_STORAGE_EMBED)
 
         # Add backend-specific sources
         if("${runtime_backend}" STREQUAL "enkits")
@@ -595,12 +596,41 @@ function(iara_add_application)
             COMMAND_EXPAND_LISTS
             VERBATIM
         )
+        # EmbedSidecarStrategy writes static_data.c (+ static_data.bin) into
+        # build_subdir alongside schedule.mlir.  Compile it with -std=c23 so
+        # #embed is available (Clang 22 supports it natively).
+        if("${final_iara_opt}" STREQUAL "virtual-fifo")
+            set(static_data_c   "${build_subdir}/static_data.c")
+            set(static_data_obj "${build_subdir}/static_data.o")
+            add_custom_command(
+                OUTPUT ${static_data_obj}
+                COMMAND ${CMAKE_COMMAND} -E env LLVM_INSTALL=$ENV{LLVM_INSTALL}
+                    ${CMAKE_C_COMPILER}
+                    -std=c23
+                    -O0
+                    -DIARA_VFIFO_DATA_STORAGE_EMBED
+                    -I${PROJECT_SOURCE_DIR}/include
+                    -I${build_subdir}
+                    -c ${static_data_c}
+                    -o ${static_data_obj}
+                DEPENDS ${schedule_mlir}
+                WORKING_DIRECTORY ${build_subdir}
+                COMMENT "Compiling static_data.c for ${target_name}"
+                VERBATIM
+            )
+        else()
+            set(static_data_obj "")
+        endif()
     endif()
 
     # Build executable
     set(exec_sources ${c_sources} ${cpp_sources} ${runtime_sources})
     if(schedule_obj)
         list(APPEND exec_sources ${schedule_obj})
+    endif()
+    if(static_data_obj)
+        list(APPEND exec_sources ${static_data_obj})
+        set_source_files_properties(${static_data_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
     endif()
 
     add_executable(${target_name} ${exec_sources})

@@ -61,8 +61,8 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
     {
       for (auto &node : iara_runtime_nodes) {
         if (node.needs_priming()) {
-          for (i64 i = graph_iteration * node.static_info.total_iter_firings,
-                   e = i + node.static_info.total_iter_firings;
+          for (i64 i = graph_iteration * node.runtime_info.total_iter_firings,
+                   e = i + node.runtime_info.total_iter_firings;
                i < e;
                i++) {
             auto node_ptr = &node;
@@ -74,8 +74,8 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
   } else {
     for (auto &node : iara_runtime_nodes) {
       if (node.needs_priming()) {
-        for (i64 i = graph_iteration * node.static_info.total_iter_firings,
-                 e = i + node.static_info.total_iter_firings;
+        for (i64 i = graph_iteration * node.runtime_info.total_iter_firings,
+                 e = i + node.runtime_info.total_iter_firings;
              i < e;
              i++) {
           auto node_ptr = &node;
@@ -129,15 +129,22 @@ extern "C" void iara_runtime_init() {
 
   setlocale(LC_NUMERIC, "");
 
+  if (sizeof(VirtualFIFO_Node) != 32 || sizeof(VirtualFIFO_Edge) != 112) {
+    fprintf(stderr, "FATAL: struct layout mismatch "
+            "(Node=%zu expect 32, Edge=%zu expect 112)\n",
+            sizeof(VirtualFIFO_Node), sizeof(VirtualFIFO_Edge));
+    abort();
+  }
+
   // Initialize parallelism runtime (e.g., EnkiTS scheduler)
   iara_parallelism_init();
 
 #ifdef IARA_DEBUGPRINT
   for (auto &node : iara_runtime_nodes) {
-    node.static_info.dump();
+    node.runtime_info.dump();
   }
   for (auto &edge : iara_runtime_edges) {
-    edge.static_info.dump();
+    edge.runtime_info.dump();
   }
 #endif
 
@@ -153,7 +160,7 @@ extern "C" void iara_runtime_init() {
   // }
 
   for (auto &node : iara_runtime_nodes) {
-    if (node.static_info.isAlloc())
+    if (node.runtime_info.isAlloc())
       node.fireAlloc(0);
   }
 }

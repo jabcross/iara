@@ -14,6 +14,16 @@ using u32 = uint64_t;
 using i64 = int64_t;
 using u64 = uint64_t;
 
+using i16 = int16_t;
+using u16 = uint16_t;
+
+namespace iara {
+// Index types for node/edge tables. u16 cap = 65535.
+// Codegen-time assert fires before silent overflow.
+using int_node = uint16_t;
+using int_edge = uint16_t;
+} // namespace iara
+
 // Special node type markers (encoded in VirtualFIFO_Node_StaticInfo::arg_bytes)
 enum class NodeType : i64 {
   Normal = 0,      // Regular compute node (arg_bytes >= 0)

@@ -119,10 +119,16 @@ struct VirtualFIFOSchedulerPass::Impl {
       return rv;
     }
 
-    auto sym_name = llvm::formatv("iara_node_wrapper_{0}_{1}",
-                                  node_codegen_data.index,
-                                  node_op.getImpl())
-                        .str();
+    // Deduplicate by (impl, params): nodes sharing the same kernel and
+    // compile-time params share a single wrapper + kernel_id.
+    std::string sym_name = ("iara_node_wrapper_" + node_op.getImpl()).str();
+    for (auto p : node_op.getParams()) {
+      if (auto c = dyn_cast<arith::ConstantOp>(p.getDefiningOp())) {
+        if (auto ia = dyn_cast<IntegerAttr>(c.getValue())) {
+          sym_name += "_" + std::to_string(ia.getInt());
+        }
+      }
+    }
 
     if (auto existing = module.lookupSymbol<LLVM::LLVMFuncOp>(sym_name)) {
       return existing;
@@ -270,6 +276,75 @@ struct VirtualFIFOSchedulerPass::Impl {
   void codegenEdgeInit(OpBuilder builder, EdgeOp edge, VirtualFIFO_Edge &info) {
   }
 
+  // Emit:
+  //   void iara_dispatch_kernel(u8 kid, i64 seq, span<Chunk> args)
+  // Uses llvm.switch: entry block switches on kid, each case block calls the
+  // corresponding wrapper, default block is unreachable.
+  void emitDispatchFn(ModuleOp module, OpBuilder mod_builder,
+                      llvm::StringMap<u8> &kid_map) {
+    auto loc = module.getLoc();
+    auto u8_type  = IntegerType::get(ctx(), 8);
+    auto span_type = iara::passes::common::codegen::getSpanType(ctx());
+
+    auto fn_type = LLVM::LLVMFunctionType::get(
+        llvm_void_type(), {u8_type, i64type(), span_type}, false);
+
+    auto dispatch_fn = CREATE(LLVM::LLVMFuncOp, mod_builder, loc,
+                              "iara_dispatch_kernel", fn_type);
+    dispatch_fn.setVisibility(mlir::SymbolTable::Visibility::Public);
+    dispatch_fn->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
+
+    // Sort by kernel_id for deterministic output.
+    SmallVector<std::pair<u8, std::string>> entries;
+    for (auto &kv : kid_map)
+      entries.push_back({kv.second, kv.first().str()});
+    llvm::sort(entries, [](auto &a, auto &b) { return a.first < b.first; });
+
+    // Build blocks.
+    auto &body = dispatch_fn.getFunctionBody();
+    auto *entry = &body.emplaceBlock();
+    for (auto t : fn_type.getParams())
+      entry->addArgument(t, loc);
+
+    SmallVector<Block *> case_blocks;
+    for (size_t i = 0; i < entries.size(); i++)
+      case_blocks.push_back(&body.emplaceBlock());
+    auto *default_block = &body.emplaceBlock();
+
+    Value kid  = entry->getArgument(0);
+    Value seq  = entry->getArgument(1);
+    Value span = entry->getArgument(2);
+
+    // Case values as APInt (u8).
+    SmallVector<APInt> case_vals;
+    for (auto &[kid_id, _] : entries)
+      case_vals.push_back(APInt(8, kid_id));
+
+    // Switch in entry block.
+    {
+      auto b = OpBuilder::atBlockBegin(entry);
+      b.create<LLVM::SwitchOp>(loc, kid,
+                                default_block, ValueRange{},
+                                case_vals, BlockRange{case_blocks},
+                                ArrayRef<ValueRange>(
+                                    SmallVector<ValueRange>(case_blocks.size())));
+    }
+
+    // Each case block: call wrapper(seq, span) + ret.
+    for (size_t i = 0; i < entries.size(); i++) {
+      auto b = OpBuilder::atBlockBegin(case_blocks[i]);
+      CREATE(LLVM::CallOp, b, loc, TypeRange{},
+             entries[i].second, ValueRange{seq, span});
+      CREATE(LLVM::ReturnOp, b, loc, ValueRange{});
+    }
+
+    // Default: unreachable.
+    {
+      auto b = OpBuilder::atBlockBegin(default_block);
+      b.create<LLVM::UnreachableOp>(loc);
+    }
+  }
+
   void upgradeDelaysToDenseArrays(ActorOp actor) {
     for (auto edge : actor.getOps<EdgeOp>()) {
       if (!edge->hasAttr("delay")) {
@@ -326,12 +401,21 @@ struct VirtualFIFOSchedulerPass::Impl {
       codegen_data.edge_op = edge;
     }
 
-    // validate the ptrs
-
-    for (auto [i, node_pair] : llvm::enumerate(node_codegen_datas)) {
-      node_pair.wrapper =
-          getOrCodegenNodeWrapper(module, mod_builder, node_pair);
+    // Create (or find) per-unique-kernel wrapper functions.
+    // Assign kernel_id: maps deduped wrapper sym -> u8 id in emission order.
+    llvm::StringMap<u8> kid_map;
+    for (auto &node_pair : node_codegen_datas) {
+      node_pair.wrapper = getOrCodegenNodeWrapper(module, mod_builder, node_pair);
+      auto sym = node_pair.wrapper.getSymName().str();
+      if (!kid_map.count(sym)) {
+        assert(kid_map.size() < 256 && "kernel_id overflow: > 255 unique wrappers");
+        kid_map[sym] = static_cast<u8>(kid_map.size());
+      }
+      node_pair.kernel_id = kid_map[sym];
     }
+
+    // Emit the single dispatch function: switch on kernel_id → call wrapper.
+    emitDispatchFn(module, mod_builder, kid_map);
 
     auto codegen_builder = CodegenStaticData(
         module, mod_builder, {node_codegen_datas}, {edge_codegen_datas});

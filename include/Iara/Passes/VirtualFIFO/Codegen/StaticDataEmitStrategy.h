@@ -19,6 +19,7 @@ struct StaticDataEmitStrategy {
 };
 
 std::unique_ptr<StaticDataEmitStrategy> makeMlirInlineStrategy();
+std::unique_ptr<StaticDataEmitStrategy> makeEmbedSidecarStrategy();
 
 } // namespace iara::passes::virtualfifo::codegen
 
