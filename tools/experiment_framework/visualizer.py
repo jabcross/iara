@@ -289,7 +289,7 @@ def translate_plotly_to_vegalite(
         # Stacked bars: x = group param, y = metric, color = stack_by field
         stack_by = plotly_spec.get("stack_by")
         _build_stacked_bar_encoding(
-            vl_spec, metric, group_param, facet_param, stack_by
+            vl_spec, metric, measurements, group_param, facet_param, stack_by
         )
 
     elif plot_type == "grouped_stacked_bars":
@@ -364,6 +364,7 @@ def _build_grouped_bars_encoding(
 def _build_stacked_bar_encoding(
     vl_spec: Dict[str, Any],
     metric: str,
+    measurements: List[str],
     group_param: Optional[str],
     facet_param: Optional[str],
     stack_by: Optional[str]
@@ -390,9 +391,9 @@ def _build_stacked_bar_encoding(
             "as": ["section_field", "value"]
         })
 
-        # Strip the "binary.sections." prefix to obtain the bare section name
+        # Strip the "section_" prefix to obtain the bare section name
         vl_spec["transform"].append({
-            "calculate": "replace(datum.section_field, 'binary.sections.', '')",
+            "calculate": "replace(datum.section_field, 'section_', '')",
             "as": "section_type"
         })
 
@@ -416,6 +417,31 @@ def _build_stacked_bar_encoding(
             "field": "section_type",
             "type": "nominal",
             "title": "Section"
+        }
+    elif stack_by == "measurement" and measurements:
+        # Fold time-component measurements into key-value pairs for stacking
+        if "transform" not in vl_spec:
+            vl_spec["transform"] = []
+
+        fold_fields = [f"execution.statistics.{m}.mean" for m in measurements]
+        vl_spec["transform"].append({
+            "fold": fold_fields,
+            "as": ["measurement_field", "value"]
+        })
+        vl_spec["transform"].append({
+            "calculate": "split(datum.measurement_field, '.')[2]",
+            "as": "measurement_type"
+        })
+
+        vl_spec["encoding"]["x"] = {
+            "field": "value",
+            "type": "quantitative",
+            "title": "Time (s)"
+        }
+        vl_spec["encoding"]["color"] = {
+            "field": "measurement_type",
+            "type": "nominal",
+            "title": "Measurement"
         }
     else:
         # Standard X encoding: metric value
@@ -454,6 +480,9 @@ def _build_stacked_bar_encoding(
     if stack_by == "section":
         tooltip_fields.append({"field": "section_type", "type": "nominal", "title": "Section"})
         tooltip_fields.append({"field": "value_formatted", "type": "nominal", "title": "Size (SI Units)"})
+    elif stack_by == "measurement" and measurements:
+        tooltip_fields.append({"field": "measurement_type", "type": "nominal", "title": "Measurement"})
+        tooltip_fields.append({"field": "value", "type": "quantitative", "title": "Time (s)"})
     else:
         tooltip_fields.append({"field": _get_metric_field(metric), "type": "quantitative", "title": _format_title(metric)})
     vl_spec["encoding"]["tooltip"] = tooltip_fields
@@ -533,7 +562,32 @@ def _build_grouped_stacked_bars_encoding(
                 "field": f"parameters.{stack_by}",
                 "type": "nominal",
                 "title": _format_title(stack_by)
-            }
+        }
+    elif stack_by == "measurement" and measurements:
+        # Fold time-component measurements into key-value pairs for stacking
+        if "transform" not in vl_spec:
+            vl_spec["transform"] = []
+
+        fold_fields = [f"execution.statistics.{m}.mean" for m in measurements]
+        vl_spec["transform"].append({
+            "fold": fold_fields,
+            "as": ["measurement_field", "value"]
+        })
+        vl_spec["transform"].append({
+            "calculate": "split(datum.measurement_field, '.')[2]",
+            "as": "measurement_type"
+        })
+
+        vl_spec["encoding"]["x"] = {
+            "field": "value",
+            "type": "quantitative",
+            "title": "Time (s)"
+        }
+        vl_spec["encoding"]["color"] = {
+            "field": "measurement_type",
+            "type": "nominal",
+            "title": "Measurement"
+        }
     else:
         vl_spec["encoding"]["color"] = {
             "field": "parameters.scheduler",
@@ -1289,18 +1343,35 @@ def generate_vegalite_json(
                 section_counts: Dict[str, int] = {}
                 for inst in results["instances"]:
                     for sec_name, sec_size in inst.get("binary", {}).get("sections", {}).items():
+                        if sec_name == "other":
+                            continue  # synthetic, excluded from top-N
                         if exclude_bss and sec_name in BSS_SECTION_NAMES:
                             continue
                         section_totals[sec_name] = section_totals.get(sec_name, 0) + sec_size
                         section_counts[sec_name] = section_counts.get(sec_name, 0) + 1
-                section_avgs = {
-                    name: section_totals[name] / section_counts[name]
-                    for name in section_totals
-                }
-                top_sections = [
-                    name for name, _ in sorted(section_avgs.items(), key=lambda x: -x[1])[:10]
-                ]
-                top_fields = [f"binary.sections.{name}" for name in top_sections]
+                total_instances = len(results["instances"])
+                # Sort by presence (how many schedulers have this section)
+                # then by average size, so sections present in both vf and preesm
+                # appear before scheduler-specific sections like ltext/lrodata.
+                top_sections = sorted(
+                    section_totals.keys(),
+                    key=lambda n: -section_totals[n]
+                )
+                # Flatten nested sections into top-level fields so fold
+                # works reliably across Vega-Lite renderers (some don't
+                # handle dot-notation nested paths in fold transforms).
+                for inst in results["instances"]:
+                    # Remove stale section_* keys from previous runs
+                    for key in list(inst.keys()):
+                        if key.startswith("section_"):
+                            del inst[key]
+                    secs = inst.get("binary", {}).get("sections", {})
+                    for name in top_sections:
+                        inst[f"section_{name}"] = secs.get(name, 0)
+                # Write back so the spec's file:// URL picks up flattened fields.
+                with open(results_json_path, 'w') as f:
+                    json.dump(results, f, indent=2)
+                top_fields = [f"section_{name}" for name in top_sections]
                 # Patch the placeholder fold transform
                 for transform in vl_spec.get("transform", []):
                     if isinstance(transform.get("fold"), list) and transform.get("as") == ["section_field", "value"]:

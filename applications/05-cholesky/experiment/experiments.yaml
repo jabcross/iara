@@ -229,18 +229,15 @@ visualization:
 
   # Declarative plot specifications
   plots:
-    # Runtime performance: grouped stacked bars
-    # One plot per matrix_size, grouped by num_blocks, stacked by time components
+    # Runtime performance: stacked bars, one per matrix_size, ordered by name
     runtime_performance:
       title: "Cholesky Runtime Performance (Stacked Time Components)"
-      type: grouped_stacked_bars
+      type: stacked_bar
       y_axis:
         metric: value
         measurements: [init_time, convert_time, compute_time]
       x_axis:
         MATRIX_SIZE: separate_plots
-        NUM_BLOCKS: group_by
-      scheduler: ordered_within_group
       stack_by: measurement
       error_bars: std_dev
       show_values: true
