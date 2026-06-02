@@ -7,6 +7,7 @@ This module generates Vega-Lite visualizations from experiment results.
 import copy
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
@@ -1333,7 +1334,7 @@ def generate_vegalite_json(
         all_sections = set()
         for inst in results["instances"]:
             for sec_name in inst.get("binary", {}).get("sections", {}):
-                if sec_name != "other":
+                if sec_name != "other" and sec_name != "unknown":
                     all_sections.add(sec_name)
         for inst in results["instances"]:
             # Remove stale section_* keys from previous runs
@@ -1343,6 +1344,14 @@ def generate_vegalite_json(
             secs = inst.get("binary", {}).get("sections", {})
             for name in all_sections:
                 inst[f"section_{name}"] = secs.get(name, 0)
+            # Compute unknown: gap between on-disk file size and section sum.
+            # Only meaningful for no_bss (with BSS, sections include virtual lbss
+            # which is larger than the file, so unknown floors to 0).
+            ep = inst.get("executable_path", "")
+            file_size = os.path.getsize(ep) if ep and os.path.exists(ep) else 0
+            section_sum = sum(secs.get(s, 0) for s in all_sections
+                              if s not in BSS_SECTION_NAMES)
+            inst["section_unknown"] = max(0, file_size - section_sum)
         with open(results_json_path, 'w') as f:
             json.dump(results, f, indent=2)
 
@@ -1362,6 +1371,9 @@ def generate_vegalite_json(
                                 if k.startswith("section_")]
                 top_sections = [s for s in all_sections
                                 if not (exclude_bss and s in BSS_SECTION_NAMES)]
+                # Always include unknown: gap between on-disk file size and section sum
+                if "unknown" not in top_sections:
+                    top_sections.append("unknown")
                 top_sections.sort(key=lambda n: -sum(
                     inst.get(f"section_{n}", 0) for inst in results["instances"]
                 ))
