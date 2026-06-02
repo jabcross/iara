@@ -1327,7 +1327,26 @@ def generate_vegalite_json(
     # Step 5: Initialize generated files list
     generated_files = []
 
-    # Step 6: Process each plot
+    # Step 6: Pre-flatten binary section data into top-level section_* fields.
+    # Do this once before any chart processing so all charts share the same data.
+    if results.get("instances"):
+        all_sections = set()
+        for inst in results["instances"]:
+            for sec_name in inst.get("binary", {}).get("sections", {}):
+                if sec_name != "other":
+                    all_sections.add(sec_name)
+        for inst in results["instances"]:
+            # Remove stale section_* keys from previous runs
+            for key in list(inst.keys()):
+                if key.startswith("section_"):
+                    del inst[key]
+            secs = inst.get("binary", {}).get("sections", {})
+            for name in all_sections:
+                inst[f"section_{name}"] = secs.get(name, 0)
+        with open(results_json_path, 'w') as f:
+            json.dump(results, f, indent=2)
+
+    # Step 7: Process each plot
     for plot_name, plotly_spec in specs.items():
         try:
             logger.info(f"Generating Vega-Lite spec for plot: {plot_name}")
@@ -1335,42 +1354,17 @@ def generate_vegalite_json(
             # Translate Plotly spec to Vega-Lite
             vl_spec = translate_plotly_to_vegalite(plot_name, plotly_spec)
 
-            # For binary-size section plots, patch the fold transform with the
-            # top-10 sections (by average size across instances).
+            # For binary-size section plots, compute the subset of section_*
+            # fields to fold over (all data is pre-flattened above).
             if plotly_spec.get("stack_by") == "section" and results.get("instances"):
                 exclude_bss = plotly_spec.get("exclude_bss", False)
-                section_totals: Dict[str, int] = {}
-                section_counts: Dict[str, int] = {}
-                for inst in results["instances"]:
-                    for sec_name, sec_size in inst.get("binary", {}).get("sections", {}).items():
-                        if sec_name == "other":
-                            continue  # synthetic, excluded from top-N
-                        if exclude_bss and sec_name in BSS_SECTION_NAMES:
-                            continue
-                        section_totals[sec_name] = section_totals.get(sec_name, 0) + sec_size
-                        section_counts[sec_name] = section_counts.get(sec_name, 0) + 1
-                total_instances = len(results["instances"])
-                # Sort by presence (how many schedulers have this section)
-                # then by average size, so sections present in both vf and preesm
-                # appear before scheduler-specific sections like ltext/lrodata.
-                top_sections = sorted(
-                    section_totals.keys(),
-                    key=lambda n: -section_totals[n]
-                )
-                # Flatten nested sections into top-level fields so fold
-                # works reliably across Vega-Lite renderers (some don't
-                # handle dot-notation nested paths in fold transforms).
-                for inst in results["instances"]:
-                    # Remove stale section_* keys from previous runs
-                    for key in list(inst.keys()):
-                        if key.startswith("section_"):
-                            del inst[key]
-                    secs = inst.get("binary", {}).get("sections", {})
-                    for name in top_sections:
-                        inst[f"section_{name}"] = secs.get(name, 0)
-                # Write back so the spec's file:// URL picks up flattened fields.
-                with open(results_json_path, 'w') as f:
-                    json.dump(results, f, indent=2)
+                all_sections = [k.replace("section_", "") for k in results["instances"][0]
+                                if k.startswith("section_")]
+                top_sections = [s for s in all_sections
+                                if not (exclude_bss and s in BSS_SECTION_NAMES)]
+                top_sections.sort(key=lambda n: -sum(
+                    inst.get(f"section_{n}", 0) for inst in results["instances"]
+                ))
                 top_fields = [f"section_{name}" for name in top_sections]
                 # Patch the placeholder fold transform
                 for transform in vl_spec.get("transform", []):
