@@ -7,6 +7,7 @@
 #ifdef __cplusplus
 
   #include "enkiTS/TaskScheduler.h"
+  #include <atomic>
   #include <functional>
   #include <mutex>
   #include <vector>
@@ -18,16 +19,28 @@ extern enki::TaskScheduler *g_scheduler;
 // Pool of tasks for cleanup after completion
 extern std::vector<enki::TaskSet *> g_task_pool;
 extern std::mutex g_task_pool_mutex;
+
+// Count of submitted-but-not-yet-finished tasks. Tasks spawn further tasks
+// dynamically, so the pool is not a reliable "is the graph done" signal (a task
+// can be in-flight, about to enqueue its successor, while the pool momentarily
+// looks empty). This counter is incremented before a task is enqueued and
+// decremented when its body returns, so it is non-zero for the whole transitive
+// closure of work.
+extern std::atomic<int64_t> g_outstanding;
 } // namespace iara_enkits
 
 // Task submission using EnkiTS TaskSet
 // Usage: iara_submit_task([=]() { /* task body */ });
 template <typename Func> inline void iara_submit_task(Func &&func) {
+  iara_enkits::g_outstanding.fetch_add(1, std::memory_order_relaxed);
   // Create a TaskSet that executes the lambda once
   auto *task = new enki::TaskSet(
       1,
       [func = std::forward<Func>(func)](enki::TaskSetPartition range,
-                                        uint32_t threadnum) { func(); });
+                                        uint32_t threadnum) {
+        func();
+        iara_enkits::g_outstanding.fetch_sub(1, std::memory_order_release);
+      });
 
   iara_enkits::g_scheduler->AddTaskSetToPipe(task);
 
@@ -50,23 +63,22 @@ inline void iara_parallel_single_taskgroup(Func &&func) {
   func();
 }
 
-// Task synchronization: wait for all pending tasks
+// Task synchronization: wait for the whole transitive closure of tasks to
+// finish. Tasks spawn successors dynamically, so we wait on the outstanding
+// counter rather than a one-shot snapshot of the pool; WaitforAll() makes the
+// calling thread run available work so the count drains to zero.
 inline void iara_task_wait() {
-  // Copy task pool to local vector (to avoid holding mutex during wait)
-  std::vector<enki::TaskSet *> tasks_to_wait;
+  while (iara_enkits::g_outstanding.load(std::memory_order_acquire) > 0) {
+    iara_enkits::g_scheduler->WaitforAll();
+  }
+
+  // All tasks finished — safe to reclaim the TaskSet objects.
+  std::vector<enki::TaskSet *> done;
   {
     std::lock_guard<std::mutex> lock(iara_enkits::g_task_pool_mutex);
-    tasks_to_wait = iara_enkits::g_task_pool;
-    iara_enkits::g_task_pool.clear();
+    done.swap(iara_enkits::g_task_pool);
   }
-
-  // Wait for each task individually (without holding mutex)
-  for (auto *task : tasks_to_wait) {
-    iara_enkits::g_scheduler->WaitforTask(task);
-  }
-
-  // Clean up completed tasks
-  for (auto *task : tasks_to_wait) {
+  for (auto *task : done) {
     delete task;
   }
 }

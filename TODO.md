@@ -143,3 +143,20 @@ Commits: `feat(virtualfifo): EmbedSidecarStrategy — #embed sidecar for static 
 ## 💬 Verify
 
 - [ ] **`virtual-fifo/VirtualFIFO_Scheduler.cpp:29-30`** sentinel `IARA_EXTERNALLY_MANAGED_MEMORY` — verify pointer is never dereferenced before bit-zeroing. If safe, leave. If not, use side table or static dummy address.
+
+---
+
+# SIFT BarrierTranspose / alloc double-fire — 2026-06-03
+
+Full notes: `agent_workspace/Sprint-2026-06-03/session-2026-06-03.md`
+
+## ✅ Done
+
+- [x] **Alloc double-fire (BarrierTranspose SIGSEGV)** — gate `ensureAlloc` in `prime()` to the first kernel only (`VirtualFIFO_Node.cpp`). Fixes crash + ~5× memory bloat.
+- [x] **enkits incomplete wait** — `iara_task_wait` only awaited the first task wave; dynamically-spawned tasks (sink) leaked → exit 0 on failure. Fixed with atomic outstanding-task counter (`WorkStealingBackend_EnkiTS.{h,cpp}`).
+- [x] **Regression test `applications/17-barrier-alloc/`** — minimal two-chain memmove; unfixed → vf-omp SIGSEGV, fixed → Built 3/3.
+- [x] **`sorgan_env.sh`** — prepend venv `bin` so `python3` is the venv (yaml/deps); regenerated `.env.cached`.
+
+## 🔴 Open (separate, pre-existing — revealed once the crash was fixed)
+
+- [ ] **SIFT `build_dog_pyr` stall** — pipeline clears blur + `MERGE_gpyr` then stalls; `build_dog_pyr` / `build_grd_rot_pyr` / `detect_keypoints` / `extract_descriptor` fire 0× → 0 keypoints (Preesm baseline 1343). Independent of the alloc fix (recount approach stalls identically). `ITERATOR_build_dog_pyr` fires but doesn't drive its loop body. Likely topology-rate work in progress.

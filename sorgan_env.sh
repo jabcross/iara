@@ -61,6 +61,12 @@ export PREESM_SIFT_REPO="/scratch/$USER/repos/preesm-apps/SIFT"
 export JAVA_HOME="/scratch/$USER/bin/java-17"
 export PATH="$JAVA_HOME/bin:$PATH"
 
+# Keep the project venv first on PATH: the spack `python/3.13` module and the
+# later PATH prepends above otherwise shadow the venv interpreter, so `python3`
+# resolves to spack python (no yaml / project deps). Do this last so nothing
+# can push the venv back down.
+export PATH="$VENV_DIR/bin:$PATH"
+
 # SACI (Scheduler-Agnostic Continuous Instrumentation) Slurm configuration
 export SACI_SLURM_NODE_LIST="sorgan-cpu[1-4]"
 

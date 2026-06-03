@@ -106,6 +106,16 @@ void VirtualFIFO_Node::prime(i64 seq) {
 
   for (iara::int_edge i = 0; i < getNumInputs(); i++) {
     auto *fifo = iara::runtime::virtualfifo::getEdge(getInputEdge(i));
+    // Only the first kernel of an inout chain — the node the alloc directly
+    // feeds — should trigger allocation of a block. Every later kernel in the
+    // chain receives the same buffer via push() and cannot run before it
+    // exists, so it must not ping the chain-head alloc. Otherwise a downstream
+    // consumer re-arrives at the alloc semaphore; on the trivial
+    // (single-dependent) path that re-fires the alloc, double-allocating the
+    // block — corrupting a kernel's arg span (BarrierTranspose SIGSEGV) and
+    // bloating runtime memory ~5x across the whole graph.
+    if (!iara::runtime::virtualfifo::getProducer(fifo)->runtime_info.isAlloc())
+      continue;
     auto [b, e_off] = fifo->firingOfConsToVirtualOffsetRange(seq);
     auto block = fifo->getSingleBlockNumberFromVirtualOffset(b);
     iara::runtime::virtualfifo::getAllocNode(fifo)->ensureAlloc(block);
