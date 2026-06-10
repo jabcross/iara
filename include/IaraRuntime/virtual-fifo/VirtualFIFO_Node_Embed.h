@@ -12,6 +12,13 @@
 #include <span>
 #include <utility>
 
+// Opt-in data-triggered allocation mode: a node fires on its true inputs and
+// allocates its own output buffers in fire(), with no prime() priming token or
+// ensureAlloc() chain. Enabled per-application with -DIARA_DATA_TRIGGERED_ALLOC.
+// Default (legacy) is the prime()/ensureAlloc() path. The mode is correct under
+// vf-sequential; it still has known data races under the parallel schedulers
+// (vf-omp/vf-enkits), so it is not a global default.
+
 struct VirtualFIFO_Edge;
 
 // Flags for VirtualFIFO_Node_CodegenInfo::flags
@@ -78,6 +85,12 @@ struct VirtualFIFO_Node {
     return !runtime_info.isAlloc() && (runtime_info.flags & IARA_NODE_NEEDS_PRIMING);
   }
 
+  // Per-firing byte total of this node's TRUE inputs (edges whose producer is
+  // not an alloc node). Used by the data-triggered-alloc scheduling mode, where
+  // a node fires once its true inputs arrive and its own output buffers
+  // (alloc-fed inputs) are allocated inline by fire().
+  i64 trueInputBytes() const;
+
   void consume(i64 seq, VirtualFIFO_Chunk chunk, i64 arg_idx, i64 offset_partial);
   void dealloc(i64 current_buffer_size, i64 first_buffer_size,
                i64 next_buffer_sizes, VirtualFIFO_Chunk chunk);
@@ -88,9 +101,21 @@ struct VirtualFIFO_Node {
   void ensureAlloc(i64 firing);
   std::pair<i64, i64> getAllocDependentFirings(i64 iteration);
   void kickstart_alloc(i64 graph_iteration);
+
+  // Data-triggered-alloc mode: if this is an alloc node feeding a buffer with
+  // delays (a feedback edge), allocate its block 0 and propagate the initial
+  // delay tokens now, so the feedback consumer has its seed input before the
+  // data-driven cascade starts. Cached so fire() reuses the same block.
+  void seedFeedbackDelays();
 };
 
 void iara_runtime_node_init(VirtualFIFO_Node *node);
+
+// Number of graph iterations released so far (data-triggered-alloc mode).
+// run_iteration() bumps it; fire() refuses firings with
+// seq >= iara_data_alloc_run_iter * total_iter_firings so self-timed feedback
+// edges cannot spill into a later iteration's firings before it is released.
+extern i64 iara_data_alloc_run_iter;
 
 } // extern "C"
 

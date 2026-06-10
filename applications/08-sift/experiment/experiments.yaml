@@ -15,6 +15,10 @@ application:
     # Compile-time defines always present
     defines:
       - "VERBOSE=1"
+      # SIFT's iterative gaussian-pyramid topology stalls under the default
+      # prime()/ensureAlloc() scheduling; build the IaRa runtime in the
+      # data-triggered-alloc mode (correct here, produces 1343 keypoints).
+      - "IARA_DATA_TRIGGERED_ALLOC"
 
 parameters:
   # Number of CPU cores for parallel execution

@@ -53,8 +53,37 @@ extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 #endif
 }
 
+// Released-iteration counter for the data-triggered-alloc mode (see header).
+extern "C" {
+i64 iara_data_alloc_run_iter = 0;
+}
+
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
                                            int wait_for_tasks) {
+#ifdef IARA_DATA_TRIGGERED_ALLOC
+  // No priming. Release this iteration's firing window, then kick the sources
+  // (nodes with no true inputs); everything downstream is data-driven through
+  // consume() -> fire(). fire() allocates each node's own output buffers and
+  // refuses firings past the released window.
+  iara_data_alloc_run_iter = graph_iteration + 1;
+  for (auto &node : iara_runtime_nodes) {
+    if (node.runtime_info.isAlloc() || node.runtime_info.isDealloc())
+      continue;
+    if (node.trueInputBytes() != 0)
+      continue; // not a source; will be triggered by its inputs arriving
+    auto *node_ptr = &node;
+    i64 total = node.runtime_info.total_iter_firings;
+    for (i64 seq = graph_iteration * total; seq < (graph_iteration + 1) * total;
+         seq++) {
+      auto *data = (VirtualFIFO_Chunk *)calloc(node.runtime_info.num_args,
+                                               sizeof(VirtualFIFO_Chunk));
+      node_ptr->fire(seq, {data, (size_t)node.runtime_info.num_args});
+    }
+  }
+  if (wait_for_tasks)
+    iara_task_wait();
+  return;
+#endif
 
   if (wait_for_tasks) {
 #pragma omp taskgroup
@@ -159,10 +188,19 @@ extern "C" void iara_runtime_init() {
   //   }
   // }
 
+#ifndef IARA_DATA_TRIGGERED_ALLOC
+  // Default mode: eagerly allocate block 0 of every buffer. In the
+  // data-triggered-alloc mode the producing node allocates its own output
+  // buffers inline in fire(), so this eager pass is skipped — except feedback
+  // (delay) buffers, whose initial tokens must be seeded before the cascade.
   for (auto &node : iara_runtime_nodes) {
     if (node.runtime_info.isAlloc())
       node.fireAlloc(0);
   }
+#else
+  for (auto &node : iara_runtime_nodes)
+    node.seedFeedbackDelays();
+#endif
 }
 
 extern "C" void iara_runtime_shutdown() {
