@@ -327,6 +327,20 @@ LogicalResult generateAllocsAndFrees(ActorOp actor, StaticAnalysisData &data) {
     if (generateAllocsAndFrees(old_node, data).failed())
       return failure();
   }
+  // Recompute alloc dependent-firing counts now that every inout chain is
+  // fully formed (alloc -> producer -> ... -> consumer -> dealloc). The
+  // per-node pass above annotates allocs inline while their downstream nodes
+  // are still pure in/out, so getInoutChain truncates, and
+  // calculateFiringsPerBlock undercounts the dependents. The prime() loop
+  // pings the alloc for every kernel in the chain; with an undercount the
+  // alloc semaphore takes the trivial always-fire path and re-allocates on
+  // every ping — double-allocating blocks (BarrierTranspose SIGSEGV, feedback
+  // chain null-arg crash in delay-hierarchy tests).
+  for (auto node : actor.getOps<NodeOp>()) {
+    if (!node.isAlloc())
+      continue;
+    Node(node).setTotalIterFirings(calculateFiringsPerBlock(node, data));
+  }
   return success();
 }
 } // namespace iara::passes::virtualfifo::sdf
