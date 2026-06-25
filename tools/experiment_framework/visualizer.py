@@ -19,6 +19,12 @@ from .config import ValidationError
 logger = logging.getLogger(__name__)
 
 
+# Vega-Lite schema. Must match the major version of altair pulled into the venv
+# (altair 6 renders/loads Vega-Lite 6); a v5-schema spec rendered through the
+# v6 path renders blank in some notebook viewers.
+VEGALITE_SCHEMA = "https://vega.github.io/schema/vega-lite/v6.json"
+
+
 # Constants for validation
 VALID_MARK_TYPES = [
     "bar", "line", "area", "point", "circle", "square",
@@ -223,7 +229,7 @@ def translate_plotly_to_vegalite(
 
     # Create base Vega-Lite structure
     vl_spec = {
-        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "$schema": VEGALITE_SCHEMA,
         "title": plotly_spec.get("title", plot_name),
         "width": 800,
         "height": {"step": 30},
@@ -710,7 +716,7 @@ def validate_vegalite_spec(spec: Dict[str, Any]) -> bool:
     Validate Vega-Lite specification has required fields and valid structure.
 
     Validation Rules:
-        - $schema: Must contain "vega-lite" and "v5"
+        - $schema: Must contain "vega-lite" and "v6"
         - data: Must exist and have "url" key
         - mark: Must exist and be valid mark type
         - encoding: Must exist and be dict with at least one encoding
@@ -741,10 +747,10 @@ def validate_vegalite_spec(spec: Dict[str, Any]) -> bool:
     if "vega-lite" not in schema.lower():
         raise ValidationError("$schema must contain 'vega-lite'")
 
-    if "v5" not in schema:
+    if "v6" not in schema:
         raise ValidationError(
-            f"$schema must specify v5, got: {schema}. "
-            "Expected: https://vega.github.io/schema/vega-lite/v5.json"
+            f"$schema must specify v6, got: {schema}. "
+            f"Expected: {VEGALITE_SCHEMA}"
         )
 
     # Check data
@@ -1239,7 +1245,7 @@ def _wrap_with_parameter_table(
         bar_sub["encoding"]["y"]["axis"] = None
 
     return {
-        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "$schema": VEGALITE_SCHEMA,
         "title": bar_spec.get("title", ""),
         "hconcat": [table_spec, bar_sub],
     }
@@ -1289,9 +1295,20 @@ def generate_vegalite_json(
     }
 
     # Step 1: Build plot specs — standard plots always first, yaml-defined plots added on top.
+    # Universal plots (wall_time, max_rss, compilation_time, binary_size*) must
+    # never be overridden by user YAML. User plots only extend, not replace.
     app_name = yaml_config.get("application", {}).get("name", "")
     specs = _default_plot_specs(app_name)
-    specs.update(load_plot_specs(yaml_config))
+    user_specs = load_plot_specs(yaml_config)
+    # Only add user plots that don't shadow universal defaults
+    for name, spec in user_specs.items():
+        if name not in specs:
+            specs[name] = spec
+        else:
+            logger.warning(
+                f"User plot '{name}' shadows a universal default plot — "
+                f"ignoring user definition, using default."
+            )
 
     # Step 2: Load results data (for unit conversion)
     results = {}
