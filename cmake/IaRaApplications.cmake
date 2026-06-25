@@ -696,11 +696,10 @@ function(iara_add_application)
         endif()
 
         # Preesm generates a very large static Shared[] BSS buffer (potentially
-        # several GB for chunks>=8) which exceeds the 2GB PC32 addressing limit
-        # of the default x86-64 code model.  Use the large code model so the
-        # compiler emits 64-bit relocations throughout.
-        # (Only degridder has this problem; SIFT data is ~2 MB.)
-        if(APP_ENTRY MATCHES "degridder")
+        # several GB for chunks>=8 or large images) which exceeds the 2GB PC32
+        # addressing limit of the default x86-64 code model.  Use the large
+        # code model so the compiler emits 64-bit relocations throughout.
+        if(APP_ENTRY MATCHES "degridder" OR APP_ENTRY MATCHES "sift-photo")
             target_compile_options(${target_name} PRIVATE -mcmodel=large)
             target_link_options(${target_name} PRIVATE -mcmodel=large)
         endif()
@@ -712,7 +711,7 @@ function(iara_add_application)
         # (Preesm's while(!preesmStopThreads) is only bounded by PREESM_LOOP_SIZE).
         if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{IARA_DIR})
             target_compile_definitions(${target_name} PRIVATE
-                "PROJECT_ROOT_PATH=\"$ENV{IARA_DIR}/applications/08-sift\""
+                "PROJECT_ROOT_PATH=\"${APP_APP_SRC_DIR}\""
                 PREESM_LOOP_SIZE=1)
         endif()
     endif()
@@ -720,7 +719,7 @@ function(iara_add_application)
     # SIFT (IaRa schedulers): filenames.c uses PROJECT_ROOT_PATH "/dat/img1.pgm"
     if(NOT "${scheduler}" STREQUAL "preesm" AND APP_ENTRY MATCHES "sift" AND DEFINED ENV{IARA_DIR})
         target_compile_definitions(${target_name} PRIVATE
-            "PROJECT_ROOT_PATH=\"$ENV{IARA_DIR}/applications/08-sift\"")
+            "PROJECT_ROOT_PATH=\"${APP_APP_SRC_DIR}\"")
     endif()
 
     set_target_properties(${target_name}
