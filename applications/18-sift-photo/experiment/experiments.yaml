@@ -1,0 +1,108 @@
+application:
+  name: "18-sift-photo"
+  description: "SIFT on 4K photo (3840x2160) — IaRa vf-omp vs Preesm"
+  app_type: experiment
+  build:
+    extra_linker_args: ["-lm"]
+    main_actor: "Hextract"
+    defines: ["VERBOSE=1"]
+
+parameters:
+  - name: NUM_CORES
+    type: int
+    label: "CPU cores"
+    description: "Number of OpenMP threads / Preesm cores"
+    choices: [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20]
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "IaRa runtime scheduler or Preesm baseline"
+    choices: ["vf-omp", "preesm"]
+  - name: VIDEO_FRAMES
+    type: int
+    label: "Video frames"
+    description: "Number of pipeline iterations per run (1 = single shot, >1 = warm-up test, vf-omp only for >1)"
+    choices: [1, 10, 50, 100]
+
+constraints:
+  - expression: "VIDEO_FRAMES == 1 or scheduler == 'vf-omp'"
+    description: "Multi-frame video warm-up supported for vf-omp only"
+
+experiment_sets:
+  - name: photo
+    description: "4K photo, all valid parallelism levels, single frame"
+    parameters:
+      NUM_CORES: [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20]
+      scheduler: [vf-omp, preesm]
+      VIDEO_FRAMES: [1]
+    scheduler_override:
+      preesm: [preesm]
+      vf-omp: [vf-omp]
+
+  - name: quick
+    description: "Edge cases only — min/max cores, both schedulers"
+    parameters:
+      NUM_CORES: [1, 4, 20]
+      scheduler: [vf-omp, preesm]
+      VIDEO_FRAMES: [1]
+    scheduler_override:
+      preesm: [preesm]
+      vf-omp: [vf-omp]
+
+  - name: video
+    description: "Video warm-up test — 1 core, vf-omp multi-frame pipeline loop"
+    parameters:
+      NUM_CORES: [1]
+      scheduler: [vf-omp]
+      VIDEO_FRAMES: [1, 10, 50, 100]
+    scheduler_override:
+      vf-omp: [vf-omp]
+
+measurements:
+  - name: keypoints_found
+    type: int
+    description: "Number of SIFT keypoints detected"
+    parser:
+      type: regex
+      pattern: "Keypoints found:\\s+(\\d+)"
+      group: 1
+    required: false
+  - name: frame_1_time_ms
+    type: float
+    description: "Wall time of first frame in ms (VIDEO_FRAMES > 1 only)"
+    parser:
+      type: regex
+      pattern: "Frame 1:\\s+([0-9.]+)\\s*ms"
+      group: 1
+    required: false
+  - name: frame_steady_time_ms
+    type: float
+    description: "Average wall time of last half of frames in ms"
+    parser:
+      type: regex
+      pattern: "Steady-state avg:\\s+([0-9.]+)\\s*ms"
+      group: 1
+    required: false
+
+execution:
+  repetitions: 3
+  warmup: 1
+  timeout: 3600
+  environment:
+    OMP_NUM_THREADS: "{NUM_CORES}"
+    OMP_PROC_BIND: "close"
+    OMP_PLACES: "cores"
+
+visualization:
+  plots:
+    # Default plots (wall_time, max_rss, compilation_time, binary_size,
+    # binary_size_no_bss) are auto-generated and need NOT be listed here.
+    # Only add custom plots below that extend beyond the universals.
+    warmup_ratio:
+      title: "SIFT 4K — Frame 1 vs Steady-state (Warm-up)"
+      type: grouped_bars
+      y_axis:
+        metric: frame_1_time_ms
+        title: "Frame 1 Time (ms)"
+      x_axis:
+        VIDEO_FRAMES: group
