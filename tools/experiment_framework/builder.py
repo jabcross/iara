@@ -241,7 +241,8 @@ def _ctest_test_exists(build_dir: Path, test_name: str) -> bool:
     return f'add_test([=[{test_name}]=' in testfile.read_text()
 
 
-def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int) -> tuple:
+def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int,
+                    time_output: Optional[Path] = None) -> tuple:
     """Run a single named CTest test. Writes full output to <build_dir>/<test_name>.log.
 
     Application tests must run serially (profiling multi-core apps requires
@@ -258,6 +259,8 @@ def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int) -> tuple:
         '--output-on-failure',
         '-V',
     ]
+    if time_output is not None:
+        cmd = ['/usr/bin/time', '-v', '-o', str(time_output)] + cmd
     try:
         with open(log_path, 'w') as log_file:
             result = subprocess.run(
@@ -281,6 +284,7 @@ def build_instance(
     attempt: int = 1,
     app_type: str = 'experiment',
     codegen_timeout: int = 300,
+    build_timeout: int = 300,
 ) -> BuildResult:
     """
     Build a single instance with timing measurement.
@@ -429,8 +433,28 @@ def build_instance(
                 logger.debug(f"Phase '{phase_key}' not present, skipping")
                 continue
 
+            # Cumulative build-timeout check
+            elapsed = time.time() - build_start_time
+            if elapsed >= build_timeout:
+                error_msg = (f"Build exceeded total timeout ({build_timeout}s) "
+                             f"before phase '{phase_key}'")
+                logger.error(error_msg)
+                errors.append(error_msg)
+                return BuildResult(
+                    success=False, instance_name=instance_name,
+                    attempt=attempt, timestamp=timestamp,
+                    compilation=compilation, binary_size_bytes=binary_size_bytes,
+                    errors=errors)
+
+            remaining = build_timeout - elapsed
+            effective_timeout = min(phase_timeout, remaining)
+            time_output = None
+            if phase_key == 'lower':
+                time_output = build_dir / f'{test_name}.time'
+
             logger.info(f"Running phase '{phase_key}' for {instance_name}")
-            ok, log_path = _run_ctest_phase(build_dir, test_name, phase_timeout)
+            ok, log_path = _run_ctest_phase(build_dir, test_name,
+                                           effective_timeout, time_output)
 
             if ok:
                 logger.info(f"Phase '{phase_key}': PASS  (log: {log_path})")
@@ -475,6 +499,19 @@ def build_instance(
                     logger.warning(f"Failed to parse {timing_file}: {e}")
             else:
                 logger.debug(f"Timing file not found: {timing_file} (optional)")
+
+        # Parse lower.time for iara-opt memory tracking (if available)
+        lower_time_file = build_dir / f'lower-{instance_name}.time'
+        if lower_time_file.exists():
+            try:
+                lower_data = parse_time_output(lower_time_file)
+                if 'max_rss_bytes' in lower_data:
+                    compilation['iara_opt_max_rss_mb'] = lower_data['max_rss_bytes'] / (1024 * 1024)
+                    logger.debug(f"iara-opt max_rss: {compilation['iara_opt_max_rss_mb']:.1f} MB")
+                if 'wall_time_s' in lower_data and 'iara_opt_time_s' not in compilation:
+                    compilation['iara_opt_time_s'] = lower_data['wall_time_s']
+            except ConfigError as e:
+                logger.warning(f"Failed to parse lower time file: {e}")
 
         # Use wall-clock build time as fallback or if timing files not available
         if total_time_s == 0.0:
@@ -592,9 +629,11 @@ def build_all_instances(
     instances: List[str],
     base_build_dir: Path,
     cmake_source: Path,
-    max_retries: int = 2,
+    max_retries: int = 1,
     app_type: str = 'experiment',
     codegen_timeout: int = 300,
+    build_timeout: int = 300,
+    cancellation_flag = None,
 ) -> BuildResults:
     """
     Build all instances sequentially with retry logic and error tracking.
@@ -647,14 +686,15 @@ def build_all_instances(
     for instance_name in instances:
         logger.info(f"Building instance: {instance_name}")
 
+        max_attempts = max_retries + 1
         attempt = 1
         result = None
         errors_list = []
         last_error = None
 
-        while attempt <= max_retries:
+        while attempt <= max_attempts:
             build_dir = base_build_dir / instance_name
-            logger.debug(f"Attempt {attempt}/{max_retries} for {instance_name}")
+            logger.debug(f"Attempt {attempt}/{max_attempts} for {instance_name}")
 
             result = build_instance(
                 instance_name=instance_name,
@@ -663,11 +703,17 @@ def build_all_instances(
                 attempt=attempt,
                 app_type=app_type,
                 codegen_timeout=codegen_timeout,
+                build_timeout=build_timeout,
             )
 
             if result.success:
                 logger.info(f"Successfully built {instance_name} on attempt {attempt}")
                 successful_instances.append(result)
+                # Check for cancellation after success
+                if cancellation_flag and cancellation_flag():
+                    logger.warning("Cancellation requested, stopping build loop")
+                    progress.update()
+                    break  # break inner retry loop; outer loop will also break
                 break
 
             # Build failed, capture error info
@@ -688,7 +734,7 @@ def build_all_instances(
 
             errors_list.append(error_info)
 
-            if attempt < max_retries:
+            if attempt < max_attempts:
                 delay = 2 ** (attempt - 1)  # Exponential backoff: 1s, 2s, 4s
                 logger.warning(
                     f"Instance {instance_name} attempt {attempt} failed, "
@@ -715,6 +761,11 @@ def build_all_instances(
             )
         # Continue processing next instance regardless
         progress.update()
+
+        # Check for cancellation after each instance
+        if cancellation_flag and cancellation_flag():
+            logger.warning("Cancellation requested, stopping build loop")
+            break
 
     logger.info(
         f"Build complete: {len(successful_instances)} successful, "

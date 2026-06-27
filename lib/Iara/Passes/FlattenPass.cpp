@@ -230,57 +230,18 @@ public:
   void fixDoubleEdge(EdgeOp edge, DenseSet<EdgeOp> &to_erase) {
     assert(edge.getResult().getNumUses() == 1);
     if (auto next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin())) {
-      // two consecutive edges
-      if (edge.getIn().getType() == edge.getOut().getType()) {
-        // Edge is single-rate. Can remove it.
+      auto edge_delay = edge->getAttr("delay");
+      auto next_edge_delay = next_edge->getAttr("delay");
+      if (edge_delay and next_edge_delay)
+        llvm_unreachable("Unimplemented: merge delays");
 
-        // First, check for delays.
-
-        auto edge_delay = edge->getAttr("delay");
-        auto next_edge_delay = next_edge->getAttr("delay");
-
-        if (edge_delay and next_edge_delay) {
-          llvm_unreachable("Unimplemented: merge delays");
-        } else if (edge_delay) {
-          // move attr to next edge since we're removing this one.
-          next_edge->setAttr("delay", edge_delay);
-          edge->removeAttr("delay");
-        } else {
-          //  next attr will keep its delay if it has one.
-        }
-
-        edge.getOut().replaceAllUsesWith(edge.getIn());
-        to_erase.insert(edge);
-
-        // Follow chain of double edges.
-        return fixDoubleEdge(next_edge, to_erase);
-      }
-      if (next_edge.getIn().getType() == next_edge.getOut().getType()) {
-        // Next edge is single-rate. Can remove it.
-
-        auto edge_delay = edge->getAttr("delay");
-        auto next_edge_delay = next_edge->getAttr("delay");
-
-        if (edge_delay and next_edge_delay) {
-          llvm_unreachable("Unimplemented: merge delays");
-        } else if (next_edge_delay) {
-          // move attr to next edge since we're removing this one.
-          edge->setAttr("delay", next_edge_delay);
-          next_edge->removeAttr("delay");
-        } else {
-          //  current edge will keep its delay if it has one.
-        }
-
-        next_edge.getOut().replaceAllUsesWith(edge.getOut());
-        to_erase.insert(next_edge);
-        if (auto next_next_edge = dyn_cast<EdgeOp>(*edge->getUsers().begin()))
-
-          // Follow chain of double edges.
-          return fixDoubleEdge(edge, to_erase);
-        return;
-      }
-      llvm_unreachable("Something is wrong; trying to stitch two consecutive "
-                       "multi-rate edges");
+      // Redirect next_edge's input to skip this edge:  A→B→C  →  A→C.
+      // Works uniformly for single-rate and multi-rate combinations.
+      if (edge_delay)
+        next_edge->setAttr("delay", edge_delay);
+      next_edge->setOperand(0, edge.getIn());
+      to_erase.insert(edge);
+      return fixDoubleEdge(next_edge, to_erase);
     }
   }
 

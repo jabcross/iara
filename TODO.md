@@ -1,3 +1,21 @@
+# Terminal Plot Renderer — 2026-06-11
+
+- [x] **Create `tools/terminal_plot/`** — terminal-based Vega-Lite plot renderer
+- [x] **Spec-driven**: `spec.md` written first, implementation follows spec
+- [x] **Vega-Lite → terminal**: bar, text, line marks; hconcat layout; colored series
+- [x] **Unicode block-drawing**: Block Elements, Box Drawing, Symbols for Legacy Computing sextants
+- [x] **ANSI truecolor**: 12-color deterministic palette per series
+- [x] **Data resolution**: file:// URLs, nested field access (dot notation), transform support
+- [x] **CLI**: standalone (`python -m tools.terminal_plot`) + integrated (`python -m tools.experiment_framework term-plot`)
+- [x] **Zero external dependencies**: Python stdlib only
+- [ ] P2: rect/heatmap mark support
+- [ ] P2: encoding.row/column facet support
+- [ ] P2: `concat` (vertical) layout
+- [ ] P3: --ascii fallback mode
+- [ ] P3: legend rendering improvements
+
+---
+
 # SACI Framework Refactoring
 
 ## Phase 1: Rename experiment_framework → saci
@@ -11,7 +29,7 @@
 
 ## Phase 2: Extract to independent repository
 
-- [ ] Create `iara-saci` repository (separate GitHub project)
+- [ ] Create `saci` repository (separate GitHub project)
 - [ ] Migrate `tools/saci/` as the root
 - [ ] Keep minimal IaRa-specific documentation
 - [ ] Add generic docs: "SACI: Scheduler-Agnostic Continuous Instrumentation framework"

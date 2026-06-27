@@ -4,6 +4,7 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
+#include "IaraRuntime/virtual-fifo/MockAllocator.h"
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
@@ -32,7 +33,11 @@ i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 // std::unordered_map<void *, int> allocated_ptrs;
 
 extern "C" void iara_runtime_alloc(i64 seq, VirtualFIFO_Chunk *chunk) {
+#ifdef IARA_MOCK_ALLOC
+  chunk->allocated = (i8 *)iara_mock_alloc(chunk->data_size);
+#else
   chunk->allocated = (i8 *)malloc(chunk->data_size);
+#endif
 }
 
 extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
@@ -43,7 +48,11 @@ extern "C" void iara_runtime_dealloc(i64 seq, VirtualFIFO_Chunk *chunk) {
     debugPrintThreadColor("freeing ptr %#016lx\n", (size_t)chunk->allocated);
 #endif
 
+#ifdef IARA_MOCK_ALLOC
+    iara_mock_free(chunk->allocated); // skip the shared mock region
+#else
     free(chunk->allocated);
+#endif
   }
 #ifdef IARA_DEBUGPRINT
   else {

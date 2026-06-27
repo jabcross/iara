@@ -975,6 +975,8 @@ def execute_instance_slurm(
     env_vars: Dict[str, str],
     measurements: List[Dict[str, Any]],
     nodelist: Optional[str] = None,
+    partition: Optional[str] = None,
+    cpus: int = 48,
     instance_name: str = None
 ) -> Dict[str, Any]:
     """Execute an instance via Slurm sbatch and collect measurements.
@@ -1012,6 +1014,8 @@ def execute_instance_slurm(
             job_name=f"{instance_name}_run{run_number}",
             output_dir=slurm_output_dir,
             nodelist=nodelist,
+            partition=partition,
+            cpus=cpus,
         )
 
         if result["success"]:
@@ -1074,6 +1078,9 @@ def collect_all_measurements(
     timeout: Optional[int] = None,
     slurm: bool = False,
     nodelist: Optional[str] = None,
+    partition: Optional[str] = None,
+    cpus: int = 48,
+    cancellation_flag = None,
 ) -> Dict[str, Any]:
     """
     Execute all successful instances and collect measurements.
@@ -1187,6 +1194,8 @@ def collect_all_measurements(
                     env_vars,
                     measurements,
                     nodelist=nodelist,
+                    partition=partition,
+                    cpus=cpus,
                     instance_name=instance_name
                 )
             else:
@@ -1211,6 +1220,11 @@ def collect_all_measurements(
             })
         finally:
             progress.update()
+
+        # Check for cancellation after each instance
+        if cancellation_flag and cancellation_flag():
+            logger.warning("Cancellation requested, stopping execution loop")
+            break
 
     # Return collection results
     return {

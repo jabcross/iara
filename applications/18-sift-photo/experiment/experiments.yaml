@@ -5,7 +5,7 @@ application:
   build:
     extra_linker_args: ["-lm"]
     main_actor: "Hextract"
-    defines: ["VERBOSE=1"]
+    defines: ["VERBOSE=1", "IARA_DATA_TRIGGERED_ALLOC"]
 
 parameters:
   - name: NUM_CORES
@@ -17,7 +17,7 @@ parameters:
     type: str
     label: "Scheduler"
     description: "IaRa runtime scheduler or Preesm baseline"
-    choices: ["vf-omp", "preesm"]
+    choices: ["vf-omp", "vf-enkits", "vf-sequential", "preesm"]
   - name: VIDEO_FRAMES
     type: int
     label: "Video frames"
@@ -40,14 +40,16 @@ experiment_sets:
       vf-omp: [vf-omp]
 
   - name: quick
-    description: "Edge cases only — min/max cores, both schedulers"
+    description: "Edge cases only — min/max cores, all schedulers"
     parameters:
       NUM_CORES: [1, 4, 20]
-      scheduler: [vf-omp, preesm]
+      scheduler: [vf-omp, vf-enkits, vf-sequential, preesm]
       VIDEO_FRAMES: [1]
     scheduler_override:
       preesm: [preesm]
       vf-omp: [vf-omp]
+      vf-enkits: [vf-enkits]
+      vf-sequential: [vf-sequential]
 
   - name: video
     description: "Video warm-up test — 1 core, vf-omp multi-frame pipeline loop"

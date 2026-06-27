@@ -3,6 +3,7 @@
 #include "IaraRuntime/virtual-fifo/StaticDataAccess.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
+#include "IaraRuntime/virtual-fifo/MockAllocator.h"
 #include "IaraRuntime/common/WorkStealingBackend.h"
 #include <cassert>
 #include <cstdio>
@@ -62,7 +63,11 @@ static VirtualFIFO_Chunk makeAllocChunkForFiring(VirtualFIFO_Edge *e, i64 seq) {
   g_block_cache.lazy_emplace_l(
       key, [&](auto &kv) { base = kv.second.base; },
       [&](auto ctor) {
+#ifdef IARA_MOCK_ALLOC
+        base = (i8 *)iara_mock_alloc(block_size);
+#else
         base = (i8 *)malloc(block_size);
+#endif
         created = true;
         ctor(key, BlockEntry{base, base_voff});
       });

@@ -35,6 +35,47 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
 
+# ---------------------------------------------------------------------------
+# Graceful cancellation support
+# ---------------------------------------------------------------------------
+import signal as _signal
+
+_cancellation_requested: bool = False
+_cancellation_signal: Optional[int] = None
+_partial_save_callback = None   # Set by pipeline phases to enable result-saving
+
+
+def _signal_handler(signum, frame):
+    global _cancellation_requested, _cancellation_signal
+    _cancellation_requested = True
+    _cancellation_signal = signum
+    logging.getLogger(__name__).warning(
+        "Received signal %d, initiating graceful shutdown...", signum
+    )
+
+
+def _cancel_orphaned_slurm_jobs():
+    """Cancel all tracked slurm jobs via slurm.cancel_all_jobs()."""
+    try:
+        from .slurm import cancel_all_jobs
+        cancel_all_jobs()
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "Failed to cancel orphaned slurm jobs: %s", e
+        )
+
+
+def _handle_cancellation():
+    """Save partial results and cancel orphaned slurm jobs on shutdown."""
+    logger = logging.getLogger(__name__)
+    logger.warning("Handling cancellation: cancelling slurm jobs, saving results...")
+    _cancel_orphaned_slurm_jobs()
+    if _partial_save_callback:
+        try:
+            _partial_save_callback()
+        except Exception as e:
+            logger.error("Partial save failed: %s", e)
+
 
 def setup_logging(
     verbose: int, quiet: bool, log_file: Optional[str], use_default_log: bool = True
@@ -176,7 +217,8 @@ def run_generate(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         return 2
 
 
-def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path, fail_fast: bool = False) -> int:
+def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
+              fail_fast: bool = False, build_timeout: Optional[int] = None) -> int:
     """
     Run Phase 2: Build all instances.
 
@@ -245,25 +287,31 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path, fail_fast:
     # Build all instances (always sequential — profiling requires exclusive CPU)
     app_type = config.get('application', {}).get('app_type', 'experiment')
     codegen_timeout = config.get('execution', {}).get('codegen_timeout', 300)
+    bt = build_timeout if build_timeout is not None else config.get('execution', {}).get('build_timeout', 300)
+    build_retries = config.get('execution', {}).get('build_retries', 1)
+    build_results = None
     try:
         build_results = build_all_instances(
             instances, build_dir, cmake_source,
+            max_retries=build_retries,
             app_type=app_type,
             codegen_timeout=codegen_timeout,
+            build_timeout=bt,
+            cancellation_flag=lambda: _cancellation_requested,
         )
     except Exception as e:
         print(f"ERROR: Build failed: {e}", file=sys.stderr)
         logger.error(f"Build error: {e}", exc_info=True)
         return 2
-
-    # Write build results
-    results_dir = app_dir / "results"
-    try:
-        write_build_results(build_results, results_dir, config, exp_set, app_dir)
-    except Exception as e:
-        print(f"ERROR: Failed to write build results: {e}", file=sys.stderr)
-        logger.error(f"Write error: {e}", exc_info=True)
-        return 2
+    finally:
+        # Always write partial results (even on cancellation)
+        if build_results is not None:
+            results_dir = app_dir / "results"
+            try:
+                write_build_results(build_results, results_dir, config, exp_set, app_dir)
+            except Exception as e:
+                print(f"ERROR: Failed to write build results: {e}", file=sys.stderr)
+                logger.error(f"Write error: {e}", exc_info=True)
 
     # Print summary
     total = len(build_results.successful_instances) + len(build_results.failed_instances)
@@ -279,8 +327,8 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path, fail_fast:
 
 
 def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
-               repetitions: Optional[int] = None, timeout: Optional[int] = None,
-               slurm: bool = False, nodelist: Optional[str] = None, fail_fast: bool = False) -> int:
+               repetitions: Optional[int] = None, exec_timeout: Optional[int] = None,
+               slurm: bool = False, nodelist: Optional[str] = None, partition: Optional[str] = None, cpus: int = 48, fail_fast: bool = False) -> int:
     """
     Run Phase 3: Execute instances and collect measurements.
 
@@ -293,6 +341,8 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         timeout: Override YAML timeout in seconds (optional)
         slurm: Submit executions to Slurm (optional)
         nodelist: Slurm nodelist (optional)
+        partition: Slurm partition (optional)
+        cpus: CPUs per task for Slurm (default 48)
         fail_fast: If True, stop pipeline on any failure (return 2 instead of 1)
 
     Returns:
@@ -360,48 +410,49 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         return 2
 
     # Execute all instances
+    collection_results = None
     try:
         collection_results = collect_all_measurements(
             build_results_dict, config,
             repetitions=repetitions,
-            timeout=timeout,
+            timeout=exec_timeout,
             slurm=slurm,
-            nodelist=nodelist
+            nodelist=nodelist,
+            partition=partition,
+            cpus=cpus,
+            cancellation_flag=lambda: _cancellation_requested,
         )
     except Exception as e:
         print(f"ERROR: Execution failed: {e}", file=sys.stderr)
         logger.error(f"Execution error: {e}", exc_info=True)
         return 2
+    finally:
+        # Always save partial execution results
+        if collection_results is not None:
+            for exec_result in collection_results.get('execution_results', []):
+                instance_name = exec_result['instance_name']
+                try:
+                    update_instance_execution(build_results_obj, instance_name, exec_result)
+                except ValueError as e:
+                    logger.warning(f"Could not update instance {instance_name}: {e}")
+            try:
+                write_build_results(build_results_obj, results_dir, config, exp_set, app_dir)
+            except Exception as e:
+                print(f"ERROR: Failed to write results: {e}", file=sys.stderr)
+                logger.error(f"Write error: {e}", exc_info=True)
+            if collection_results and 'summary' in collection_results:
+                summary = collection_results['summary']
+                print(f"  ✓ Executed {summary.get('executed', 0)} instances")
+                if summary.get('skipped', 0) > 0:
+                    print(f"  ⚠ Warning: Skipped {summary['skipped']} instance(s)", file=sys.stderr)
+                if summary.get('errors', 0) > 0:
+                    print(f"  ⚠ Warning: {summary['errors']} instance(s) had errors", file=sys.stderr)
 
-    # Update build results with execution data
-    updated_count = 0
-    for exec_result in collection_results['execution_results']:
-        instance_name = exec_result['instance_name']
-        try:
-            update_instance_execution(build_results_obj, instance_name, exec_result)
-            updated_count += 1
-        except ValueError as e:
-            logger.warning(f"Could not update instance {instance_name}: {e}")
-
-    # Write updated results
-    try:
-        write_build_results(build_results_obj, results_dir, config, exp_set, app_dir)
-    except Exception as e:
-        print(f"ERROR: Failed to write results: {e}", file=sys.stderr)
-        logger.error(f"Write error: {e}", exc_info=True)
+    if collection_results is None:
         return 2
 
-    # Print summary
-    summary = collection_results['summary']
-    print(f"  ✓ Executed {summary['executed']} instances")
-
-    if summary['skipped'] > 0:
-        print(f"  ⚠ Warning: Skipped {summary['skipped']} instance(s)", file=sys.stderr)
-        logger.warning(f"Skipped {summary['skipped']} instances")
-
-    if summary['errors'] > 0:
-        print(f"  ⚠ Warning: {summary['errors']} instance(s) had errors", file=sys.stderr)
-        logger.warning(f"{summary['errors']} instances had errors")
+    summary = collection_results.get('summary', {})
+    if summary.get('errors', 0) > 0:
         return 2 if fail_fast else 1
 
     return 0
@@ -506,6 +557,121 @@ def run_visualize(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         logger.warning(f"Jupyter not available: {e}")
     except Exception as e:
         logger.warning(f"Notebook execution failed: {e}")
+
+    return 0
+
+
+def run_terminal_plot(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
+                      results_json_path: Optional[Path] = None,
+                      width: Optional[int] = None,
+                      height: Optional[int] = None,
+                      color: bool = True) -> int:
+    """
+    Render Vega-Lite plots directly in the terminal.
+
+    Uses the same Vega-Lite JSON files generated by ``run_visualize``.
+    If they don't exist yet, generates them first.
+
+    Args:
+        app: Application name.
+        exp_set: Experiment set name.
+        app_dir: Application experiment directory.
+        yaml_path: Path to experiments.yaml.
+        results_json_path: Explicit results JSON path (defaults to latest).
+        width: Terminal width override.
+        height: Terminal height override.
+        color: If False, disable ANSI colors.
+
+    Returns:
+        0 on success, 2 on critical error.
+    """
+    logger = logging.getLogger(__name__)
+
+    from .visualizer import generate_vegalite_json
+    from .config import load_experiments_yaml
+
+    results_dir = app_dir / "results"
+
+    # Resolve results JSON path
+    if results_json_path is not None:
+        if not results_json_path.exists():
+            print(f"ERROR: Specified results file not found: {results_json_path}",
+                  file=sys.stderr)
+            return 2
+        results_json = results_json_path
+    else:
+        if not results_dir.exists():
+            print(f"ERROR: Results directory not found: {results_dir}", file=sys.stderr)
+            return 2
+        json_files = sorted(results_dir.glob("results_*.json"))
+        if not json_files:
+            print(f"ERROR: No results found in {results_dir}", file=sys.stderr)
+            return 2
+        results_json = json_files[-1]
+
+    logger.info(f"Using results file: {results_json}")
+
+    # Load configuration
+    try:
+        config = load_experiments_yaml(yaml_path)
+    except Exception as e:
+        print(f"ERROR: Failed to load configuration: {e}", file=sys.stderr)
+        return 2
+
+    # Merge failed_instances into instances so build-failed configurations
+    # appear as rows in charts (with failure info in execution.failures).
+    import json as _json
+    with open(results_json, 'r') as _f:
+        _results_data = _json.load(_f)
+    _failed = _results_data.get("failed_instances", [])
+    if _failed:
+        for _fi in _failed:
+            _fi.setdefault("execution", {})
+            _fi["execution"].setdefault("failed_runs", 1)
+            _fi["execution"].setdefault("successful_runs", 0)
+            _fi["execution"].setdefault("total_runs", 1)
+            _fi["execution"].setdefault("statistics", {})
+            _fi["execution"].setdefault("failures",
+                [e.get("message", "build failed") for e in _fi.get("errors", [])] or ["build failed"])
+            _results_data["instances"].append(_fi)
+        with open(results_json, 'w') as _f:
+            _json.dump(_results_data, _f, indent=2, sort_keys=True)
+        logger.info("Merged %d failed instance(s) into results", len(_failed))
+
+    # Generate fresh Vega-Lite JSON files (same pipeline as visualize)
+    try:
+        vl_files = generate_vegalite_json(config, results_json, results_dir)
+        logger.info("Generated %d plot(s)", len(vl_files))
+    except Exception as e:
+        print(f"ERROR: Vega-Lite generation failed: {e}", file=sys.stderr)
+        return 2
+
+    if not vl_files:
+        print("No plots to render.", file=sys.stderr)
+        return 0
+
+    # Render each plot
+    from tools.terminal_plot import render_file
+
+    first = True
+    for vl_file in vl_files:
+        if not first:
+            print()  # separator between plots
+        first = False
+
+        # Print filename stub so identically-titled facet plots
+        # are distinguishable (e.g. "wall_time [cpu-cores=1]").
+        stub = vl_file.stem.split("__")[-1] if "__" in vl_file.stem else ""
+        if stub:
+            print(f"  [{stub}]", file=sys.stderr)
+
+        try:
+            result = render_file(vl_file, width=width, height=height,
+                                 color=color)
+            print(result)
+        except Exception as e:
+            logger.warning(f"Failed to render {vl_file.name}: {e}")
+            print(f"  (skipped {vl_file.name}: {e})", file=sys.stderr)
 
     return 0
 
@@ -629,15 +795,21 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
             return rc
 
     if not args.skip_build:
-        rc = run_build(app, exp_set, app_dir, yaml_path, fail_fast=fail_fast)
+        build_timeout = getattr(args, 'build_timeout', None)
+        rc = run_build(app, exp_set, app_dir, yaml_path,
+                       fail_fast=fail_fast, build_timeout=build_timeout)
         if rc == 2:
             return 2
 
     if not args.skip_execute:
         slurm = getattr(args, 'slurm', False)
         nodelist = getattr(args, 'nodelist', None)
+        partition = getattr(args, 'partition', None)
+        cpus = getattr(args, 'cpus', 48)
+        exec_timeout = getattr(args, 'exec_timeout', None)
         rc = run_execute(app, exp_set, app_dir, yaml_path,
-                         slurm=slurm, nodelist=nodelist, fail_fast=fail_fast)
+                         slurm=slurm, nodelist=nodelist, partition=partition, cpus=cpus,
+                         exec_timeout=exec_timeout, fail_fast=fail_fast)
         if rc == 2:
             return 2
 
@@ -665,7 +837,7 @@ def _list_available_sets(yaml_path: Path) -> list:
         return []
 
 
-def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
+def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None, partition: Optional[str] = None, cpus: int = 48) -> int:
     """
     Submit the entire framework command to Slurm via sbatch.
 
@@ -675,6 +847,8 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
     Args:
         argv: Command-line arguments (sys.argv)
         nodelist: Optional Slurm nodelist (overrides SACI_SLURM_NODE_LIST env var)
+        partition: Optional Slurm partition
+        cpus: CPUs per task (default 48)
 
     Returns:
         Exit code from sbatch job
@@ -689,7 +863,11 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
     if not nodelist:
         nodelist = os.environ.get('SACI_SLURM_NODE_LIST')
 
-    # Reconstruct command without --slurm and --nodelist
+    # Use partition from arg, env var, or None
+    if not partition:
+        partition = os.environ.get('SACI_SLURM_PARTITION')
+
+    # Reconstruct command without --slurm, --nodelist, --partition, --cpus
     # sys.argv[0] is the __main__.py path (or -c when testing), not 'python3',
     # so reconstruct as python3 -m tools.experiment_framework ...
     # NOTE: python3 resolves to the venv python because sorgan_env.sh sources the venv
@@ -706,6 +884,12 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
         if arg == "--nodelist":
             skip_next = True
             continue
+        if arg == "--partition":
+            skip_next = True
+            continue
+        if arg == "--cpus":
+            skip_next = True
+            continue
         cmd_argv.append(arg)
 
     # Get IARA_DIR now (in Python) before building sbatch script
@@ -713,15 +897,16 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None) -> int:
 
     # Build sbatch script with proper shell quoting
     cmd_str = ' '.join(shlex.quote(arg) for arg in cmd_argv)
+    partition_line = f"#SBATCH --partition={partition}\n" if partition else ""
     script = f'''#!/bin/bash
 #SBATCH --job-name=iara-framework
 #SBATCH --output=iara-slurm-%j.out
 #SBATCH --error=iara-slurm-%j.err
 #SBATCH --time=48:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task={cpus}
 #SBATCH --exclusive
-
+{partition_line}
 set -e
 
 # Restore IaRa environment on compute node
@@ -835,6 +1020,21 @@ def main() -> int:
         help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
     )
 
+    parser.add_argument(
+        "--partition",
+        type=str,
+        metavar="PARTITION",
+        help="Slurm partition to submit to (e.g. big-mem). Requires --slurm.",
+    )
+
+    parser.add_argument(
+        "--cpus",
+        type=int,
+        default=48,
+        metavar="N",
+        help="CPUs per Slurm task (default 48). Requires --slurm.",
+    )
+
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -933,6 +1133,14 @@ def main() -> int:
         help="Filter instances by scheduler name (e.g. vf-sequential, vf-omp, preesm)",
     )
 
+    build_parser.add_argument(
+        "--build-timeout",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help="Per-instance build timeout in seconds (default: from YAML or 300)",
+    )
+
     # ============================================================================
     # execute command
     # ============================================================================
@@ -972,10 +1180,11 @@ def main() -> int:
     )
 
     execute_parser.add_argument(
-        "--timeout",
+        "--exec-timeout", "--timeout",
         type=int,
+        default=None,
         metavar="SECONDS",
-        help="Execution timeout in seconds (default: from YAML)",
+        help="Per-instance execution timeout in seconds (default: from YAML or 300)",
     )
 
     execute_parser.add_argument(
@@ -989,6 +1198,21 @@ def main() -> int:
         type=str,
         metavar="NODES",
         help="Slurm node(s) to use (e.g. sorgan-cpu2). Requires --slurm.",
+    )
+
+    execute_parser.add_argument(
+        "--partition",
+        type=str,
+        metavar="PARTITION",
+        help="Slurm partition to submit to (e.g. big-mem). Requires --slurm.",
+    )
+
+    execute_parser.add_argument(
+        "--cpus",
+        type=int,
+        default=48,
+        metavar="N",
+        help="CPUs per Slurm task (default 48). Requires --slurm.",
     )
 
     # ============================================================================
@@ -1027,6 +1251,64 @@ def main() -> int:
         type=str,
         metavar="PATH",
         help="Path to results JSON file (default: latest in results/)",
+    )
+
+    # ============================================================================
+    # terminal-plot command
+    # ============================================================================
+    termplot_parser = subparsers.add_parser(
+        "term-plot",
+        help="Render Vega-Lite plots directly in the terminal",
+    )
+
+    termplot_parser.add_argument(
+        "--app",
+        type=str,
+        nargs="?",
+        metavar="NAME",
+        help="Application name (e.g., '05-cholesky')",
+    )
+
+    termplot_parser.add_argument(
+        "--set",
+        type=str,
+        nargs="?",
+        metavar="NAME",
+        help="Experiment set name (e.g., 'regression')",
+    )
+
+    termplot_parser.add_argument(
+        "--app_type",
+        type=str,
+        metavar="TYPE",
+        help="Run for all apps of this type (e.g., 'regression_test', 'experiment')",
+    )
+
+    termplot_parser.add_argument(
+        "--results",
+        type=str,
+        metavar="PATH",
+        help="Path to results JSON file (default: latest in results/)",
+    )
+
+    termplot_parser.add_argument(
+        "--width",
+        type=int,
+        metavar="COLS",
+        help="Canvas width in characters (default: terminal width)",
+    )
+
+    termplot_parser.add_argument(
+        "--height",
+        type=int,
+        metavar="ROWS",
+        help="Canvas height in rows (default: terminal height - 2)",
+    )
+
+    termplot_parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable ANSI color output",
     )
 
     # ============================================================================
@@ -1116,6 +1398,22 @@ def main() -> int:
         help="Stop pipeline on first failed stage (any instance failure halts further processing)",
     )
 
+    run_parser.add_argument(
+        "--build-timeout",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help="Per-instance build timeout in seconds (default: from YAML or 300)",
+    )
+
+    run_parser.add_argument(
+        "--exec-timeout", "--timeout",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help="Per-instance execution timeout in seconds (default: from YAML or 300)",
+    )
+
     # Register completers and activate argcomplete (no-op if not installed)
     if _ARGCOMPLETE:
         def _app_completer(prefix, **kw):
@@ -1128,7 +1426,7 @@ def main() -> int:
             return _list_available_sets(
                 Path("applications") / app / "experiment" / "experiments.yaml")
 
-        for _sp in [generate_parser, build_parser, execute_parser, visualize_parser, run_parser, clean_parser]:
+        for _sp in [generate_parser, build_parser, execute_parser, visualize_parser, termplot_parser, run_parser, clean_parser]:
             for _action in _sp._actions:
                 if _action.dest == 'app':
                     _action.completer = _app_completer
@@ -1149,6 +1447,10 @@ def main() -> int:
     # Notify user about log file location
     if log_file_path != Path("/dev/null"):
         print(f"Log file: {log_file_path}", file=sys.stderr)
+
+    # Install graceful-shutdown handlers
+    _signal.signal(_signal.SIGTERM, _signal_handler)
+    _signal.signal(_signal.SIGINT, _signal_handler)
 
     # Handle no command
     if args.command is None:
@@ -1206,7 +1508,7 @@ def main() -> int:
     # ============================================================================
     if getattr(args, 'slurm', False):
         logger.info("Submitting command to Slurm")
-        return _submit_command_to_slurm(sys.argv, nodelist=getattr(args, 'nodelist', None))
+        return _submit_command_to_slurm(sys.argv, nodelist=getattr(args, 'nodelist', None), partition=getattr(args, 'partition', None), cpus=getattr(args, 'cpus', 48))
 
     # ============================================================================
     # generate command
@@ -1254,7 +1556,9 @@ def main() -> int:
             results = []
             for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
                 print(f"\n=== {app_name} / {set_name} ===")
-                rc = run_build(app_name, set_name, exp_dir, yaml_path)
+                build_timeout = getattr(args, 'build_timeout', None)
+                rc = run_build(app_name, set_name, exp_dir, yaml_path,
+                               build_timeout=build_timeout)
                 results.append((app_name, set_name, rc))
             return _batch_summary(results)
 
@@ -1274,7 +1578,9 @@ def main() -> int:
                               scheduler_override=scheduler)
             if rc != 0:
                 return rc
-        return run_build(args.app, args.set, app_dir, yaml_path)
+        build_timeout = getattr(args, 'build_timeout', None)
+        return run_build(args.app, args.set, app_dir, yaml_path,
+                         build_timeout=build_timeout)
 
     # ============================================================================
     # execute command
@@ -1286,9 +1592,11 @@ def main() -> int:
                 print(f"\n=== {app_name} / {set_name} ===")
                 rc = run_execute(app_name, set_name, exp_dir, yaml_path,
                                  repetitions=getattr(args, 'repetitions', None),
-                                 timeout=getattr(args, 'timeout', None),
+                                 exec_timeout=getattr(args, 'exec_timeout', None),
                                  slurm=getattr(args, 'slurm', False),
-                                 nodelist=getattr(args, 'nodelist', None))
+                                 nodelist=getattr(args, 'nodelist', None),
+                                 partition=getattr(args, 'partition', None),
+                                 cpus=getattr(args, 'cpus', 48))
                 results.append((app_name, set_name, rc))
             return _batch_summary(results)
 
@@ -1297,9 +1605,11 @@ def main() -> int:
         yaml_path = app_dir / "experiments.yaml"
         return run_execute(args.app, args.set, app_dir, yaml_path,
                            repetitions=getattr(args, 'repetitions', None),
-                           timeout=getattr(args, 'timeout', None),
+                           exec_timeout=getattr(args, 'exec_timeout', None),
                            slurm=getattr(args, 'slurm', False),
-                           nodelist=getattr(args, 'nodelist', None))
+                           nodelist=getattr(args, 'nodelist', None),
+                           partition=getattr(args, 'partition', None),
+                           cpus=getattr(args, 'cpus', 48))
 
     # ============================================================================
     # visualize command
@@ -1318,6 +1628,30 @@ def main() -> int:
         yaml_path = app_dir / "experiments.yaml"
         results_path = Path(args.results) if getattr(args, 'results', None) else None
         return run_visualize(args.app, args.set, app_dir, yaml_path, results_json_path=results_path)
+
+    # ============================================================================
+    # term-plot command
+    # ============================================================================
+    if args.command == "term-plot":
+        if getattr(args, 'app_type', None):
+            results = []
+            for app_name, set_name, exp_dir, yaml_path in _iter_app_sets(args.app_type, args.set):
+                print(f"\n=== {app_name} / {set_name} ===")
+                rc = run_terminal_plot(app_name, set_name, exp_dir, yaml_path,
+                                       width=getattr(args, 'width', None),
+                                       height=getattr(args, 'height', None),
+                                       color=not getattr(args, 'no_color', False))
+                results.append((app_name, set_name, rc))
+            return _batch_summary(results)
+
+        app_dir = Path("applications").resolve() / args.app / "experiment"
+        yaml_path = app_dir / "experiments.yaml"
+        results_path = Path(args.results) if getattr(args, 'results', None) else None
+        return run_terminal_plot(args.app, args.set, app_dir, yaml_path,
+                                 results_json_path=results_path,
+                                 width=getattr(args, 'width', None),
+                                 height=getattr(args, 'height', None),
+                                 color=not getattr(args, 'no_color', False))
 
     # ============================================================================
     # run command (orchestrator)
@@ -1377,6 +1711,7 @@ def main() -> int:
 
     logger.warning(f"Command '{args.command}' handler not yet implemented")
     return 0
+
 
 
 if __name__ == "__main__":

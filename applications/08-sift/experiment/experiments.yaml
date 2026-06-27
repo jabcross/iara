@@ -76,8 +76,15 @@ experiment_sets:
       NUM_CORES: [1, 2, 4, 5, 10]
       scheduler: [vf-omp, preesm]
 
+  - name: vf-scaling
+    description: "Table 1 reproduction: 1/2/4/5/10 cores, IaRa vf-omp vs Preesm"
+    parameters:
+      NUM_CORES: [1, 2, 4, 5, 10, 20]
+      scheduler: [vf-omp]
+
 # Execution configuration
 execution:
+  build_retries: 0
   repetitions: 3
   warmup: 1
   timeout: 120

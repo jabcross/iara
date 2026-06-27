@@ -130,13 +130,17 @@ LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(NodeOp broadcast) {
     for (auto offset = 0; offset < num_copies; offset++) {
       Value dst = argument;
       if (offset > 0) {
+        auto byte_offset = offset * getTypeSize(input);
+        auto offset_val = impl_builder.create<LLVM::ConstantOp>(
+            impl->getLoc(), impl_builder.getI64Type(),
+            impl_builder.getI64IntegerAttr(byte_offset));
         dst = CREATE(LLVM::GEPOp,
                      impl_builder,
                      impl->getLoc(),
                      opaque_ptr,
                      impl_builder.getI8Type(),
                      dst,
-                     {offset * getTypeSize(input)});
+                     ValueRange{offset_val});
       }
       CREATE(LLVM::MemcpyOp,
              impl_builder,

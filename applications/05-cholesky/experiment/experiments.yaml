@@ -186,6 +186,14 @@ experiment_sets:
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
+  # Matrix/block scaling — powers of 2, vf-omp vs omp-task
+  - name: matrix_scaling
+    description: "Matrix size 2^11..2^15 × blocks 2^0..2^5, vf-omp vs omp-task"
+    parameters:
+      MATRIX_SIZE: [2048, 4096, 8192, 16384, 32768]
+      NUM_BLOCKS: [1, 2, 4, 8, 16, 32]
+      scheduler: [vf-omp, omp-task]
+
   # Non-uniform block test - all vf schedulers with non-uniform sizes
   - name: nonuniform_vf
     description: "Non-uniform block sizes (MATRIX_SIZE % NUM_BLOCKS != 0) for all IaRa schedulers"

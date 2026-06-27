@@ -17,6 +17,30 @@ from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
+# Global tracking of active slurm jobs, so cancellation handlers can scancel them.
+_active_jobs: set = set()
+
+
+def register_active_job(job_id: int):
+    """Track a slurm job so it can be cancelled on shutdown."""
+    _active_jobs.add(job_id)
+
+
+def unregister_active_job(job_id: int):
+    """Remove a completed/cancelled job from tracking."""
+    _active_jobs.discard(job_id)
+
+
+def cancel_all_jobs():
+    """Cancel all tracked slurm jobs (called on graceful shutdown)."""
+    for job_id in list(_active_jobs):
+        try:
+            subprocess.run(['scancel', str(job_id)], capture_output=True, timeout=10)
+            logger.info("Cancelled slurm job %d", job_id)
+        except Exception as e:
+            logger.warning("Failed to cancel slurm job %d: %s", job_id, e)
+        _active_jobs.discard(job_id)
+
 
 def check_slurm_available() -> bool:
     """Return True if sbatch/squeue/scancel are available."""
@@ -32,6 +56,8 @@ def _make_batch_script(
     timeout: int,
     job_name: str,
     output_dir: Path,
+    partition: Optional[str] = None,
+    cpus: int = 48,
 ) -> str:
     """Generate a self-contained sbatch script.
 
@@ -45,15 +71,17 @@ def _make_batch_script(
 
     env_exports = '\n'.join(f'export {k}="{v}"' for k, v in env_vars.items())
 
+    partition_line = f"#SBATCH --partition={partition}\n" if partition else ""
+
     script = f'''#!/bin/bash
 #SBATCH --job-name={job_name}
 #SBATCH --output={output_dir}/{job_name}.out
 #SBATCH --error={output_dir}/{job_name}.err
 #SBATCH --time={timeout // 60}:{timeout % 60:02d}
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task={cpus}
 #SBATCH --exclusive
-
+{partition_line}
 set -e
 
 # Restore the IaRa environment on the compute node
@@ -73,6 +101,8 @@ def submit_job(
     job_name: str,
     output_dir: Path,
     nodelist: Optional[str] = None,
+    partition: Optional[str] = None,
+    cpus: int = 48,
 ) -> Dict[str, Any]:
     """Submit a single test instance to Slurm and wait for completion.
 
@@ -95,7 +125,7 @@ def submit_job(
         }
 
     script = _make_batch_script(executable, env_vars, timeout,
-                                 job_name, output_dir)
+                                 job_name, output_dir, partition, cpus)
 
     with tempfile.NamedTemporaryFile(
         mode='w', suffix='.sh', delete=False, prefix=f'sbatch_{job_name}_'
@@ -123,6 +153,7 @@ def submit_job(
             }
 
         job_id = int(result.stdout.strip())
+        register_active_job(job_id)
         logger.info(f'Submitted job {job_id} ({job_name})')
 
         # Query which node the job was assigned to
@@ -200,3 +231,8 @@ def submit_job(
 
     finally:
         Path(script_path).unlink(missing_ok=True)
+        try:
+            if job_id:
+                unregister_active_job(job_id)
+        except NameError:
+            pass

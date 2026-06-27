@@ -1,4 +1,6 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Chunk.h"
+#include "IaraRuntime/virtual-fifo/MockAllocator.h"
+#include <cstdlib>
 
 VirtualFIFO_Chunk VirtualFIFO_Chunk::take_front(i64 amount) {
   assert(data_size >= amount);
@@ -23,7 +25,11 @@ VirtualFIFO_Chunk VirtualFIFO_Chunk::take_back(i64 amount) {
 
 VirtualFIFO_Chunk VirtualFIFO_Chunk::allocate(i64 size, i64 virtual_offset) {
   // static int x = 1;
+#ifdef IARA_MOCK_ALLOC
+  auto allocated = (i8 *)iara_mock_alloc(size);
+#else
   auto allocated = (i8 *)malloc(size);
+#endif
   // #ifndef IARA_COMPILER
   //     allocated_ptrs[allocated] = x++;
   //     fprintf(stderr, "allocating ptr %d\n", x - 1);
