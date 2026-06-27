@@ -74,5 +74,9 @@ manual-builds/
 *.llvm.mlir
 *.llvm.mlir.2
 
+# EmbedSidecarStrategy output leaking to repo root
+static_data.bin
+static_data.c
+
 # Misc
 preesm_run_large.log
