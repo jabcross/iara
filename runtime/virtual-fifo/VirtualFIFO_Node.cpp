@@ -257,7 +257,11 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
     debugPrintThreadColor("fire(): HOLD %ld of node[%lu] kid=%u (limit %ld)\n",
                           seq, (size_t)this, (unsigned)codegen_info.kernel_id, limit);
 #endif
+#ifdef IARA_RING_SEMAPHORE
+    runtime_info.sema_variant.normal->semaphore.release(seq);
+#else
     free(args.data());
+#endif
     return;
   }
   auto _this = this;
@@ -289,7 +293,11 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       out->push(out_chunk);
     }
 
+#ifdef IARA_RING_SEMAPHORE
+    _this->runtime_info.sema_variant.normal->semaphore.release(seq);
+#else
     free(args.data());
+#endif
   });
   return;
 #else
@@ -310,7 +318,11 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
 #endif
+#ifdef IARA_RING_SEMAPHORE
+    _this->runtime_info.sema_variant.normal->semaphore.release(seq);
+#else
     free(args.data());
+#endif
   });
 #endif // IARA_DATA_TRIGGERED_ALLOC
 }
@@ -363,14 +375,28 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
       firing, 1, runtime_info.total_iter_firings, f, e, l);
 
   auto _this = this;
-  if (may_alloc)
+  if (may_alloc) {
     iara_submit_task([_this, firing]() { _this->fireAlloc(firing); });
+#ifdef IARA_RING_SEMAPHORE
+    // The alloc slot guards only a counter (empty Data); fireAlloc reads no
+    // slot state, so the slot may be recycled immediately on completion.
+    runtime_info.sema_variant.alloc->semaphore.release(firing);
+#endif
+  }
 }
 
 void VirtualFIFO_Node::init() {
   if (runtime_info.isAlloc()) {
     runtime_info.sema_variant.alloc = new VirtualFIFO_AllocSemaphore{};
+#ifdef IARA_RING_SEMAPHORE
+    runtime_info.sema_variant.alloc->semaphore.reserve(
+        runtime_info.total_iter_firings);
+#endif
   } else {
     runtime_info.sema_variant.normal = new VirtualFIFO_NormalSemaphore{};
+#ifdef IARA_RING_SEMAPHORE
+    runtime_info.sema_variant.normal->semaphore.reserve(
+        runtime_info.total_iter_firings);
+#endif
   }
 }

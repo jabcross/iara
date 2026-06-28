@@ -3,9 +3,12 @@
 
 #include "Iara/Util/CommonTypes.h"
 #include "IaraRuntime/virtual-fifo/MutexHashMap.h"
+#include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <gtl/phmap.hpp>
 #include <iostream>
+#include <memory>
 
 namespace keyed_semaphore {
 
@@ -152,6 +155,197 @@ struct KeyedSemaphore {
     if (erase) {
       map.erase(key);
     }
+  }
+};
+
+// ===========================================================================
+// Ring variant (opt-in: -DIARA_RING_SEMAPHORE)
+// ===========================================================================
+//
+// Same surface as KeyedSemaphore: identical `arrive(...)` signature and the
+// same first/every/last templated callbacks. The map is replaced by a
+// direct-mapped ring of `W` slots indexed by `key & (W-1)`, so a firing's
+// arrivals coordinate through one lock-free, cache-local slot — no hashing,
+// no submap lock, no insert/erase.
+//
+// Counting is accumulate-UP (`fetch_add`): the arrival that pushes the
+// accumulated resources across `total_resources` is the completer. The first
+// arrival to a free slot CASes `owner_key` from -1 and runs `first_time_func`;
+// it publishes `ready` so later arrivals to the same key may run
+// `every_time_func`/`last_time_func`.
+//
+// Slot lifetime extends to KERNEL completion, not gather completion: `arrive`
+// never frees the slot. The caller invokes `release(key)` from `fire()` after
+// the kernel has run, so the slot's inline `Data` (e.g. the kernel arg array)
+// stays valid for the async kernel task. `W` therefore bounds the number of
+// firings live *including execution* — the same antichain the allocator uses.
+//
+// Correctness is independent of `W`: if `key & (W-1)` is still owned by a
+// different live key (W underestimate, or num_args wrap), the firing falls
+// back to an overflow hash map with the same accumulate/complete semantics.
+// `cleanup_func` frees any heap a slot's Data acquired (e.g. num_args > K).
+
+inline void keyed_semaphore_pause() {
+#if defined(__x86_64__) || defined(__i386__)
+  __builtin_ia32_pause();
+#elif defined(__aarch64__)
+  asm volatile("yield" ::: "memory");
+#endif
+}
+
+template <template <class Key, class Value> class HashMap,
+          class Data,
+          class FirstArgs,
+          class EveryTimeArgs,
+          class LastArgs,
+          void first_time_func(FirstArgs &, Data &),
+          void every_time_func(EveryTimeArgs &, Data &),
+          void last_time_func(LastArgs &, Data &),
+          void cleanup_func(Data &)>
+struct KeyedSemaphoreRing {
+
+  static constexpr i64 kDefaultCapacity = 1024;
+
+  struct Slot {
+    std::atomic<i64> owner_key{-1};
+    std::atomic<i64> arrived{0};
+    std::atomic<uint8_t> ready{0};
+    Data data{};
+  };
+
+  // Overflow path: a still-live key collided on its ring slot. Behaves like the
+  // map variant but defers erase to release(key) so inline Data outlives fire().
+  struct OverflowEntry {
+    i64 remaining_resources;
+    Data data;
+  };
+
+  std::unique_ptr<Slot[]> ring;
+  i64 mask = 0; // W - 1, W a power of two
+  HashMap<i64, OverflowEntry> overflow{};
+
+  static i64 next_pow2(i64 n) {
+    i64 w = 1;
+    while (w < n)
+      w <<= 1;
+    return w;
+  }
+
+  // Size the ring. `hint` = an upper bound on concurrently-live firings of this
+  // node (e.g. total_iter_firings). Safe to call once before any arrive(); if
+  // skipped the ring lazy-sizes to kDefaultCapacity on first arrive().
+  void reserve(i64 hint) {
+    if (ring)
+      return;
+    i64 w = next_pow2(std::min<i64>(std::max<i64>(hint, 1), kDefaultCapacity));
+    ring = std::make_unique<Slot[]>(w);
+    mask = w - 1;
+  }
+
+  void arrive(i64 key,
+              i64 this_resources,
+              i64 total_resources,
+              FirstArgs &first_args,
+              EveryTimeArgs &every_time_args,
+              LastArgs &last_args) {
+
+    assert(total_resources >= this_resources &&
+           "Asking for more resources than total");
+
+    if (!ring)
+      reserve(kDefaultCapacity);
+
+    Slot &slot = ring[key & mask];
+
+    // Claim the slot for this key, or recognise an in-progress same-key arrival,
+    // or detect a collision with a different live key (-> overflow).
+    i64 expected = -1;
+    bool claimed = slot.owner_key.compare_exchange_strong(
+        expected, key, std::memory_order_acq_rel, std::memory_order_acquire);
+
+    if (claimed) {
+      // First to arrive: build Data, then publish it.
+      first_time_func(first_args, slot.data);
+      slot.ready.store(1, std::memory_order_release);
+    } else if (expected == key) {
+      // Same firing, but first_time_func may still be running: wait for publish.
+      while (slot.ready.load(std::memory_order_acquire) == 0)
+        keyed_semaphore_pause();
+    } else {
+      // Slot busy with a different live firing -> overflow map.
+      arriveOverflow(key, this_resources, total_resources, first_args,
+                     every_time_args, last_args);
+      return;
+    }
+
+    // Write our contribution to Data FIRST, then publish it via fetch_add. The
+    // acq_rel RMW release-sequence makes every producer's every_time_func write
+    // visible to whichever arrival becomes the completer (its acquire), so
+    // last_time_func sees a fully-populated arg array without a lock. (Doing
+    // every_time_func after fetch_add would let the completer read stale args.)
+    every_time_func(every_time_args, slot.data);
+    i64 prev = slot.arrived.fetch_add(this_resources, std::memory_order_acq_rel);
+    assert(prev + this_resources <= total_resources &&
+           "Asking for more resources than available");
+    if (prev + this_resources == total_resources)
+      last_time_func(last_args, slot.data); // sets may_fire + args span
+  }
+
+  // Free the slot after the kernel has consumed its Data. Called from fire().
+  void release(i64 key) {
+    Slot &slot = ring[key & mask];
+    if (slot.owner_key.load(std::memory_order_acquire) == key) {
+      cleanup_func(slot.data);
+      slot.data = Data{};
+      slot.arrived.store(0, std::memory_order_relaxed);
+      slot.ready.store(0, std::memory_order_relaxed);
+      slot.owner_key.store(-1, std::memory_order_release);
+      return;
+    }
+    releaseOverflow(key);
+  }
+
+private:
+  // Same accumulate-down semantics as the map variant, but erase is deferred to
+  // releaseOverflow() so inline Data outlives the async kernel task.
+  void arriveOverflow(i64 key,
+                      i64 this_resources,
+                      i64 total_resources,
+                      FirstArgs &first_args,
+                      EveryTimeArgs &every_time_args,
+                      LastArgs &last_args) {
+    overflow.lazy_emplace_l(
+        key,
+        [&](typename decltype(overflow)::value_type &iter) {
+          auto &e = iter.second;
+          e.remaining_resources -= this_resources;
+          assert(e.remaining_resources >= 0 && "Over-arrival on overflow entry");
+          every_time_func(every_time_args, e.data);
+          if (e.remaining_resources == 0)
+            last_time_func(last_args, e.data);
+        },
+        [&](typename decltype(overflow)::constructor &&ctor) {
+          OverflowEntry e{.remaining_resources =
+                              total_resources - this_resources,
+                          .data = {}};
+          first_time_func(first_args, e.data);
+          every_time_func(every_time_args, e.data);
+          if (e.remaining_resources == 0)
+            last_time_func(last_args, e.data);
+          ctor(key, std::move(e));
+        });
+  }
+
+  void releaseOverflow(i64 key) {
+    // Run cleanup on the live entry (no-op constructor: never insert at
+    // release), then erase. Rare path -> double lock is acceptable.
+    overflow.lazy_emplace_l(
+        key,
+        [&](typename decltype(overflow)::value_type &iter) {
+          cleanup_func(iter.second.data);
+        },
+        [&](typename decltype(overflow)::constructor &&) {});
+    overflow.erase(key);
   }
 };
 
