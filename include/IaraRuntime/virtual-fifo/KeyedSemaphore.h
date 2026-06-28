@@ -201,7 +201,15 @@ template <template <class Key, class Value> class HashMap,
           void first_time_func(FirstArgs &, Data &),
           void every_time_func(EveryTimeArgs &, Data &),
           void last_time_func(LastArgs &, Data &),
-          void cleanup_func(Data &)>
+          void cleanup_func(Data &),
+          // When true, the slot frees itself at the completer (all resources
+          // counted) instead of waiting for an explicit release(key). Use for
+          // counters whose Data the firing does NOT read after completion (e.g.
+          // the alloc semaphore, which fires on the FIRST arrival via
+          // first_time_func and only counts to know when the entry is done).
+          // Leaving the slot owned past completion would let the next same-key
+          // dependent re-claim it and re-run first_time_func -> double-fire.
+          bool AutoRelease = false>
 struct KeyedSemaphoreRing {
 
   static constexpr i64 kDefaultCapacity = 1024;
@@ -287,25 +295,33 @@ struct KeyedSemaphoreRing {
     i64 prev = slot.arrived.fetch_add(this_resources, std::memory_order_acq_rel);
     assert(prev + this_resources <= total_resources &&
            "Asking for more resources than available");
-    if (prev + this_resources == total_resources)
+    if (prev + this_resources == total_resources) {
       last_time_func(last_args, slot.data); // sets may_fire + args span
+      if constexpr (AutoRelease)
+        freeSlot(slot);
+    }
   }
 
   // Free the slot after the kernel has consumed its Data. Called from fire().
+  // (Not used when AutoRelease is set — the slot frees itself at the completer.)
   void release(i64 key) {
     Slot &slot = ring[key & mask];
     if (slot.owner_key.load(std::memory_order_acquire) == key) {
-      cleanup_func(slot.data);
-      slot.data = Data{};
-      slot.arrived.store(0, std::memory_order_relaxed);
-      slot.ready.store(0, std::memory_order_relaxed);
-      slot.owner_key.store(-1, std::memory_order_release);
+      freeSlot(slot);
       return;
     }
     releaseOverflow(key);
   }
 
 private:
+  void freeSlot(Slot &slot) {
+    cleanup_func(slot.data);
+    slot.data = Data{};
+    slot.arrived.store(0, std::memory_order_relaxed);
+    slot.ready.store(0, std::memory_order_relaxed);
+    slot.owner_key.store(-1, std::memory_order_release);
+  }
+
   // Same accumulate-down semantics as the map variant, but erase is deferred to
   // releaseOverflow() so inline Data outlives the async kernel task.
   void arriveOverflow(i64 key,
@@ -314,6 +330,7 @@ private:
                       FirstArgs &first_args,
                       EveryTimeArgs &every_time_args,
                       LastArgs &last_args) {
+    bool completed = false;
     overflow.lazy_emplace_l(
         key,
         [&](typename decltype(overflow)::value_type &iter) {
@@ -321,8 +338,10 @@ private:
           e.remaining_resources -= this_resources;
           assert(e.remaining_resources >= 0 && "Over-arrival on overflow entry");
           every_time_func(every_time_args, e.data);
-          if (e.remaining_resources == 0)
+          if (e.remaining_resources == 0) {
             last_time_func(last_args, e.data);
+            completed = true;
+          }
         },
         [&](typename decltype(overflow)::constructor &&ctor) {
           OverflowEntry e{.remaining_resources =
@@ -330,10 +349,15 @@ private:
                           .data = {}};
           first_time_func(first_args, e.data);
           every_time_func(every_time_args, e.data);
-          if (e.remaining_resources == 0)
+          if (e.remaining_resources == 0) {
             last_time_func(last_args, e.data);
+            completed = true;
+          }
           ctor(key, std::move(e));
         });
+    if constexpr (AutoRelease)
+      if (completed)
+        releaseOverflow(key);
   }
 
   void releaseOverflow(i64 key) {

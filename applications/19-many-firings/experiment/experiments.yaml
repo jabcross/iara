@@ -1,0 +1,49 @@
+application:
+  name: 19-many-firings
+  description: "High firing count — ring semaphore W-cap wrap + overflow + large single-firing gather"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "19-many-firings-{scheduler}"
+  description: "Many-firings test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "Tests with all schedulers"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

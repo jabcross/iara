@@ -164,20 +164,13 @@ struct VirtualFIFO_AllocSemaphore {
 
   static void last_time_func(LastArgs &l_args, EntryData &kernel_args) {};
 
-#ifdef IARA_RING_SEMAPHORE
-  static void cleanup_func(EntryData &kernel_args) {};
-
-  using Semaphore = keyed_semaphore::KeyedSemaphoreRing<
-      keyed_semaphore::ParallelHashMap,
-      EntryData,
-      FirstArgs,
-      EveryTimeArgs,
-      LastArgs,
-      first_time_func,
-      every_time_func,
-      last_time_func,
-      cleanup_func>;
-#else
+  // The alloc semaphore always uses the map variant, even under
+  // IARA_RING_SEMAPHORE. The ring is keyed/sized by a node's firing count, but
+  // an alloc node's total_iter_firings is its DEPENDENT count (how many
+  // consumers share each buffer), unrelated to how many distinct buffers it
+  // allocs — so it cannot size a ring. The alloc path is also not the hot
+  // per-firing gather the ring targets. Only VirtualFIFO_NormalSemaphore (whose
+  // total_iter_firings IS its firing count) uses the ring.
   using Semaphore =
       keyed_semaphore::KeyedSemaphore<keyed_semaphore::ParallelHashMap,
                                       EntryData,
@@ -187,7 +180,6 @@ struct VirtualFIFO_AllocSemaphore {
                                       first_time_func,
                                       every_time_func,
                                       last_time_func>;
-#endif
 
   Semaphore semaphore;
 };

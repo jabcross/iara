@@ -1,0 +1,54 @@
+application:
+  name: 20-wide-gather
+  description: "Wide gather — ring ArgStore heap path (num_args > inline K)"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "20-wide-gather-{scheduler}"
+  description: "Wide-gather test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "Tests with all schedulers; tiny inline-arg cap forces the heap path under the ring semaphore"
+    # Per-set build flag (no-op for the map semaphore): shrink the ring slot's
+    # inline arg capacity below the sink's arg count (3) to exercise the
+    # ArgStore heap-allocation + cleanup path.
+    defines:
+      - "IARA_SEMAPHORE_INLINE_ARGS=2"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

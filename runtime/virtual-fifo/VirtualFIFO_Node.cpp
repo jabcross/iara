@@ -375,23 +375,16 @@ void VirtualFIFO_Node::ensureAlloc(i64 firing) {
       firing, 1, runtime_info.total_iter_firings, f, e, l);
 
   auto _this = this;
-  if (may_alloc) {
+  if (may_alloc)
     iara_submit_task([_this, firing]() { _this->fireAlloc(firing); });
-#ifdef IARA_RING_SEMAPHORE
-    // The alloc slot guards only a counter (empty Data); fireAlloc reads no
-    // slot state, so the slot may be recycled immediately on completion.
-    runtime_info.sema_variant.alloc->semaphore.release(firing);
-#endif
-  }
 }
 
 void VirtualFIFO_Node::init() {
   if (runtime_info.isAlloc()) {
+    // Alloc semaphore is always the map variant (see SDFSemaphores.h) — no ring
+    // to reserve; its total_iter_firings is a dependent count, not a firing
+    // count.
     runtime_info.sema_variant.alloc = new VirtualFIFO_AllocSemaphore{};
-#ifdef IARA_RING_SEMAPHORE
-    runtime_info.sema_variant.alloc->semaphore.reserve(
-        runtime_info.total_iter_firings);
-#endif
   } else {
     runtime_info.sema_variant.normal = new VirtualFIFO_NormalSemaphore{};
 #ifdef IARA_RING_SEMAPHORE
