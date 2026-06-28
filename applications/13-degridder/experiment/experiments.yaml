@@ -63,6 +63,12 @@ parameters:
       - vf-sequential   # Virtual FIFO without OpenMP for debugging
       - preesm          # Preesm dataflow compiler baseline
 
+  # IaRa semaphore implementation (iara-opt codegen dim, forwarded as IARA_SEMAPHORE)
+  - name: semaphore
+    type: str
+    label: "Semaphore"
+    description: "IaRa semaphore implementation (atomic-ring, sharded-hash, global-mutex)"
+
 # Computed parameters (derived from SIZE, NUM_KERNEL_SUPPORT, NUM_CHUNK)
 # These replace the hardcoded _add_degridder_defines() from the old generator.py.
 computed_parameters:
@@ -167,6 +173,24 @@ experiment_sets:
       NUM_CHUNK: [1, 8, 32]
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, vf-enkits]
+
+  # Sub-scheduler comparison on the `small` workload: the 4 IaRa versions
+  # ({vf-omp,vf-enkits} × {atomic-ring,sharded-hash}) vs the Preesm baseline.
+  # Workload grid (cores × chunks) cross-producted with the scheduler/semaphore
+  # matrix; preesm (no IaRa semaphore) added via include and swept over the same
+  # grid by the common-parameters cross.
+  - name: small-sub-sched
+    description: "small workload (cores 1/4/8 × chunks 1/8/32): 4 IaRa versions + preesm"
+    parameters:
+      SIZE: [small]
+      NUM_CORES: [1, 4, 8]
+      NUM_CHUNK: [1, 8, 32]
+      NUM_KERNEL_SUPPORT: [8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+    include:
+      - {scheduler: preesm}
 
 
   # Full scale experiments

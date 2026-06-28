@@ -74,6 +74,20 @@ experiment_sets:
       NUM_CORES: [1, 4]
       scheduler: [vf-omp, preesm]
 
+  # Sub-scheduler comparison on the `compare` workload: the 4 IaRa versions
+  # ({vf-omp,vf-enkits} × {atomic-ring,sharded-hash}) vs the Preesm baseline.
+  # Core sweep cross-producted with the scheduler/semaphore matrix; preesm
+  # (no IaRa semaphore) added via include so its names omit the semaphore.
+  - name: compare-sub-sched
+    description: "compare workload (1,4 cores): 4 IaRa versions (backend×semaphore) + preesm"
+    parameters:
+      NUM_CORES: [1, 4]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+    include:
+      - {scheduler: preesm}
+
   # Reproduces Table 1 from Honorat et al. 2019 (SIFT SDF iterators paper).
   # Core counts {1,2,4,5,10} are the common divisors of the 4-D array sizes
   # used in SIFT, matching the original Preesm vs OpenMP evaluation exactly.

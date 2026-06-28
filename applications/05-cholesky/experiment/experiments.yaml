@@ -43,6 +43,12 @@ parameters:
       - vf-omp         # Virtual FIFO with OpenMP backend
       - vf-enkits      # Virtual FIFO with EnkiTS backend
 
+  # IaRa semaphore implementation (iara-opt codegen dim, forwarded as IARA_SEMAPHORE)
+  - name: semaphore
+    type: str
+    label: "Semaphore"
+    description: "IaRa semaphore implementation (atomic-ring, sharded-hash, global-mutex)"
+
 # Computed parameters (derived from other parameters)
 computed_parameters:
   - name: BLOCK_SIZE
@@ -185,6 +191,21 @@ experiment_sets:
       MATRIX_SIZE: [4096]
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
+
+  # Sub-scheduler comparison on the `medium` workload: the 4 IaRa versions
+  # ({vf-omp,vf-enkits} × {atomic-ring,sharded-hash}) vs an OpenMP baseline
+  # (omp-task). Common workload sweep cross-producted with the scheduler/
+  # semaphore matrix; omp-task (no IaRa semaphore) added via include.
+  - name: medium-sub-sched
+    description: "medium workload: 4 IaRa versions (backend×semaphore) + omp-task baseline"
+    parameters:
+      MATRIX_SIZE: [4096]
+      NUM_BLOCKS: [4, 8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+    include:
+      - {scheduler: omp-task}
 
   # Matrix/block scaling — powers of 2, vf-omp vs omp-task
   - name: matrix_scaling

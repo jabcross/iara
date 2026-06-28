@@ -427,6 +427,24 @@ def get_parameter_combinations(
                 combinations.append(entry_copy)
         logger.debug(f"After include: {len(combinations)} combinations")
 
+    # Step 4c: when BOTH `matrix` and `parameters` are present, treat
+    # `parameters` as a COMMON sweep cross-producted with every heterogeneous
+    # matrix/include row. Lets workload dims (cores, sizes, chunks) apply to all
+    # scheduler/semaphore rows — including baseline include rows — without
+    # enumerating them. (`parameters`-only sets are unaffected: no matrix here.)
+    common_values = exp_set.get('parameters', {}) if exp_set.get('matrix') else {}
+    if common_values:
+        common_names = list(common_values.keys())
+        common_lists = [common_values[n] for n in common_names]
+        common_product = [
+            dict(zip(common_names, vals)) for vals in product(*common_lists)
+        ]
+        # heterogeneous row keys (scheduler/semaphore) win over common on overlap
+        combinations = [
+            {**c, **h} for c in common_product for h in combinations
+        ]
+        logger.debug(f"After parameters×matrix cross: {len(combinations)} combinations")
+
     # Step 5: Compute derived parameters FIRST (before constraints)
     # This allows constraints to reference computed parameters
     computed_parameters = config.get('computed_parameters', [])
