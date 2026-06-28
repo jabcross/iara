@@ -12,7 +12,7 @@
 
 namespace keyed_semaphore {
 
-#ifdef IARA_USE_MUTEX_HASHMAP
+#ifdef IARA_SEMAPHORE_GLOBAL_MUTEX
 template <class Key, class Value>
 using ParallelHashMap = MutexHashMap<Key, Value>;
 
@@ -159,7 +159,7 @@ struct KeyedSemaphore {
 };
 
 // ===========================================================================
-// Ring variant (opt-in: -DIARA_RING_SEMAPHORE)
+// Ring variant (opt-in: -DIARA_SEMAPHORE_ATOMIC_RING)
 // ===========================================================================
 //
 // Same surface as KeyedSemaphore: identical `arrive(...)` signature and the

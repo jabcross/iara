@@ -29,6 +29,8 @@ add_mlir_dialect_library(MLIRIara
         Passes/VirtualFIFO/BreakLoops.cpp
         Passes/VirtualFIFO/VirtualFIFOSchedulerPass.cpp
 
+        Passes/Analysis/MNCAnalysisPass.cpp
+
         # Common.cpp excluded: getConsumerSlice is now inline in VirtualFIFO_Edge_Embed.h.
         # ../../runtime/virtual-fifo/VirtualFIFO_Edge.cpp
 

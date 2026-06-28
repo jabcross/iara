@@ -27,7 +27,7 @@ struct VirtualFIFO_NormalSemaphore {
     std::span<VirtualFIFO_Chunk> *args;
   };
 
-#ifdef IARA_RING_SEMAPHORE
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
   // Ring variant: the kernel arg array lives INLINE in the semaphore slot, so
   // its lifetime is the slot's lifetime (freed by release() after the kernel
   // runs). No per-firing calloc on the common path (num_args <= K).
@@ -165,7 +165,7 @@ struct VirtualFIFO_AllocSemaphore {
   static void last_time_func(LastArgs &l_args, EntryData &kernel_args) {};
 
   // The alloc semaphore always uses the map variant, even under
-  // IARA_RING_SEMAPHORE. The ring is keyed/sized by a node's firing count, but
+  // IARA_SEMAPHORE_ATOMIC_RING. The ring is keyed/sized by a node's firing count, but
   // an alloc node's total_iter_firings is its DEPENDENT count (how many
   // consumers share each buffer), unrelated to how many distinct buffers it
   // allocs — so it cannot size a ring. The alloc path is also not the hot

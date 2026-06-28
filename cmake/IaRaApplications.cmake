@@ -528,7 +528,7 @@ function(iara_add_application)
 
         # Generate schedule.mlir
         add_custom_command(
-            OUTPUT ${schedule_mlir}
+            OUTPUT ${schedule_mlir} ${build_subdir}/iara_runtime_config.h
             COMMAND ${CMAKE_COMMAND} -E make_directory ${build_subdir}
             COMMAND ${CMAKE_COMMAND} -E env
                 IARA_DIR=$ENV{IARA_DIR}
@@ -791,6 +791,9 @@ function(iara_add_application)
     if(runtime_compile_defs)
         list(APPEND common_compile_options "-D${runtime_compile_defs}")
     endif()
+    if(NOT is_baseline_scheduler AND final_iara_opt)
+        list(APPEND common_compile_options "-include" "${build_subdir}/iara_runtime_config.h")
+    endif()
 
     target_compile_options(${target_name}
         PRIVATE
@@ -798,6 +801,10 @@ function(iara_add_application)
         ${common_compile_options}
         -UIARA_COMPILER
     )
+    if(NOT is_baseline_scheduler AND final_iara_opt AND runtime_sources)
+        set_source_files_properties(${runtime_sources} PROPERTIES
+            OBJECT_DEPENDS "${build_subdir}/iara_runtime_config.h")
+    endif()
 
     # Link options
     target_link_directories(${target_name} PRIVATE $ENV{LLVM_INSTALL}/lib)

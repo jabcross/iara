@@ -15,6 +15,7 @@
 
 #include "Iara/Dialect/IaraDialect.h"
 #include "Iara/Dialect/IaraPasses.h"
+#include "Iara/Passes/Analysis/MNCAnalysisPass.h"
 #include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Passes/RingBuffer/RingBufferSchedulerPass.h"
 #include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
@@ -32,6 +33,7 @@ int main(int argc, char **argv) {
   iara::passes::registerFlattenPass();
   iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
   iara::passes::ringbuffer::registerRingBufferSchedulerPass();
+  iara::passes::analysis::registerMNCAnalysisPass();
 
   // // Add the following to include *all* MLIR Core dialects, or selectively
   // include what you need like above. You only need to register dialects that

@@ -257,7 +257,7 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
     debugPrintThreadColor("fire(): HOLD %ld of node[%lu] kid=%u (limit %ld)\n",
                           seq, (size_t)this, (unsigned)codegen_info.kernel_id, limit);
 #endif
-#ifdef IARA_RING_SEMAPHORE
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
     runtime_info.sema_variant.normal->semaphore.release(seq);
 #else
     free(args.data());
@@ -293,7 +293,7 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       out->push(out_chunk);
     }
 
-#ifdef IARA_RING_SEMAPHORE
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
     _this->runtime_info.sema_variant.normal->semaphore.release(seq);
 #else
     free(args.data());
@@ -318,7 +318,7 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
 #ifdef IARA_DEBUGPRINT
     debugPrintThreadColor("fire(): freeing %#016lx\n", (size_t)args.data());
 #endif
-#ifdef IARA_RING_SEMAPHORE
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
     _this->runtime_info.sema_variant.normal->semaphore.release(seq);
 #else
     free(args.data());
@@ -387,7 +387,7 @@ void VirtualFIFO_Node::init() {
     runtime_info.sema_variant.alloc = new VirtualFIFO_AllocSemaphore{};
   } else {
     runtime_info.sema_variant.normal = new VirtualFIFO_NormalSemaphore{};
-#ifdef IARA_RING_SEMAPHORE
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
     runtime_info.sema_variant.normal->semaphore.reserve(
         runtime_info.total_iter_firings);
 #endif

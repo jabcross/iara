@@ -39,6 +39,11 @@ struct VirtualFIFOSchedulerPass
   Option<std::string> main_actor{
       *this, "main-actor", llvm::cl::desc("Name of actor to schedule")};
 
+  Option<std::string> semaphore{
+      *this, "semaphore",
+      llvm::cl::desc("Keyed-semaphore impl: atomic-ring|sharded-hash|global-mutex "
+                     "(env IARA_SEMAPHORE; default sharded-hash)")};
+
   struct Impl;
   ::llvm::StringRef getArgument() const override { return "virtual-fifo"; }
   ::llvm::StringRef getDescription() const override {

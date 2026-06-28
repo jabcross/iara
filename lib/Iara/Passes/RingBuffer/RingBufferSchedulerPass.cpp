@@ -3,6 +3,7 @@
 #include "Iara/Passes/RingBuffer/Codegen/Codegen.h"
 #include "Iara/Passes/RingBuffer/RingBufferSchedulerPass.h"
 #include "Iara/Passes/RingBuffer/SDF/SDF.h"
+#include "Iara/Util/EnvOption.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
@@ -180,11 +181,12 @@ struct RingBufferSchedulerPass::Impl {
     DenseSet<ActorOp> not_top_level;
     Vec<ActorOp> definitions;
 
-    if (pass->main_actor.hasValue()) {
-      auto actor = module.lookupSymbol<ActorOp>(pass->main_actor.getValue());
+    std::string main_actor_name = iara::util::optionOrEnv(
+        pass->main_actor.hasValue(), pass->main_actor.getValue(), "IARA_MAIN_ACTOR");
+    if (!main_actor_name.empty()) {
+      auto actor = module.lookupSymbol<ActorOp>(main_actor_name);
       if (!actor)
-        llvm::errs() << "Provided actor name not found: "
-                     << pass->main_actor.getValue() << "\n";
+        llvm::errs() << "Provided actor name not found: " << main_actor_name << "\n";
       assert(actor && "Provided actor name not found");
       return actor;
     }
