@@ -265,22 +265,43 @@ struct KeyedSemaphoreRing {
 
     Slot &slot = ring[key & mask];
 
-    // Claim the slot for this key, or recognise an in-progress same-key arrival,
-    // or detect a collision with a different live key (-> overflow).
-    i64 expected = -1;
-    bool claimed = slot.owner_key.compare_exchange_strong(
-        expected, key, std::memory_order_acq_rel, std::memory_order_acquire);
-
-    if (claimed) {
-      // First to arrive: build Data, then publish it.
-      first_time_func(first_args, slot.data);
-      slot.ready.store(1, std::memory_order_release);
-    } else if (expected == key) {
-      // Same firing, but first_time_func may still be running: wait for publish.
+    // Decide ring vs overflow. Routing for a key MUST be sticky: once a key's
+    // first arrival went to the overflow map (its slot was busy with another
+    // live key), every later arrival must too — otherwise, if the colliding key
+    // frees the slot mid-gather, a later arrival would claim the now-free slot
+    // and split this firing's accounting across ring+overflow (double/lost
+    // fire). So when we don't already own the slot, consult the overflow map
+    // before attempting a fresh claim. The `empty()` short-circuit keeps the
+    // common no-wrap case (overflow always empty) lock-free.
+    bool ring_path;
+    i64 owner = slot.owner_key.load(std::memory_order_acquire);
+    if (owner == key) {
+      // Same firing, in the ring; first_time_func may still be running.
       while (slot.ready.load(std::memory_order_acquire) == 0)
         keyed_semaphore_pause();
+      ring_path = true;
+    } else if (owner == -1 && (overflow.empty() || !overflow.contains(key))) {
+      i64 expected = -1;
+      if (slot.owner_key.compare_exchange_strong(
+              expected, key, std::memory_order_acq_rel,
+              std::memory_order_acquire)) {
+        // Claimed a free slot: build Data, then publish it.
+        first_time_func(first_args, slot.data);
+        slot.ready.store(1, std::memory_order_release);
+        ring_path = true;
+      } else if (expected == key) {
+        // Another thread claimed for the same key: wait for publish.
+        while (slot.ready.load(std::memory_order_acquire) == 0)
+          keyed_semaphore_pause();
+        ring_path = true;
+      } else {
+        ring_path = false; // lost the claim race to a different key
+      }
     } else {
-      // Slot busy with a different live firing -> overflow map.
+      ring_path = false; // slot busy with another key, or we are already in overflow
+    }
+
+    if (!ring_path) {
       arriveOverflow(key, this_resources, total_resources, first_args,
                      every_time_args, last_args);
       return;

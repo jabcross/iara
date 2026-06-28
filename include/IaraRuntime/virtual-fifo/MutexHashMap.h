@@ -36,6 +36,18 @@ template <class Key, class Value> struct MutexHashMap {
     map.erase(key);
     lock.unlock();
   }
+  bool contains(Key key) {
+    lock.lock();
+    bool found = map.find(key) != map.end();
+    lock.unlock();
+    return found;
+  }
+  bool empty() {
+    lock.lock();
+    bool e = map.empty();
+    lock.unlock();
+    return e;
+  }
 };
 
 #endif
