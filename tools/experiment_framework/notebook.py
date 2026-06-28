@@ -447,6 +447,94 @@ else:
     }
 
 
+def _code_cell(code: str) -> Dict[str, Any]:
+    """Wrap a code string into an nbformat-v4 code cell."""
+    lines = code.split("\n")
+    source = [line + "\n" for line in lines[:-1]]
+    if lines[-1]:
+        source.append(lines[-1])
+    return {"cell_type": "code", "execution_count": None,
+            "metadata": {}, "outputs": [], "source": source}
+
+
+def _markdown_cell(md: str) -> Dict[str, Any]:
+    """Wrap a markdown string into an nbformat-v4 markdown cell."""
+    lines = md.split("\n")
+    source = [line + "\n" for line in lines[:-1]]
+    if lines[-1]:
+        source.append(lines[-1])
+    return {"cell_type": "markdown", "metadata": {}, "source": source}
+
+
+def create_interactive_pivot_cells() -> List[Dict[str, Any]]:
+    """
+    Cells for drag-and-drop interactive re-pivoting of the results.
+
+    Builds one tidy DataFrame (`df_pivot`: one row per instance = all parameters
+    + each metric's mean), then offers two pivot widgets over it so the user can
+    reorder dimensions (faceting / grouping / ordering) by dragging, and pick the
+    one they prefer. Both are guarded so a missing optional package never breaks
+    notebook execution.
+
+    Returns:
+        List of nbformat-v4 cells (markdown header, tidy-df, Perspective,
+        PivotTable.js).
+    """
+    header = """## Interactive exploration (drag to re-pivot)
+
+Both views below read the same tidy table **`df_pivot`** (one row per instance =
+all parameters + each metric's mean). Drag parameter fields to change faceting /
+grouping / ordering, then keep whichever you prefer.
+
+- **Perspective** — drag fields into *Group By* / *Split By* / *Order By* / *Filter*; toggle grid ↔ chart.
+- **PivotTable.js** — drag fields between *Rows* / *Cols* / *Filter* zones; pick a renderer (bar/line/heatmap/table).
+
+One-time install: `pip install perspective-python pivottablejs pyarrow ipywidgets`"""
+
+    tidy_df = """import pandas as pd
+
+# Tidy table for pivoting: one row per instance = all parameters + metric means.
+_rows = []
+for _inst in results_data['instances']:
+    _row = dict(_inst.get('parameters', {}))
+    for _metric, _stats in _inst.get('execution', {}).get('statistics', {}).items():
+        _row[_metric] = _stats.get('mean')
+    _row['instance'] = _inst.get('name')
+    _rows.append(_row)
+
+df_pivot = pd.DataFrame(_rows)
+print(f"df_pivot: {len(df_pivot)} rows x {len(df_pivot.columns)} cols")
+df_pivot"""
+
+    perspective_cell = """# Perspective: drag fields into Group By / Split By / Order By / Filter; toggle grid <-> chart.
+try:
+    try:
+        from perspective.widget import PerspectiveWidget   # perspective-python >= 2
+    except ImportError:
+        from perspective import PerspectiveWidget           # older releases
+    from IPython.display import display
+    display(PerspectiveWidget(df_pivot))
+except Exception as _e:
+    print("Perspective unavailable:", _e)
+    print("Install with:  pip install perspective-python")"""
+
+    pivottable_cell = """# PivotTable.js: drag fields between Rows / Cols / Filter zones; pick a renderer.
+try:
+    from pivottablejs import pivot_ui
+    from IPython.display import display
+    display(pivot_ui(df_pivot, outfile_path="pivot_ui.html"))  # inline iframe + writes pivot_ui.html
+except Exception as _e:
+    print("PivotTable.js unavailable:", _e)
+    print("Install with:  pip install pivottablejs")"""
+
+    return [
+        _markdown_cell(header),
+        _code_cell(tidy_df),
+        _code_cell(perspective_cell),
+        _code_cell(pivottable_cell),
+    ]
+
+
 def create_visualization_cell(plot_name: str, vegalite_path: Path) -> Dict[str, Any]:
     """
     Create code cell to load and render Vega-Lite spec using altair.
@@ -606,6 +694,9 @@ def generate_notebook(
         # Extract plot name from filename (e.g., "plot_runtime.vl.json" -> "runtime")
         plot_name = vegalite_file.stem.replace("plot_", "").replace(".vl", "")
         cells.append(create_visualization_cell(plot_name, vegalite_file))
+
+    # 6. Add interactive drag-to-re-pivot exploration cells (Perspective + PivotTable.js)
+    cells.extend(create_interactive_pivot_cells())
 
     # Create notebook structure (nbformat v4)
     kernelspec = {
