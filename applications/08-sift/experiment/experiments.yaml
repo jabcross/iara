@@ -30,8 +30,15 @@ parameters:
     label: "Scheduler"
     description: "Task scheduling strategy"
     choices:
-      - vf-omp    # IaRa Virtual FIFO with OpenMP backend
-      - preesm    # Preesm reference implementation
+      - vf-omp      # IaRa Virtual FIFO with OpenMP backend
+      - vf-enkits   # IaRa Virtual FIFO with EnkiTS backend
+      - preesm      # Preesm reference implementation
+
+  # IaRa semaphore implementation (iara-opt codegen dim, forwarded as IARA_SEMAPHORE)
+  - name: semaphore
+    type: str
+    label: "Semaphore"
+    description: "IaRa semaphore implementation (atomic-ring, sharded-hash, global-mutex)"
 
 computed_parameters: []
 
@@ -81,6 +88,22 @@ experiment_sets:
     parameters:
       NUM_CORES: [1, 2, 4, 5, 10, 20]
       scheduler: [vf-omp]
+
+  # Cross-scheduler × cross-semaphore comparison.
+  # Tests the matrix/include plumbing and the CODEGEN_OPTIONS→IARA_SEMAPHORE
+  # forwarding.  Small core sweep (1,4), quick image, for fast iteration.
+  # The vf-* matrix carries the semaphore dimension; preesm (no IaRa semaphore)
+  # is added via `include` WITHOUT a semaphore key, so its instance names omit
+  # it entirely — names mirror exactly how each row is defined here.
+  - name: sub-sched-compare
+    description: "Scheduler × semaphore smoke test: preesm + vf-{omp,enkits} × {atomic-ring,sharded-hash}"
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+      NUM_CORES: [1, 4]
+    include:
+      - {scheduler: preesm, NUM_CORES: 1}
+      - {scheduler: preesm, NUM_CORES: 4}
 
 # Execution configuration
 execution:

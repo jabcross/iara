@@ -23,6 +23,10 @@ from .progress import ProgressBar
 
 logger = logging.getLogger(__name__)
 
+# Parameters that select an iara-opt codegen variant. They are forwarded to
+# iara-opt per-instance as env IARA_<UPPER>=<value> (see iara_add_application),
+# NOT emitted as -D defines or generic PARAMETERS. Extend as new knobs land.
+IARA_CODEGEN_DIMS = ("semaphore",)  # future: "allocator", "mnc"
 
 
 def generate_instance_name(
@@ -194,6 +198,9 @@ def generate_cmake_instance(
     for param_name in sorted(params.keys()):
         if param_name == 'scheduler' or param_name in computed_param_names:
             continue
+        # Codegen dims are forwarded as IARA_<DIM> env to iara-opt, not as -D defines
+        if param_name in IARA_CODEGEN_DIMS:
+            continue
         value = params[param_name]
         parameters_list.append(f'"{param_name}={value}"')
 
@@ -204,8 +211,17 @@ def generate_cmake_instance(
     for param_name in sorted(params.keys()):
         if param_name == 'scheduler':
             continue
+        # Codegen dims are forwarded as IARA_<DIM> env to iara-opt, not as -D defines
+        if param_name in IARA_CODEGEN_DIMS:
+            continue
         value = params[param_name]
         defines_list.append(f'"{param_name}={value}"')
+
+    # CODEGEN_OPTIONS: codegen dims forwarded as IARA_<DIM>=<value> env to iara-opt
+    codegen_options_list = []
+    for dim in IARA_CODEGEN_DIMS:
+        if dim in params:
+            codegen_options_list.append(f'"{dim}={params[dim]}"')
 
     # Add scheduler define
     scheduler_define = _get_scheduler_define(scheduler)
@@ -271,6 +287,10 @@ def generate_cmake_instance(
     # Add PARAMETERS if present
     if parameters_list:
         lines.append(f"    PARAMETERS {' '.join(parameters_list)}")
+
+    # Add CODEGEN_OPTIONS if any codegen dims are present in this instance
+    if codegen_options_list:
+        lines.append(f"    CODEGEN_OPTIONS {' '.join(codegen_options_list)}")
 
     # Add remaining fields
     lines.extend([

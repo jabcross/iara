@@ -307,10 +307,15 @@ def get_parameter_combinations(
     Process:
         1. Extract parameter definitions from config
         2. Get parameter values from specified experiment set
+           (reads ``matrix`` if present, else ``parameters`` for back-compat)
         3. If scheduler_override is set, replace the scheduler choices
         4. Compute Cartesian product of all parameter values
-        5. Apply constraints to filter invalid combinations
+        5. Apply GitHub Actions-faithful ``exclude`` / ``include`` rules:
+           - exclude: drop matrix combos that partially match any exclude entry
+           - include: append extra rows (partial dicts allowed, missing dims
+             are filled by computed-parameter/default logic below)
         6. Compute derived parameters for each combination
+        7. Apply constraints to filter invalid combinations
 
     Args:
         config: Parsed configuration dictionary
@@ -365,10 +370,13 @@ def get_parameter_combinations(
     if exp_set is None:
         raise ConfigError(f"Experiment set '{experiment_set}' not found in configuration")
 
-    # Step 3: Get parameter values for this experiment set
-    param_values = exp_set.get('parameters', {})
+    # Step 3: Get parameter values for this experiment set.
+    # ``matrix`` is the preferred key (GitHub Actions naming); ``parameters``
+    # is accepted as a back-compat alias when ``matrix`` is absent.
+    param_values = exp_set.get('matrix') or exp_set.get('parameters', {})
 
-    if not param_values:
+    include_entries = exp_set.get('include', [])
+    if not param_values and not include_entries:
         logger.warning(f"Experiment set '{experiment_set}' has no parameters")
         return []
 
@@ -381,16 +389,43 @@ def get_parameter_combinations(
                 f"'{experiment_set}' (available: {', '.join(allowed)})")
         param_values['scheduler'] = [scheduler_override]
 
-    # Step 4: Compute Cartesian product
-    param_names = list(param_values.keys())
-    param_lists = [param_values[name] for name in param_names]
-
+    # Step 4: Compute Cartesian product (empty when param_values is empty)
     combinations = []
-    for values in product(*param_lists):
-        combination = dict(zip(param_names, values))
-        combinations.append(combination)
+    if param_values:
+        param_names = list(param_values.keys())
+        param_lists = [param_values[name] for name in param_names]
+        for values in product(*param_lists):
+            combination = dict(zip(param_names, values))
+            combinations.append(combination)
 
     logger.debug(f"Generated {len(combinations)} raw combinations from Cartesian product")
+
+    # Step 4b: GitHub Actions matrix/exclude/include semantics.
+    # exclude: removes matrix combos that partially match an exclude entry.
+    #   "Partial match" = every key in the exclude entry exists in the combo
+    #   with an equal value (string-compare tolerant).
+    #   Excludes apply ONLY to the matrix product, not to include rows.
+    exclude_entries = exp_set.get('exclude', [])
+    if exclude_entries:
+        def _matches_exclude(combo: dict, entry: dict) -> bool:
+            return all(str(combo.get(k)) == str(v) for k, v in entry.items())
+        before_exclude = len(combinations)
+        combinations = [
+            c for c in combinations
+            if not any(_matches_exclude(c, e) for e in exclude_entries)
+        ]
+        logger.debug(f"Exclude removed {before_exclude - len(combinations)} combinations; "
+                     f"{len(combinations)} remain")
+
+    # include: append each entry as an additional raw combination.
+    #   Partial dicts are allowed; missing dims are filled by computed-param
+    #   and constraint steps below.  Exact-duplicate dicts are skipped.
+    if include_entries:
+        for entry in include_entries:
+            entry_copy = dict(entry)
+            if entry_copy not in combinations:
+                combinations.append(entry_copy)
+        logger.debug(f"After include: {len(combinations)} combinations")
 
     # Step 5: Compute derived parameters FIRST (before constraints)
     # This allows constraints to reference computed parameters

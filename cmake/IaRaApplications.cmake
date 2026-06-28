@@ -198,7 +198,7 @@ function(iara_add_application)
     cmake_parse_arguments(APP
         ""  # No boolean options
         "ENTRY;SCHEDULER;TARGET_NAME;BUILD_DIR;APP_NAME;TEST_SRC_DIR;APP_SRC_DIR;PARAMETERS_SCRIPT;MAIN_ACTOR"  # Single-value args
-        "EXTRA_KERNEL_ARGS;EXTRA_LINKER_ARGS;CODEGEN_ENV"  # Multi-value args
+        "EXTRA_KERNEL_ARGS;EXTRA_LINKER_ARGS;CODEGEN_ENV;CODEGEN_OPTIONS"  # Multi-value args
         ${ARGN}
     )
     if(NOT APP_MAIN_ACTOR)
@@ -526,6 +526,21 @@ function(iara_add_application)
             )
         endif()
 
+        # Translate CODEGEN_OPTIONS (dim=value pairs) to IARA_<DIM>=<value> env
+        # vars so that iara-opt sees e.g. IARA_SEMAPHORE=atomic-ring and writes
+        # the matching #define into iara_runtime_config.h.
+        set(_codegen_dim_env "")
+        foreach(_opt ${APP_CODEGEN_OPTIONS})
+            string(FIND "${_opt}" "=" _eq_pos)
+            if(_eq_pos GREATER -1)
+                string(SUBSTRING "${_opt}" 0 ${_eq_pos} _dim_key)
+                math(EXPR _val_start "${_eq_pos} + 1")
+                string(SUBSTRING "${_opt}" ${_val_start} -1 _dim_val)
+                string(TOUPPER "${_dim_key}" _dim_key_upper)
+                list(APPEND _codegen_dim_env "IARA_${_dim_key_upper}=${_dim_val}")
+            endif()
+        endforeach()
+
         # Generate schedule.mlir
         add_custom_command(
             OUTPUT ${schedule_mlir} ${build_subdir}/iara_runtime_config.h
@@ -535,6 +550,7 @@ function(iara_add_application)
                 PATH_TO_TEST_SOURCES=${APP_TEST_SRC_DIR}
                 PATH_TO_TEST_BUILD_DIR=${build_subdir}
                 SCHEDULER_MODE=${scheduler}
+                ${_codegen_dim_env}
                 ${iara_opt_binary} ${iara_flags} ${topology_input} > ${schedule_mlir}
             DEPENDS ${schedule_deps}
             WORKING_DIRECTORY ${build_subdir}
@@ -864,7 +880,7 @@ function(iara_add_test_instance)
     cmake_parse_arguments(TEST
         "IS_REGRESSION_TEST"  # Boolean options
         "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR"  # Single-value args
-        "PARAMETERS;DEFINES;LINKER_ARGS"  # Multi-value args
+        "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS"  # Multi-value args
         ${ARGN}
     )
     if(NOT TEST_MAIN_ACTOR)
@@ -944,6 +960,7 @@ function(iara_add_test_instance)
         EXTRA_KERNEL_ARGS ${extra_kernel_args_list}
         EXTRA_LINKER_ARGS ${linker_args_list}
         CODEGEN_ENV ${codegen_env_list}
+        CODEGEN_OPTIONS ${TEST_CODEGEN_OPTIONS}
     )
 
     # ===========================================================================
@@ -1104,13 +1121,28 @@ execute_process(
     # build-* — direct iara-opt invocation (debugger-friendly)
     # Only generated for IaRa schedulers that have a topology and iara-opt pass.
     # --------------------------------------------------------------------------
+
+    # Build IARA_<DIM>=<value> env assignments from CODEGEN_OPTIONS so that
+    # the build-* CTest mirrors the iara-opt invocation in iara_add_application.
+    set(_build_codegen_env_str "")
+    foreach(_opt ${TEST_CODEGEN_OPTIONS})
+        string(FIND "${_opt}" "=" _eq_pos)
+        if(_eq_pos GREATER -1)
+            string(SUBSTRING "${_opt}" 0 ${_eq_pos} _dim_key)
+            math(EXPR _val_start "${_eq_pos} + 1")
+            string(SUBSTRING "${_opt}" ${_val_start} -1 _dim_val)
+            string(TOUPPER "${_dim_key}" _dim_key_upper)
+            set(_build_codegen_env_str "${_build_codegen_env_str};IARA_${_dim_key_upper}=${_dim_val}")
+        endif()
+    endforeach()
+
     if(_test_iara_opt AND _test_topology)
         add_test(NAME "${build_target_name}"
             COMMAND "${_iara_opt_bin}" ${_test_iara_flags} "${_test_topology}"
                     -o "${_schedule_mlir}"
             WORKING_DIRECTORY "${TEST_BUILD_DIR}")
         set_tests_properties("${build_target_name}" PROPERTIES
-            ENVIRONMENT "IARA_DIR=$ENV{IARA_DIR};SCHEDULER_MODE=${TEST_SCHEDULER};PATH_TO_TEST_SOURCES=${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR};PATH_TO_TEST_BUILD_DIR=${TEST_BUILD_DIR}"
+            ENVIRONMENT "IARA_DIR=$ENV{IARA_DIR};SCHEDULER_MODE=${TEST_SCHEDULER};PATH_TO_TEST_SOURCES=${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR};PATH_TO_TEST_BUILD_DIR=${TEST_BUILD_DIR}${_build_codegen_env_str}"
             TIMEOUT 120)
     endif()
 
