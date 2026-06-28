@@ -1081,6 +1081,8 @@ def collect_all_measurements(
     partition: Optional[str] = None,
     cpus: int = 48,
     cancellation_flag = None,
+    experiment_set: Optional[str] = None,
+    extra_env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Execute all successful instances and collect measurements.
@@ -1117,7 +1119,16 @@ def collect_all_measurements(
     exec_config = config.get('execution', {})
     final_repetitions = repetitions or exec_config.get('repetitions', 5)
     final_timeout = timeout or exec_config.get('timeout', 300)
-    base_env_vars = exec_config.get('environment', {})
+    # Base env, then per-set environment override (execution flags pinned to a
+    # set), then CLI --env overrides (highest precedence).
+    base_env_vars = dict(exec_config.get('environment', {}))
+    if experiment_set:
+        for s in config.get('experiment_sets', []):
+            if s.get('name') == experiment_set:
+                base_env_vars.update(s.get('environment', {}))
+                break
+    if extra_env:
+        base_env_vars.update(extra_env)
     # Standard measurements always precede app-specific ones.
     # Apps must not redefine wall_time or max_rss_mb in their yaml.
     app_measurements = [

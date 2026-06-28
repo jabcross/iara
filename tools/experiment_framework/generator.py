@@ -222,6 +222,20 @@ def generate_cmake_instance(
             for key, val in define.items():
                 defines_list.append(f'"{key}={val}"')
 
+    # Add per-experiment-set defines (lets a set pin build flags such as
+    # IARA_RING_SEMAPHORE without touching application-global defines or the
+    # CLI). Same format as application defines: bare strings or {NAME: value}.
+    for s in config.get('experiment_sets', []):
+        if s.get('name') != experiment_set:
+            continue
+        for define in s.get('defines', []):
+            if isinstance(define, str):
+                defines_list.append(f'"{define}"')
+            elif isinstance(define, dict):
+                for key, val in define.items():
+                    defines_list.append(f'"{key}={val}"')
+        break
+
     # Add extra defines passed from CLI (e.g. --define IARA_DEBUGPRINT)
     for define in (extra_defines or []):
         # Strip leading -D if user passed -DFOO style

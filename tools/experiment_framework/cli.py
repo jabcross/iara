@@ -326,9 +326,21 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
     return 0
 
 
+def _parse_env_list(env_list) -> dict:
+    """Parse repeated --env KEY=VALUE options into a dict."""
+    out = {}
+    for item in (env_list or []):
+        if '=' not in item:
+            raise SystemExit(f"--env expects KEY=VALUE, got: {item!r}")
+        k, v = item.split('=', 1)
+        out[k] = v
+    return out
+
+
 def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
                repetitions: Optional[int] = None, exec_timeout: Optional[int] = None,
-               slurm: bool = False, nodelist: Optional[str] = None, partition: Optional[str] = None, cpus: int = 48, fail_fast: bool = False) -> int:
+               slurm: bool = False, nodelist: Optional[str] = None, partition: Optional[str] = None, cpus: int = 48, fail_fast: bool = False,
+               extra_env: Optional[dict] = None) -> int:
     """
     Run Phase 3: Execute instances and collect measurements.
 
@@ -421,6 +433,8 @@ def run_execute(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
             partition=partition,
             cpus=cpus,
             cancellation_flag=lambda: _cancellation_requested,
+            experiment_set=exp_set,
+            extra_env=extra_env,
         )
     except Exception as e:
         print(f"ERROR: Execution failed: {e}", file=sys.stderr)
@@ -807,9 +821,10 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
         partition = getattr(args, 'partition', None)
         cpus = getattr(args, 'cpus', 48)
         exec_timeout = getattr(args, 'exec_timeout', None)
+        extra_env = _parse_env_list(getattr(args, 'env', []))
         rc = run_execute(app, exp_set, app_dir, yaml_path,
                          slurm=slurm, nodelist=nodelist, partition=partition, cpus=cpus,
-                         exec_timeout=exec_timeout, fail_fast=fail_fast)
+                         exec_timeout=exec_timeout, fail_fast=fail_fast, extra_env=extra_env)
         if rc == 2:
             return 2
 
@@ -1188,6 +1203,15 @@ def main() -> int:
     )
 
     execute_parser.add_argument(
+        "--env", "-E",
+        action="append",
+        metavar="KEY=VALUE",
+        dest="env",
+        default=[],
+        help="Extra execution-time environment variable (e.g. --env IARA_MOCK_ALLOC=1); repeatable. Overrides YAML.",
+    )
+
+    execute_parser.add_argument(
         "--slurm",
         action="store_true",
         help="Submit execution to Slurm instead of running locally",
@@ -1383,6 +1407,15 @@ def main() -> int:
         dest="defines",
         default=[],
         help="Extra compile define (e.g. -DIARA_DEBUGPRINT); repeatable",
+    )
+
+    run_parser.add_argument(
+        "--env", "-E",
+        action="append",
+        metavar="KEY=VALUE",
+        dest="env",
+        default=[],
+        help="Extra execution-time environment variable (e.g. --env IARA_MOCK_ALLOC=1); repeatable. Overrides YAML.",
     )
 
     run_parser.add_argument(
@@ -1596,7 +1629,8 @@ def main() -> int:
                                  slurm=getattr(args, 'slurm', False),
                                  nodelist=getattr(args, 'nodelist', None),
                                  partition=getattr(args, 'partition', None),
-                                 cpus=getattr(args, 'cpus', 48))
+                                 cpus=getattr(args, 'cpus', 48),
+                                 extra_env=_parse_env_list(getattr(args, 'env', [])))
                 results.append((app_name, set_name, rc))
             return _batch_summary(results)
 
@@ -1609,7 +1643,8 @@ def main() -> int:
                            slurm=getattr(args, 'slurm', False),
                            nodelist=getattr(args, 'nodelist', None),
                            partition=getattr(args, 'partition', None),
-                           cpus=getattr(args, 'cpus', 48))
+                           cpus=getattr(args, 'cpus', 48),
+                           extra_env=_parse_env_list(getattr(args, 'env', [])))
 
     # ============================================================================
     # visualize command
