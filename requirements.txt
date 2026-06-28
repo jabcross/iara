@@ -16,6 +16,7 @@ gdown
 astropy
 sep
 # interactive drag-to-re-pivot notebook cells (Perspective + PivotTable.js)
+jupyterlab
 pivottablejs
 perspective-python
 pyarrow

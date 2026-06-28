@@ -9,6 +9,7 @@ import json
 import logging
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -202,6 +203,7 @@ def get_failure_report_cell(failed_instances: List[Dict[str, Any]]) -> Dict[str,
 
     return {
         "cell_type": "markdown",
+        "id": uuid.uuid4().hex[:8],
         "metadata": {},
         "source": source
     }
@@ -296,6 +298,7 @@ def create_metadata_cell(config: Dict[str, Any], results: Dict[str, Any]) -> Dic
 
     return {
         "cell_type": "markdown",
+        "id": uuid.uuid4().hex[:8],
         "metadata": {},
         "source": source
     }
@@ -347,6 +350,7 @@ print(f"Schema version: {{results_data['schema_version']}}")
     return {
         "cell_type": "code",
         "execution_count": None,
+        "id": uuid.uuid4().hex[:8],
         "metadata": {},
         "outputs": [],
         "source": source
@@ -441,6 +445,7 @@ else:
     return {
         "cell_type": "code",
         "execution_count": None,
+        "id": uuid.uuid4().hex[:8],
         "metadata": {},
         "outputs": [],
         "source": source
@@ -454,7 +459,7 @@ def _code_cell(code: str) -> Dict[str, Any]:
     if lines[-1]:
         source.append(lines[-1])
     return {"cell_type": "code", "execution_count": None,
-            "metadata": {}, "outputs": [], "source": source}
+            "id": uuid.uuid4().hex[:8], "metadata": {}, "outputs": [], "source": source}
 
 
 def _markdown_cell(md: str) -> Dict[str, Any]:
@@ -463,7 +468,7 @@ def _markdown_cell(md: str) -> Dict[str, Any]:
     source = [line + "\n" for line in lines[:-1]]
     if lines[-1]:
         source.append(lines[-1])
-    return {"cell_type": "markdown", "metadata": {}, "source": source}
+    return {"cell_type": "markdown", "id": uuid.uuid4().hex[:8], "metadata": {}, "source": source}
 
 
 def create_interactive_pivot_cells() -> List[Dict[str, Any]]:
@@ -471,10 +476,13 @@ def create_interactive_pivot_cells() -> List[Dict[str, Any]]:
     Cells for drag-and-drop interactive re-pivoting of the results.
 
     Builds one tidy DataFrame (`df_pivot`: one row per instance = all parameters
-    + each metric's mean), then offers two pivot widgets over it so the user can
-    reorder dimensions (faceting / grouping / ordering) by dragging, and pick the
-    one they prefer. Both are guarded so a missing optional package never breaks
-    notebook execution.
+    + each metric's mean), then two drag-and-drop pivot views so dimensions can
+    be re-faceted/reordered without re-plotting. Both are guarded so a missing
+    package never breaks notebook execution.
+
+    NOTE: open in JupyterLab (`jupyter lab`), not VSCode — the widgets load from
+    locally-installed labextensions (perspective-python / ipywidgets ship them);
+    VSCode's notebook renderer only fetches widget JS from a CDN and can't.
 
     Returns:
         List of nbformat-v4 cells (markdown header, tidy-df, Perspective,
@@ -482,14 +490,14 @@ def create_interactive_pivot_cells() -> List[Dict[str, Any]]:
     """
     header = """## Interactive exploration (drag to re-pivot)
 
-Both views below read the same tidy table **`df_pivot`** (one row per instance =
-all parameters + each metric's mean). Drag parameter fields to change faceting /
-grouping / ordering, then keep whichever you prefer.
+Both views read the tidy table **`df_pivot`** (one row per instance = all
+parameters + each metric's mean). Drag fields to re-facet / regroup / reorder.
 
 - **Perspective** — drag fields into *Group By* / *Split By* / *Order By* / *Filter*; toggle grid ↔ chart.
-- **PivotTable.js** — drag fields between *Rows* / *Cols* / *Filter* zones; pick a renderer (bar/line/heatmap/table).
+- **PivotTable.js** — drag fields between *Rows* / *Cols* / *Filter*; pick a renderer (bar/line/heatmap/table). Also writes a standalone `pivot_ui.html`.
 
-One-time install: `pip install perspective-python pivottablejs pyarrow ipywidgets`"""
+**Open in JupyterLab** (`pip install jupyterlab && jupyter lab`) — the widgets
+render from local labextensions, which VSCode's CDN-only renderer can't load."""
 
     tidy_df = """import pandas as pd
 
@@ -507,22 +515,24 @@ print(f"df_pivot: {len(df_pivot)} rows x {len(df_pivot.columns)} cols")
 df_pivot"""
 
     perspective_cell = """# Perspective: drag fields into Group By / Split By / Order By / Filter; toggle grid <-> chart.
+# Renders in JupyterLab (not VSCode). Needs: perspective-python, pyarrow, ipywidgets.
 try:
-    try:
-        from perspective.widget import PerspectiveWidget   # perspective-python >= 2
-    except ImportError:
-        from perspective import PerspectiveWidget           # older releases
+    from perspective.widget import PerspectiveWidget
     from IPython.display import display
     display(PerspectiveWidget(df_pivot))
 except Exception as _e:
     print("Perspective unavailable:", _e)
-    print("Install with:  pip install perspective-python")"""
+    print("Install with:  pip install perspective-python pyarrow ipywidgets")"""
 
     pivottable_cell = """# PivotTable.js: drag fields between Rows / Cols / Filter zones; pick a renderer.
 try:
     from pivottablejs import pivot_ui
     from IPython.display import display
-    display(pivot_ui(df_pivot, outfile_path="pivot_ui.html"))  # inline iframe + writes pivot_ui.html
+    import os
+    pivot_ui(df_pivot, outfile_path="pivot_ui.html")
+    print("standalone view (open in a browser if the iframe below is blank):",
+          os.path.abspath("pivot_ui.html"))
+    display(pivot_ui(df_pivot, outfile_path="pivot_ui.html"))  # inline iframe
 except Exception as _e:
     print("PivotTable.js unavailable:", _e)
     print("Install with:  pip install pivottablejs")"""
@@ -602,6 +612,7 @@ chart
     return {
         "cell_type": "code",
         "execution_count": None,
+        "id": uuid.uuid4().hex[:8],
         "metadata": {},
         "outputs": [],
         "source": source
