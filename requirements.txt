@@ -15,9 +15,6 @@ altair
 gdown
 astropy
 sep
-# interactive drag-to-re-pivot notebook cells (Perspective + PivotTable.js)
+# interactive drag-to-re-pivot notebook cell (PivotTable.js); jupyterlab to view widgets
 jupyterlab
 pivottablejs
-perspective-python
-pyarrow
-ipywidgets

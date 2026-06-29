@@ -178,3 +178,34 @@ Full notes: `agent_workspace/Sprint-2026-06-03/session-2026-06-03.md`
 ## 🔴 Open (separate, pre-existing — revealed once the crash was fixed)
 
 - [ ] **SIFT `build_dog_pyr` stall** — pipeline clears blur + `MERGE_gpyr` then stalls; `build_dog_pyr` / `build_grd_rot_pyr` / `detect_keypoints` / `extract_descriptor` fire 0× → 0 keypoints (Preesm baseline 1343). Independent of the alloc fix (recount approach stalls identically). `ITERATOR_build_dog_pyr` fires but doesn't drive its loop body. Likely topology-rate work in progress.
+
+---
+
+# SIFT Memory Allocation Roadmap — 2026-06-26
+
+Full design doc (read first): `agent_workspace/Sprint-2026-06-26/sift-memory-allocation-roadmap.md`
+
+Root cause (proven): IaRa broadcasts physically copy the full pyramid P× single-threaded;
+Preesm aliases zero-copy. Cost = alloc + first-touch page faults of the copy buffers, not
+memcpy bandwidth. vf-omp anti-scales at 4K (RSS 4→13GB, faults 3.6→7.4M, 23→35s P=1→4);
+Preesm flat + scales. Scheduler exonerated (workers are multi-tid). Each tier below = a
+future sprint; see doc for mechanism, code anchors, SOTA refs, validation.
+
+## ✅ Done (this session)
+- [x] **Mock allocator** (`-DIARA_MOCK_ALLOC`, opt-in, flag-gated) — alias >1MB buffers to one mmap region; proves the upper bound (faults 3.6M→0.28M, RSS 4→1.3GB @ P=1). Commit `662c7ea`.
+- [x] **Debug tid+timestamp** (`DebugPrint.h`, `SYS_gettid` + CLOCK_MONOTONIC) — backend-agnostic concurrency/overlap probe. Commit `662c7ea`.
+
+## 🟠 Roadmap (sequenced)
+- [ ] **T1 — static peak estimate + preallocated arena** — peak = max-weight antichain (min-cut) over inout-chain lifetimes, per parallelism level; MEG = lower bound only for a dynamic runtime. mmap once + hugepages.
+- [ ] **T2 — slab/region sub-allocator** — per-size-class slab pools sized by per-class max antichain; malloc overflow fallback. Open: worst-case concurrent-live-chains-per-size algorithm.
+- [ ] **T3 — per-core lock-free NUMA-bound arenas** — kill global malloc lock (4-core sys-time).
+- [ ] **T4 — ownership-aware zero-copy broadcast (RO-borrow)** ← copy fix + research differentiator. No refcount: compile-time dependency edges via existing `KeyedSemaphore` count (`0cf074e` hook); `getInoutPairs` 1→N fork; no memcpy for read-only same-size outputs. Prep region-overlap dependency-gen for multidim (paper Slice/Concat).
+- [ ] **T5 — locality/transfer-aware allocation** — Preesm MEG-split (hal-01390486) is distributed-mem, mapping-first; we bias dynamically (NUMA hints, transfer-weighted).
+- [ ] **T6 — co-schedule compute+memory (data-parallel vs pipeline)** — locality-guided work-stealing default + coarse per-stage bandit (penalty = cheap proxy, not per-firing/PMU).
+- [ ] **T7 — profiling** — (1) always-on compiler per-`kernel_id` counters (evolve DebugPrint to in-memory accumulator); (2) offline perf/PMU for locality calibration.
+
+---
+
+# Experiment framework — interactive notebook pivots — 2026-06-28
+
+- [ ] **Get the Perspective widget working** — richer drag-pivot than PivotTable.js (Group/Split/Order shelves, grid↔chart), but its widget model won't load in either env: VSCode's renderer fetches widget JS from a CDN where `@perspective-dev/jupyterlab` isn't published; JupyterLab throws `Failed to load model class 'PerspectiveModel'` (perspective 4.5 vs `@jupyter-widgets/jupyterlab-manager` 5.x mismatch) despite `jupyter labextension list` = enabled OK. Currently dropped from `notebook.py`; only PivotTable.js ships. Try: pin compatible perspective / jupyterlab-widgets versions, or use perspective's standalone (non-widget) HTML/`<perspective-viewer>` export instead of the ipywidget.

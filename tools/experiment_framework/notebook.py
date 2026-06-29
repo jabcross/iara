@@ -476,28 +476,24 @@ def create_interactive_pivot_cells() -> List[Dict[str, Any]]:
     Cells for drag-and-drop interactive re-pivoting of the results.
 
     Builds one tidy DataFrame (`df_pivot`: one row per instance = all parameters
-    + each metric's mean), then two drag-and-drop pivot views so dimensions can
-    be re-faceted/reordered without re-plotting. Both are guarded so a missing
-    package never breaks notebook execution.
+    + each metric's mean) and a PivotTable.js drag-and-drop view, pre-seeded with
+    sensible facets. Guarded so a missing package never breaks execution; also
+    writes a standalone `pivot_ui.html`.
 
-    NOTE: open in JupyterLab (`jupyter lab`), not VSCode — the widgets load from
-    locally-installed labextensions (perspective-python / ipywidgets ship them);
-    VSCode's notebook renderer only fetches widget JS from a CDN and can't.
+    (Perspective was tried and dropped: its widget model fails to register in both
+    VSCode's CDN-based renderer and JupyterLab's widget manager under
+    perspective 4.x. PivotTable.js works in both.)
 
     Returns:
-        List of nbformat-v4 cells (markdown header, tidy-df, Perspective,
-        PivotTable.js).
+        List of nbformat-v4 cells (markdown header, tidy-df, PivotTable.js).
     """
     header = """## Interactive exploration (drag to re-pivot)
 
-Both views read the tidy table **`df_pivot`** (one row per instance = all
-parameters + each metric's mean). Drag fields to re-facet / regroup / reorder.
-
-- **Perspective** — drag fields into *Group By* / *Split By* / *Order By* / *Filter*; toggle grid ↔ chart.
-- **PivotTable.js** — drag fields between *Rows* / *Cols* / *Filter*; pick a renderer (bar/line/heatmap/table). Also writes a standalone `pivot_ui.html`.
-
-**Open in JupyterLab** (`pip install jupyterlab && jupyter lab`) — the widgets
-render from local labextensions, which VSCode's CDN-only renderer can't load."""
+**PivotTable.js** over the tidy table **`df_pivot`** (one row per instance = all
+parameters + each metric's mean): drag fields between *Rows* / *Cols* / *Filter*
+and pick a renderer (table / bar / line / heatmap) from the top-left dropdown.
+Starts grouped by scheduler with average wall-time as a bar chart. Also writes a
+standalone `pivot_ui.html` — open it in a browser if the inline frame is blank."""
 
     tidy_df = """import pandas as pd
 
@@ -514,25 +510,20 @@ df_pivot = pd.DataFrame(_rows)
 print(f"df_pivot: {len(df_pivot)} rows x {len(df_pivot.columns)} cols")
 df_pivot"""
 
-    perspective_cell = """# Perspective: drag fields into Group By / Split By / Order By / Filter; toggle grid <-> chart.
-# Renders in JupyterLab (not VSCode). Needs: perspective-python, pyarrow, ipywidgets.
-try:
-    from perspective.widget import PerspectiveWidget
-    from IPython.display import display
-    display(PerspectiveWidget(df_pivot))
-except Exception as _e:
-    print("Perspective unavailable:", _e)
-    print("Install with:  pip install perspective-python pyarrow ipywidgets")"""
-
-    pivottable_cell = """# PivotTable.js: drag fields between Rows / Cols / Filter zones; pick a renderer.
+    pivottable_cell = """# PivotTable.js: drag fields between Rows / Cols / Filter; renderer dropdown is top-left.
 try:
     from pivottablejs import pivot_ui
     from IPython.display import display
     import os
-    pivot_ui(df_pivot, outfile_path="pivot_ui.html")
-    print("standalone view (open in a browser if the iframe below is blank):",
+    # Pre-seed useful facets when those columns exist (drag to change).
+    _rows = [c for c in ("scheduler", "semaphore") if c in df_pivot.columns]
+    _vals = [c for c in ("wall_time", "compute_time") if c in df_pivot.columns][:1]
+    _frame = pivot_ui(df_pivot, outfile_path="pivot_ui.html",
+                      rows=_rows, vals=_vals,
+                      aggregatorName="Average", rendererName="Bar Chart")
+    print("standalone view (open in a browser if the frame below is blank):",
           os.path.abspath("pivot_ui.html"))
-    display(pivot_ui(df_pivot, outfile_path="pivot_ui.html"))  # inline iframe
+    display(_frame)
 except Exception as _e:
     print("PivotTable.js unavailable:", _e)
     print("Install with:  pip install pivottablejs")"""
@@ -540,7 +531,6 @@ except Exception as _e:
     return [
         _markdown_cell(header),
         _code_cell(tidy_df),
-        _code_cell(perspective_cell),
         _code_cell(pivottable_cell),
     ]
 
