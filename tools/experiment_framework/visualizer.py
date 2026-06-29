@@ -108,6 +108,13 @@ def _default_plot_specs(app_name: str) -> Dict[str, Dict[str, Any]]:
             "x_axis": {},
             "description": "Time to compile and link the binary",
         },
+        "binary_file_size": {
+            "title": f"{title_prefix} — Binary File Size (ls)",
+            "type": "grouped_bars",
+            "y_axis": {"metric": "binary_file_size"},
+            "x_axis": {},
+            "description": "Actual on-disk binary size (os.path.getsize), non-sectioned — sanity check vs the stacked section breakdowns",
+        },
         "binary_size": {
             "title": f"{title_prefix} — Binary Size Breakdown",
             "type": "stacked_bar",
@@ -1369,6 +1376,8 @@ def generate_vegalite_json(
             section_sum = sum(secs.get(s, 0) for s in all_sections
                               if s not in BSS_SECTION_NAMES)
             inst["section_unknown"] = max(0, file_size - section_sum)
+            # Actual on-disk size (ls), for the non-sectioned sanity-check plot.
+            inst.setdefault("binary", {})["binary_file_size_bytes"] = file_size
         with open(results_json_path, 'w') as f:
             json.dump(results, f, indent=2)
 

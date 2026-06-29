@@ -497,12 +497,17 @@ standalone `pivot_ui.html` — open it in a browser if the inline frame is blank
 
     tidy_df = """import pandas as pd
 
-# Tidy table for pivoting: one row per instance = all parameters + metric means.
+# Tidy table for pivoting: one row per instance = all parameters + metric means
+# + universal measurements (binary size, compilation time).
 _rows = []
 for _inst in results_data['instances']:
     _row = dict(_inst.get('parameters', {}))
     for _metric, _stats in _inst.get('execution', {}).get('statistics', {}).items():
         _row[_metric] = _stats.get('mean')
+    _b = _inst.get('binary', {})
+    _row['binary_size_bytes'] = _b.get('total_size_bytes')        # summed sections
+    _row['binary_file_size_bytes'] = _b.get('binary_file_size_bytes')  # ls (on-disk)
+    _row.update(_inst.get('compilation', {}))  # iara_opt_time_s, total_time_s, iara_opt_max_rss_mb
     _row['instance'] = _inst.get('name')
     _rows.append(_row)
 
