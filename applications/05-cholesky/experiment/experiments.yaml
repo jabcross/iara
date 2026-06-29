@@ -49,6 +49,12 @@ parameters:
     label: "Semaphore"
     description: "IaRa semaphore implementation (atomic-ring, sharded-hash, global-mutex)"
 
+  # IaRa VirtualFIFO alloc mode (iara-opt codegen dim, forwarded as IARA_ALLOC_MODE)
+  - name: alloc_mode
+    type: str
+    label: "Alloc mode"
+    description: "VirtualFIFO alloc mode (data-triggered or priming)"
+
 # Computed parameters (derived from other parameters)
 computed_parameters:
   - name: BLOCK_SIZE
@@ -192,6 +198,32 @@ experiment_sets:
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
+  # ---- Overnight large comparison: 8 IaRa versions + omp-task baseline ----
+  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  - name: large-blocks
+    description: "Large: 8 IaRa versions (backend×semaphore×alloc) + omp-task; blocks{2,4,8}×matrix{2048,10080}"
+    parameters:
+      MATRIX_SIZE: [2048, 10080]
+      NUM_BLOCKS: [2, 4, 8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+      alloc_mode: [data-triggered, priming]
+    include:
+      - {scheduler: omp-task}
+
+  - name: large-scaling
+    description: "Large block-scaling: 8 IaRa versions + omp-task; blocks{1..8}×matrix{10080}"
+    parameters:
+      MATRIX_SIZE: [10080]
+      NUM_BLOCKS: [1, 2, 3, 4, 5, 6, 7, 8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+      alloc_mode: [data-triggered, priming]
+    include:
+      - {scheduler: omp-task}
+
   # Sub-scheduler comparison on the `medium` workload: the 4 IaRa versions
   # ({vf-omp,vf-enkits} × {atomic-ring,sharded-hash}) vs an OpenMP baseline
   # (omp-task). Common workload sweep cross-producted with the scheduler/
@@ -241,7 +273,7 @@ execution:
   warmup: 1
 
   # Timeout for each run (seconds)
-  timeout: 300
+  timeout: 1800
 
   # Environment variables to set for all runs
   environment:

@@ -44,6 +44,11 @@ struct VirtualFIFOSchedulerPass
       llvm::cl::desc("Keyed-semaphore impl: atomic-ring|sharded-hash|global-mutex "
                      "(env IARA_SEMAPHORE; default sharded-hash)")};
 
+  Option<std::string> alloc_mode{
+      *this, "alloc-mode",
+      llvm::cl::desc("VirtualFIFO alloc mode: data-triggered|priming "
+                     "(env IARA_ALLOC_MODE; default: leave build define as-is)")};
+
   struct Impl;
   ::llvm::StringRef getArgument() const override { return "virtual-fifo"; }
   ::llvm::StringRef getDescription() const override {

@@ -108,6 +108,13 @@ def _default_plot_specs(app_name: str) -> Dict[str, Dict[str, Any]]:
             "x_axis": {},
             "description": "Time to compile and link the binary",
         },
+        "compilation_max_rss": {
+            "title": f"{title_prefix} — Compilation Peak RAM",
+            "type": "grouped_bars",
+            "y_axis": {"metric": "compilation_max_rss"},
+            "x_axis": {},
+            "description": "Peak RSS of the compile/link process tree (lower phase, /usr/bin/time)",
+        },
         "binary_file_size": {
             "title": f"{title_prefix} — Binary File Size (ls)",
             "type": "grouped_bars",
@@ -689,6 +696,9 @@ def _get_metric_field(metric: str) -> str:
     """
     if metric == "binary_compilation_time":
         return "compilation.total_time_s"
+    elif metric == "compilation_max_rss":
+        # Peak RSS of the compile/link tree (lower phase, /usr/bin/time), in MB.
+        return "compilation.iara_opt_max_rss_mb"
     elif metric.startswith("binary_"):
         # binary_size_breakdown -> binary.binary_size_breakdown_bytes
         return f"binary.{metric}_bytes"
@@ -712,6 +722,8 @@ def _get_metric_title(metric: str) -> str:
         return f"{title} (Bytes)"
     elif "rss" in metric.lower():
         return "Memory (MB)"
+    elif metric == "compilation_max_rss":
+        return "Compilation Peak RAM (MB)"
     elif "time" in metric.lower() and metric != "binary_compilation_time":
         return f"{title} (s)"
 

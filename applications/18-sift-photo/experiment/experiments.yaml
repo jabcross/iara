@@ -24,9 +24,21 @@ parameters:
     description: "Number of pipeline iterations per run (1 = single shot, >1 = warm-up test, vf-omp only for >1)"
     choices: [1, 10, 50, 100]
 
+  # IaRa semaphore implementation (iara-opt codegen dim, forwarded as IARA_SEMAPHORE)
+  - name: semaphore
+    type: str
+    label: "Semaphore"
+    description: "IaRa semaphore implementation (atomic-ring, sharded-hash, global-mutex)"
+
+  # IaRa VirtualFIFO alloc mode (iara-opt codegen dim, forwarded as IARA_ALLOC_MODE)
+  - name: alloc_mode
+    type: str
+    label: "Alloc mode"
+    description: "VirtualFIFO alloc mode (data-triggered or priming)"
+
 constraints:
-  - expression: "VIDEO_FRAMES == 1 or scheduler == 'vf-omp'"
-    description: "Multi-frame video warm-up supported for vf-omp only"
+  - expression: "VIDEO_FRAMES == 1 or scheduler in ('vf-omp', 'vf-enkits')"
+    description: "Multi-frame video warm-up supported for IaRa VirtualFIFO backends (vf-omp/vf-enkits); preesm runs single-frame"
 
 experiment_sets:
   - name: photo
@@ -59,6 +71,21 @@ experiment_sets:
       VIDEO_FRAMES: [1, 10, 50, 100]
     scheduler_override:
       vf-omp: [vf-omp]
+
+  # ---- Overnight large comparison: 4K video steady-state, 8 IaRa + preesm ----
+  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  # IaRa runs 10-frame video (steady state); preesm is single-frame (no video loop).
+  - name: large-sub-sched
+    description: "4K video steady-state: 8 IaRa versions (frames=10) + preesm (frames=1); cores{1,4,8,12,16,20}"
+    parameters:
+      NUM_CORES: [1, 4, 8, 12, 16, 20]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring, sharded-hash]
+      alloc_mode: [data-triggered, priming]
+      VIDEO_FRAMES: [10]
+    include:
+      - {scheduler: preesm, VIDEO_FRAMES: 1}
 
 measurements:
   - name: keypoints_found

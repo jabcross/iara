@@ -471,6 +471,20 @@ struct VirtualFIFOSchedulerPass::Impl {
                    << "', using sharded-hash\n";
       define = "#define IARA_SEMAPHORE_SHARDED_HASH 1\n";
     }
+    // Alloc mode: data-triggered #defines, priming #undefs (overriding any -D
+    // from build.defines, since this header is force-included after -D flags).
+    // Empty (unset) leaves whatever the build define dictates.
+    std::string alloc = iara::util::optionOrEnv(
+        pass->alloc_mode.hasValue(), pass->alloc_mode.getValue(),
+        "IARA_ALLOC_MODE", "");
+    std::string alloc_define;
+    if (alloc == "data-triggered")
+      alloc_define = "#define IARA_DATA_TRIGGERED_ALLOC 1\n";
+    else if (alloc == "priming")
+      alloc_define = "#undef IARA_DATA_TRIGGERED_ALLOC\n";
+    else if (!alloc.empty())
+      llvm::errs() << "Unknown --alloc-mode value '" << alloc
+                   << "', leaving build define as-is\n";
     std::error_code ec;
     llvm::raw_fd_ostream os("iara_runtime_config.h", ec);
     if (ec) {
@@ -481,6 +495,8 @@ struct VirtualFIFOSchedulerPass::Impl {
        << "#ifndef IARA_RUNTIME_CONFIG_H\n#define IARA_RUNTIME_CONFIG_H\n"
        << "// semaphore = " << sem << "\n"
        << define
+       << "// alloc_mode = " << (alloc.empty() ? "(build default)" : alloc) << "\n"
+       << alloc_define
        << "#endif // IARA_RUNTIME_CONFIG_H\n";
   }
 };
