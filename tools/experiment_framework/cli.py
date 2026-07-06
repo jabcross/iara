@@ -951,34 +951,14 @@ source {shlex.quote(iara_dir)}/sorgan_env.sh
             return 2
 
         job_id = int(result.stdout.strip())
-        print(f"Slurm job {job_id} submitted. Output: iara-slurm-{job_id}.out", file=sys.stderr)
-
-        # Poll until job completes
-        while True:
-            status_result = subprocess.run(
-                ['squeue', '-j', str(job_id), '-h', '-o', '%T'],
-                capture_output=True, text=True, timeout=10
-            )
-            status = status_result.stdout.strip()
-            if not status:
-                break  # Job finished
-            time.sleep(5)
-
-        # Check exit code
-        sacct_result = subprocess.run(
-            ['sacct', '-j', str(job_id), '--format=ExitCode', '--noheader', '-P', '-n'],
-            capture_output=True, text=True, timeout=10
-        )
-        returncode = 0
-        for line in sacct_result.stdout.strip().split('\n'):
-            if line:
-                try:
-                    returncode = int(line.split(':')[0])
-                    break
-                except (ValueError, IndexError):
-                    pass
-
-        return returncode
+        # Always detach: sbatch has already spooled the script, so we return
+        # immediately instead of polling the job to completion. The pipeline
+        # runs on the compute node in the background; monitor it separately.
+        print(f"Slurm job {job_id} submitted (detached). "
+              f"Output: iara-slurm-{job_id}.out", file=sys.stderr)
+        print(f"  Monitor:  squeue -j {job_id}   |   tail -f iara-slurm-{job_id}.out",
+              file=sys.stderr)
+        return 0
     finally:
         Path(script_path).unlink(missing_ok=True)
 
