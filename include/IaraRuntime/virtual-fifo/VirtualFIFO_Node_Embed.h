@@ -15,9 +15,12 @@
 // Opt-in data-triggered allocation mode: a node fires on its true inputs and
 // allocates its own output buffers in fire(), with no prime() priming token or
 // ensureAlloc() chain. Enabled per-application with -DIARA_DATA_TRIGGERED_ALLOC.
-// Default (legacy) is the prime()/ensureAlloc() path. The mode is correct under
-// vf-sequential; it still has known data races under the parallel schedulers
-// (vf-omp/vf-enkits), so it is not a global default.
+// Default (legacy) is the prime()/ensureAlloc() path. Validated on all current
+// benchmarks (cholesky, degridder, SIFT, SIFT-photo) under vf-omp and vf-enkits;
+// opt-in (not a global default) because general-case correctness is not yet
+// proven, not because of any known failure. Theoretical race risk to watch:
+// concurrent-writer gathers sharing one g_block_cache block, and cross-iteration
+// self-timed feedback beyond the per-iteration release window.
 
 struct VirtualFIFO_Edge;
 
