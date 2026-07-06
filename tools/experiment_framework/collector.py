@@ -431,6 +431,32 @@ def parse_regex_measurement(
         )
 
 
+def parse_timespan_measurement(
+    output: str,
+    start_pattern: str,
+    end_pattern: str,
+) -> Optional[float]:
+    """
+    Compute a wallclock span from repeated start/end timestamp lines.
+
+    Both patterns must capture (group 1) a float timestamp. Returns
+    max(all end timestamps) - min(all start timestamps), i.e. the wallclock
+    span covered by every start/end pair in the output. Used for e.g. the
+    degridder kernel span, where each chunk firing prints its own
+    "Time degrid start/end" line and the parallel span is max_end - min_start.
+
+    Returns None if either pattern matches nothing.
+    """
+    try:
+        starts = [float(v) for v in re.findall(start_pattern, output, re.MULTILINE)]
+        ends = [float(v) for v in re.findall(end_pattern, output, re.MULTILINE)]
+    except re.error as e:
+        raise ValueError(f"Invalid timespan pattern: {e}")
+    if not starts or not ends:
+        return None
+    return max(ends) - min(starts)
+
+
 def parse_json_measurement(
     output: str,
     key_path: List[str],
@@ -616,6 +642,13 @@ def parse_measurement(
         elif parser_type == 'line':
             line_number = parser.get('line_number', 0)
             value = parse_line_measurement(output, line_number, spec_type)
+
+        elif parser_type == 'timespan':
+            value = parse_timespan_measurement(
+                output,
+                parser.get('start_pattern', ''),
+                parser.get('end_pattern', ''),
+            )
 
         else:
             raise ValueError(f"Unknown parser type: {parser_type}")

@@ -137,6 +137,21 @@ measurements:
     required: false
     description: "Whether the computation was correct"
 
+  # Kernel-only timing: wallclock span of the degrid compute phase, computed from
+  # the per-firing "Time degrid start/end" lines that BOTH the IaRa and Preesm
+  # kernels already print (max end - min start). No source changes — reuses the
+  # existing instrumentation shared by both versions. Isolates the parallelizable
+  # work from the fixed serial I/O that caps end-to-end wall speedup (~1.25x Amdahl).
+  - name: degrid_kernel_time
+    type: float
+    parser:
+      type: timespan
+      start_pattern: 'Time degrid start:\s+([0-9.]+)'
+      end_pattern: 'Time degrid end:\s+([0-9.]+)'
+    unit: s
+    required: false
+    description: "Wallclock span of the degrid compute phase (excludes I/O/setup)"
+
 # Named experiment sets for different purposes
 experiment_sets:
   # Quick test
@@ -225,6 +240,19 @@ experiment_sets:
     include:
       - {scheduler: preesm}
 
+
+  # Reproduce the published ~22x degridder speedup — PREESM, kernel-only.
+  # End-to-end wall is I/O-bound (Amdahl-capped ~1.25x); the 22x is the degrid
+  # KERNEL span (degrid_kernel_time). chunk>=cores so every core gets a task.
+  # cores{1,32} x chunk{32,64}; speedup = degrid_kernel_time(1) / (32).
+  - name: preesm-kernel-scaling
+    description: "Preesm degrid kernel scaling curve (large, chunk=64, cores 1..32); kernel-only timing"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1, 8, 16, 32]
+      NUM_CHUNK: [64]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [preesm]
 
   # Chunking study
   - name: chunking
