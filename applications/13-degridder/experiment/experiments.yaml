@@ -254,6 +254,20 @@ experiment_sets:
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [preesm]
 
+  # vf-omp kernel scaling curve, matched to preesm-kernel-scaling's core count
+  # (32 real cores, now that OMP_NUM_THREADS is templated to {NUM_CORES} instead
+  # of hardcoded 8). NUM_CHUNK as the parallelism-exposed proxy: with only 32
+  # real threads, chunk count below 32 can't use them all, so sweep chunks at a
+  # fixed large core count rather than sweeping cores at a fixed chunk count.
+  - name: vf-omp-kernel-scaling
+    description: "vf-omp degrid kernel scaling curve (large, 32 real cores, chunk 1..512); kernel-only timing"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [32]
+      NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [vf-omp]
+
   # Chunking study
   - name: chunking
     description: "Study effect of chunk size on performance"
@@ -302,7 +316,7 @@ execution:
 
   # Environment variables to set for all runs
   environment:
-    OMP_NUM_THREADS: "8"
+    OMP_NUM_THREADS: "{NUM_CORES}"
     OMP_PROC_BIND: "spread"
     OMP_PLACES: "threads"
 
