@@ -213,7 +213,7 @@ experiment_sets:
       - {scheduler: omp-task}
 
   - name: large-scaling
-    description: "Large block-scaling: 8 IaRa versions + omp-task; blocks{1..8}×matrix{10080}"
+    description: "Large block-scaling: 8 IaRa versions + omp-task + enkits-task baselines; blocks{1..8}×matrix{10080}"
     parameters:
       MATRIX_SIZE: [10080]
       NUM_BLOCKS: [1, 2, 3, 4, 5, 6, 7, 8]
@@ -223,6 +223,7 @@ experiment_sets:
       alloc_mode: [data-triggered, priming]
     include:
       - {scheduler: omp-task}
+      - {scheduler: enkits-task}
 
   # Sub-scheduler comparison on the `medium` workload: the 4 IaRa versions
   # ({vf-omp,vf-enkits} × {atomic-ring,sharded-hash}) vs an OpenMP baseline
