@@ -41,8 +41,12 @@ void fillOutPairPointers(std::span<NodeCodegenData> node_codegen_datas,
       auto edge_op = llvm::cast<EdgeOp>(input.getDefiningOp());
       assert(edge_to_data.contains(edge_op));
       auto edge_codegen_data = edge_to_data[edge_op];
-      node_codegen_data.inputs.push_back(edge_codegen_data);
       edge_codegen_data->consumer = &node_codegen_data;
+      // Logic inputs are not kernel args and not part of the input-fifo list;
+      // the consumer link above is still recorded so the producer can deliver
+      // the token.
+      if (!isLogicEdge(edge_op))
+        node_codegen_data.inputs.push_back(edge_codegen_data);
     }
     for (auto output : node_codegen_data.node_op.getAllOutputs()) {
       auto users = llvm::to_vector(output.getUsers());
@@ -50,11 +54,20 @@ void fillOutPairPointers(std::span<NodeCodegenData> node_codegen_datas,
       auto edge_op = llvm::cast<EdgeOp>(users.front());
       assert(edge_to_data.contains(edge_op));
       auto edge_codegen_data = edge_to_data[edge_op];
-      node_codegen_data.outputs.push_back(edge_codegen_data);
       edge_codegen_data->producer = &node_codegen_data;
+      // Logic outputs are pushed as tokens in fire(), not threaded through the
+      // inout-chain output enumeration.
+      if (isLogicEdge(edge_op))
+        node_codegen_data.logic_outputs.push_back(edge_codegen_data);
+      else
+        node_codegen_data.outputs.push_back(edge_codegen_data);
     }
   }
   for (auto &edge_codegen_data : edge_codegen_datas) {
+    // Logic edges have no buffer and belong to no inout chain: no alloc node,
+    // no chain successor.
+    if (isLogicEdge(edge_codegen_data.edge_op))
+      continue;
     edge_codegen_data.alloc_node =
         node_to_data[findFirstNodeOfChain(edge_codegen_data.edge_op)];
     assert(edge_codegen_data.alloc_node->node_op.isAlloc());

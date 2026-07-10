@@ -100,6 +100,24 @@ public:
   auto pureOutputs() {
     return llvm::map_range(getPureOuts(), valueToOutEdge);
   }
+
+  // A logic (control-only) port is typed `none`: no data buffer, not a kernel
+  // arg, only gates firing. Everything else is a data port.
+  static bool isLogicValue(mlir::Value v) {
+    return llvm::isa<mlir::NoneType>(v.getType());
+  }
+  auto dataIns() {
+    return llvm::make_filter_range(
+        getIn(), [](mlir::Value v) { return !isLogicValue(v); });
+  }
+  auto logicIns() {
+    return llvm::make_filter_range(
+        getIn(), [](mlir::Value v) { return isLogicValue(v); });
+  }
+  auto logicOuts() {
+    return llvm::make_filter_range(
+        getPureOuts(), [](mlir::Value v) { return isLogicValue(v); });
+  }
   auto inoutOutputs() {
     // Result-side of inout = first getInout().size() results of NodeOp.
     return llvm::map_range(getResults().take_front(getInout().size()),

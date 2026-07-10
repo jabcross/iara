@@ -88,16 +88,24 @@ FunctionType NodeOp::getKernelFunctionType() {
   auto builder = OpBuilder(*this);
   SmallVector<Type> types;
 
+  // Logic (`none`) ports are not kernel arguments: they carry no buffer and
+  // `none` has no memref lowering. Skip them so the kernel signature matches the
+  // data-only argument list the dispatch passes.
+  auto isLogic = [](Value v) { return llvm::isa<mlir::NoneType>(v.getType()); };
   for (auto p : getParams()) {
     types.push_back(p.getType());
   }
   for (auto v : getIn()) {
+    if (isLogic(v))
+      continue;
     types.push_back(v.getType());
   }
   for (auto v : getInout()) {
     types.push_back(v.getType());
   }
   for (auto v : getPureOuts()) {
+    if (isLogic(v))
+      continue;
     types.push_back(v.getType());
   }
 

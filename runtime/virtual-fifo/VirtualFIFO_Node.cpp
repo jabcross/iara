@@ -189,6 +189,37 @@ void VirtualFIFO_Node::consume(i64 seq,
     fire(seq, args);
 }
 
+void VirtualFIFO_Node::consumeLogic(i64 seq, i64 tokens) {
+  // A logic (control-only) arrival gates firing without occupying a kernel-arg
+  // slot: an empty chunk (skipped by every_time_func's store) plus an explicit
+  // token amount — the exact decoupling prime() uses. The threshold matches
+  // consume()'s so all arrivals for a firing agree on it.
+  auto f = VirtualFIFO_NormalSemaphore::FirstArgs{this};
+  auto e = VirtualFIFO_NormalSemaphore::EveryTimeArgs{
+      .data = VirtualFIFO_Chunk::make_empty(), .arg_idx = -1,
+      .first_of_firing = 0};
+
+  bool may_fire = false;
+  std::span<VirtualFIFO_Chunk> args;
+  auto l = VirtualFIFO_NormalSemaphore::LastArgs{&may_fire, &args};
+
+#ifdef IARA_DATA_TRIGGERED_ALLOC
+  // NOTE: logic-edge gating under data-triggered alloc is incomplete — the
+  // threshold below excludes the logic token (trueInputBytes counts only
+  // alloc-independent data inputs). Tracked in the ownership design doc; the
+  // legacy priming path (below) is correct and is what the tests exercise.
+  i64 arrive_count = trueInputBytes();
+#else
+  i64 arrive_count = runtime_info.arg_bytes
+      + ((runtime_info.flags & IARA_NODE_NEEDS_PRIMING) ? 1 : 0);
+#endif
+  runtime_info.sema_variant.normal->semaphore.arrive(
+      seq, tokens, arrive_count, f, e, l);
+
+  if (may_fire)
+    fire(seq, args);
+}
+
 void VirtualFIFO_Node::dealloc(i64 current_buffer_size,
                                i64 first_buffer_size,
                                i64 next_buffer_sizes,
@@ -293,6 +324,14 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       out->push(out_chunk);
     }
 
+    // Deliver control tokens on this node's logic outputs (1:1 with firing).
+    for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
+      auto *le =
+          iara::runtime::virtualfifo::getEdge(_this->getLogicOutputEdge(k));
+      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(
+          seq, le->runtime_info.cons_rate);
+    }
+
 #ifdef IARA_SEMAPHORE_ATOMIC_RING
     _this->runtime_info.sema_variant.normal->semaphore.release(seq);
 #else
@@ -313,6 +352,14 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
     for (iara::int_edge idx = 0; idx < _this->getNumOutputs(); idx++) {
       auto *out = iara::runtime::virtualfifo::getEdge(_this->getOutputEdge(idx));
       out->push(args[idx]);
+    }
+
+    // Deliver control tokens on this node's logic outputs (1:1 with firing).
+    for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
+      auto *le =
+          iara::runtime::virtualfifo::getEdge(_this->getLogicOutputEdge(k));
+      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(
+          seq, le->runtime_info.cons_rate);
     }
 
 #ifdef IARA_DEBUGPRINT

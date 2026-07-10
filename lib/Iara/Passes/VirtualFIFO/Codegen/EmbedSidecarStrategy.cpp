@@ -99,14 +99,14 @@ sortEdgesChainContiguous(std::span<EdgeCodegenData> edges) {
     }
   }
 
-  // Any edges not reached (shouldn't happen in a valid graph) appended last.
+  // Logic edges belong to no inout chain; they are appended separately by the
+  // caller (grouped per producer). Every other edge must have been reached.
   for (auto &e : edges) {
-    if (!visited.count(&e)) {
+    if (!visited.count(&e) && !isLogicEdge(e.edge_op)) {
       assert(false && "Edge not reached during chain-contiguous sort");
     }
   }
 
-  assert(result.size() == edges.size());
   return result;
 }
 
@@ -198,6 +198,22 @@ struct EmbedSidecarEmitter {
     // Sort edges chain-contiguous.
     auto sorted_edges = sortEdgesChainContiguous(edge_pairs);
 
+    // Append logic (control-only) output edges, grouped per producer node so
+    // each node's logic outputs occupy a contiguous range. They live after all
+    // dealloc-terminated chains, so they never disturb the implicit e+1
+    // chain-successor walk.
+    std::vector<std::pair<iara::int_edge, u8>> node_logic_out(num_nodes, {0, 0});
+    for (size_t i = 0; i < num_nodes; i++) {
+      auto &nd = node_pairs[i];
+      if (nd.logic_outputs.empty())
+        continue;
+      node_logic_out[i].first =
+          static_cast<iara::int_edge>(sorted_edges.size());
+      node_logic_out[i].second = static_cast<u8>(nd.logic_outputs.size());
+      for (auto *le : nd.logic_outputs)
+        sorted_edges.push_back(le);
+    }
+
     // Remap edge indices after sorting.
     llvm::DenseMap<EdgeCodegenData *, iara::int_edge> edge_idx;
     for (size_t i = 0; i < sorted_edges.size(); i++)
@@ -286,6 +302,8 @@ struct EmbedSidecarEmitter {
       // sema_variant: zero-initialized (calloc semantics from memset above).
 
       dst.codegen_info.kernel_id = nd.kernel_id;
+      dst.codegen_info.logic_out_start = node_logic_out[i].first;
+      dst.codegen_info.logic_out_count = node_logic_out[i].second;
       if (node_fifo[i].flags & IARA_NODE_INPUTS_INLINE) {
         dst.codegen_info.input_fifos.inline_inputs[0] =
             node_fifo[i].inline_inputs[0];

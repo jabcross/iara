@@ -13,6 +13,7 @@
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
 #include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 #include <cstddef>
+#include <functional>
 #include <system_error>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/Support/raw_ostream.h>
@@ -137,7 +138,13 @@ struct VirtualFIFOSchedulerPass::Impl {
       return existing;
     }
 
-    auto num_buffers = node_op.getIn().size() + node_op.getOut().size();
+    // Logic (`none`) ports carry no buffer and are excluded from the kernel's
+    // buffer-arg count: a logic `in` has no data-pointer arg, and a logic pure
+    // `out` (past the inout-paired prefix of getOut()) has none either.
+    auto isLogic = [](Value v) { return llvm::isa<NoneType>(v.getType()); };
+    size_t num_buffers =
+        llvm::count_if(node_op.getIn(), std::not_fn(isLogic)) +
+        llvm::count_if(node_op.getOut(), std::not_fn(isLogic));
 
     auto wrapper = CREATE(LLVM::LLVMFuncOp,
                           mod_builder,

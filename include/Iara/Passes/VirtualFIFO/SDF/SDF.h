@@ -16,6 +16,12 @@ using namespace dialect;
 
 bool isDeallocEdge(EdgeOp edge);
 
+// A logic (control-only) edge is typed `none`: it carries no data buffer, is not
+// a kernel argument, and only gates firing (a 1:1 token). It is a normal SDF edge
+// for rating/admissibility but is excluded from alloc/dealloc generation, inout
+// chains, and kernel-arg accounting.
+bool isLogicEdge(EdgeOp edge);
+
 Vec<EdgeOp> getInoutChain(EdgeOp edge);
 
 NodeOp findFirstNodeOfChain(EdgeOp edge);

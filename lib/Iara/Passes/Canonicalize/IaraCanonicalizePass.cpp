@@ -45,6 +45,11 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   // First, expand all broadcasts.
   for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
     for (auto result : op->getResults()) {
+      // Logic (`none`) outputs never fan out through a memcpy broadcast; a
+      // logic fan-out is expressed as several distinct logic edges (handled by
+      // the ownership pass), not by a data-copying broadcast node.
+      if (isa<NoneType>(result.getType()))
+        continue;
       auto uses = result.getUses() | Pointers() | IntoVector();
       if (uses.size() > 1) {
         auto _ = iara::dialect::broadcast::insertBroadcast(result, false);
@@ -85,6 +90,12 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
 }
 
 Type canonicalizeType(Type old_type) {
+  // Logic (control-only) edges are typed `none`. Leave them bare: `none` is not
+  // a valid tensor element type, so it must not be wrapped in a tensor, and it
+  // carries no data to reshape.
+  if (isa<NoneType>(old_type)) {
+    return old_type;
+  }
   if (!isa<RankedTensorType>(old_type)) {
     return RankedTensorType::get({1}, old_type);
   }

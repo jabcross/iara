@@ -276,13 +276,44 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
     return success();
   auto builder = OpBuilder(old_node);
 
-  SmallVector<Value> new_node_inputs = old_node.getAllInputs();
-  auto alloc_inputs = createAllocations(old_node.getPureOuts());
-  new_node_inputs.append(alloc_inputs);
+  // Partition pure inputs and pure outputs into data vs logic (`none`) ports.
+  // Logic ports carry no buffer: a logic input stays a pure `in` (no
+  // pass-through result, no dealloc); a logic output stays a pure result (no
+  // alloc). Data ports keep the original threading — each data input becomes an
+  // inout operand with a pass-through result feeding a dealloc, and each data
+  // output is fed by a fresh alloc. With no logic ports this is identical to the
+  // previous behavior.
+  SmallVector<Value> data_pure_ins, logic_pure_ins;
+  for (auto v : old_node.getIn())
+    (Node::isLogicValue(v) ? logic_pure_ins : data_pure_ins).push_back(v);
 
-  SmallVector<Type> new_result_types =
-      llvm::to_vector(old_node.getIn().getTypes());
-  new_result_types.append(to_vector(old_node->getResultTypes()));
+  SmallVector<Value> inout_ins = llvm::to_vector(old_node.getInout());
+  auto inout_results =
+      old_node.getResults().take_front(old_node.getInout().size());
+
+  SmallVector<Value> data_pure_outs, logic_pure_outs;
+  for (auto v : old_node.getPureOuts())
+    (Node::isLogicValue(v) ? logic_pure_outs : data_pure_outs).push_back(v);
+
+  auto alloc_inputs = createAllocations(data_pure_outs);
+
+  // Inout operands, in the order their paired results appear.
+  SmallVector<Value> inout_operands;
+  inout_operands.append(data_pure_ins.begin(), data_pure_ins.end());
+  inout_operands.append(inout_ins.begin(), inout_ins.end());
+  inout_operands.append(alloc_inputs.begin(), alloc_inputs.end());
+
+  // Result types: paired block (matches inout_operands order) then the unpaired
+  // logic pure-out results.
+  SmallVector<Type> new_result_types;
+  for (auto v : data_pure_ins)
+    new_result_types.push_back(v.getType());
+  for (auto v : inout_results)
+    new_result_types.push_back(v.getType());
+  for (auto v : data_pure_outs)
+    new_result_types.push_back(v.getType());
+  for (auto v : logic_pure_outs)
+    new_result_types.push_back(v.getType());
 
   auto new_node = CREATE(NodeOp,
                          builder,
@@ -290,10 +321,8 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
                          new_result_types,
                          old_node.getImpl(),
                          old_node.getParams(),
-                         {},
-                         new_node_inputs);
-
-  assert(new_node_inputs.size() == new_result_types.size());
+                         /*in=*/logic_pure_ins,
+                         /*inout=*/inout_operands);
 
   // Copy attributes from old_node to new_node
   Node old_n(old_node);
@@ -306,13 +335,23 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
 
   new_node->setDiscardableAttrs(old_node->getDiscardableAttrDictionary());
 
-  auto new_outs = new_node.getOut().take_front(old_node.getIn().size());
-  auto existing_outs = new_node.getOut().drop_front(old_node.getIn().size());
-  auto new_dealloc_nodes = createDeallocations(new_outs);
+  // Deallocs: one per data pure-in pass-through (the first block of results).
+  auto passthrough_outs = new_node.getOut().take_front(data_pure_ins.size());
+  auto new_dealloc_nodes = createDeallocations(passthrough_outs);
 
-  for (auto [old, new_] : llvm::zip_equal(old_node.getOut(), existing_outs)) {
-    old.replaceAllUsesWith(new_);
-  }
+  // Rewire old results to their new positions (skip the leading pass-through
+  // block, which is new).
+  auto new_results = new_node.getResults();
+  size_t base = data_pure_ins.size();
+  for (auto [k, oldr] : llvm::enumerate(inout_results))
+    oldr.replaceAllUsesWith(new_results[base + k]);
+  base += inout_results.size();
+  for (auto [k, oldr] : llvm::enumerate(data_pure_outs))
+    oldr.replaceAllUsesWith(new_results[base + k]);
+  base += data_pure_outs.size();
+  for (auto [k, oldr] : llvm::enumerate(logic_pure_outs))
+    oldr.replaceAllUsesWith(new_results[base + k]);
+
   old_node->erase();
 
   annotateDeallocations(new_dealloc_nodes, data);

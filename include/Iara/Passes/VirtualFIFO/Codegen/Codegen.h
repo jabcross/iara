@@ -45,6 +45,9 @@ struct NodeCodegenData {
   std::string name;
   std::vector<EdgeCodegenData *> inputs = {};
   std::vector<EdgeCodegenData *> outputs = {};
+  // Logic (control-only, `none`) output edges. Not part of the inout-chain
+  // output enumeration; the producer pushes a token on each in fire().
+  std::vector<EdgeCodegenData *> logic_outputs = {};
   Value input_fifos_span_ptr = {};
   Value output_fifos_span_ptr = {};
 };

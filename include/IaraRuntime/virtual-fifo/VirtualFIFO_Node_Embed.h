@@ -64,6 +64,10 @@ struct VirtualFIFO_Node_RuntimeInfo {
 // no .rela entries.
 struct VirtualFIFO_Node_CodegenInfo {
   u8 kernel_id; // index into the codegen-emitted iara_dispatch_kernel switch
+  // Logic (control-only) outputs are stored contiguously in the edge array,
+  // outside every inout chain. The producer pushes a token on each in fire().
+  // Packed into the pad byte after kernel_id so the node stays 32 bytes.
+  u8 logic_out_count;
   union {
     struct {
       iara::int_edge start; // offset into iara_runtime_node_input_fifos_flat
@@ -71,6 +75,7 @@ struct VirtualFIFO_Node_CodegenInfo {
     } indirect;               // when !IARA_NODE_INPUTS_INLINE (input_count > 2)
     iara::int_edge inline_inputs[2]; // when IARA_NODE_INPUTS_INLINE (count <= 2)
   } input_fifos;
+  iara::int_edge logic_out_start; // index of first logic-output edge
 };
 
 struct VirtualFIFO_Node {
@@ -84,6 +89,13 @@ struct VirtualFIFO_Node {
   iara::int_edge getNumInputs() const;
   iara::int_edge getInputEdge(iara::int_edge idx) const;
 
+  // Logic (control-only) outputs: contiguous edge indices, delivered as tokens
+  // in fire() (not part of the inout-chain output enumeration).
+  iara::int_edge getNumLogicOutputs() const { return codegen_info.logic_out_count; }
+  iara::int_edge getLogicOutputEdge(iara::int_edge idx) const {
+    return codegen_info.logic_out_start + idx;
+  }
+
   inline bool needs_priming() const {
     return !runtime_info.isAlloc() && (runtime_info.flags & IARA_NODE_NEEDS_PRIMING);
   }
@@ -95,6 +107,9 @@ struct VirtualFIFO_Node {
   i64 trueInputBytes() const;
 
   void consume(i64 seq, VirtualFIFO_Chunk chunk, i64 arg_idx, i64 offset_partial);
+  // Deliver `tokens` control tokens for firing `seq` from a logic edge: bumps
+  // the firing counter without occupying a kernel-arg slot (prime()-style).
+  void consumeLogic(i64 seq, i64 tokens);
   void dealloc(i64 current_buffer_size, i64 first_buffer_size,
                i64 next_buffer_sizes, VirtualFIFO_Chunk chunk);
   void init();

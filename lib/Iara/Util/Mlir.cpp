@@ -31,6 +31,10 @@ size_t getTypeTokenCount(Type type) {
 
 // returns the size of the type in bytes
 size_t getTypeSize(Value value) {
+  // A logic (control-only) edge is typed `none`: it carries no data buffer, but
+  // for SDF rating/threshold purposes it is one count-unit (a token) per firing.
+  if (llvm::isa<NoneType>(value.getType()))
+    return 1;
   auto dl = DataLayout::closest(value.getDefiningOp());
   if (auto tensor = llvm::dyn_cast<TensorType>(value.getType())) {
     return tensor.getNumElements() * dl.getTypeSize(tensor.getElementType());
@@ -40,6 +44,9 @@ size_t getTypeSize(Value value) {
 
 // returns the size of the type in bytes
 size_t getTypeSize(Type type, DataLayout dl) {
+  // `none` = logic token: 1 count-unit, no real bytes (see getTypeSize(Value)).
+  if (llvm::isa<NoneType>(type))
+    return 1;
   if (auto tensor = llvm::dyn_cast<TensorType>(type)) {
     return tensor.getNumElements() * dl.getTypeSize(tensor.getElementType());
   }

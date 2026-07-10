@@ -30,6 +30,10 @@ enum class Direction { Forward, Backward };
 
 bool isDeallocEdge(EdgeOp edge) { return getConsumerNode(edge).isDealloc(); }
 
+bool isLogicEdge(EdgeOp edge) {
+  return Node::isLogicValue(edge.getOut()) || Node::isLogicValue(edge.getIn());
+}
+
 Vec<EdgeOp> getInoutChain(EdgeOp edge) {
   Vec<EdgeOp> rv;
   auto first = findFirstEdgeOfChain(edge);
@@ -49,6 +53,9 @@ NodeOp findFirstNodeOfChain(EdgeOp edge) {
 Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
   Vec<Vec<EdgeOp>> chains;
   for (auto edge : actor.getOps<EdgeOp>()) {
+    // Logic edges have no buffer and belong to no inout chain.
+    if (isLogicEdge(edge))
+      continue;
     // Only once per inout chain.
     if (iara::followInoutChainBackwards(edge))
       continue;
@@ -66,15 +73,23 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     i64 arg_bytes = 0;
     i64 num_args = 0;
 
+    // Logic (control-only, `none`-typed) ports are normal SDF dependencies but
+    // are NOT kernel arguments. A logic *input* still gates firing, so it counts
+    // toward arg_bytes (the arrival threshold; getTypeSize(none)=1 token) but not
+    // num_args (no kernel-arg slot). A logic *output* has no buffer and nothing
+    // arrives for it, so it counts toward neither.
     for (auto pure_input : node.getIn()) {
       arg_bytes += getTypeSize(pure_input);
-      num_args += 1;
+      if (!Node::isLogicValue(pure_input))
+        num_args += 1;
     }
     for (auto inout : node.getInout()) {
       arg_bytes += getTypeSize(inout);
       num_args += 1;
     }
     for (auto pure_output : node.getPureOuts()) {
+      if (Node::isLogicValue(pure_output))
+        continue;
       arg_bytes += getTypeSize(pure_output);
       num_args += 1;
     }
@@ -94,6 +109,26 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
 LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
     Edge e(edge);
+    // A logic edge carries no buffer and is skipped by the inout-chain analysis
+    // that would otherwise set delay/block/alpha/beta. Give it a well-defined
+    // 1:1 token rating and no delays/blocks so the blob is valid; it is not a
+    // kernel arg (cons_arg_idx = -1) and its token is delivered directly in
+    // fire() (never through the byte-slicing push path).
+    if (isLogicEdge(edge)) {
+      e.setLocalIndex(0);
+      e.setProdRate(getProdRateBytes(edge)); // getTypeSize(none) == 1
+      e.setConsRate(getConsRateBytes(edge)); // 1
+      e.setConsArgIdx(-1);
+      e.setDelayOffset(0);
+      e.setDelaySize(0);
+      e.setBlockSizeWithDelays(1);
+      e.setBlockSizeNoDelays(1);
+      e.setProdAlpha(0);
+      e.setProdBeta(0);
+      e.setConsAlpha(0);
+      e.setConsBeta(0);
+      continue;
+    }
     // To fill in after alloc and dealloc generation.
     e.setLocalIndex(-1);
     e.setProdRate(getProdRateBytes(edge));
