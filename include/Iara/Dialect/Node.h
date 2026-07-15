@@ -154,6 +154,15 @@ public:
   i64 numArgs() const              { return getI64("num_args"); }
   void setNumArgs(i64 v)           { setI64("num_args", v); }
 
+  // Total logic-input tokens per firing (see RuntimeInfo::logic_in_bytes).
+  // Defaults to 0 when unset: synthetic nodes (alloc/dealloc/broadcast) are
+  // created outside annotateNodeInfo and have no logic inputs, so absent = 0.
+  i64 logicInBytes() const {
+    auto a = (*this)->getAttrOfType<mlir::IntegerAttr>("logic_in_bytes");
+    return a ? a.getInt() : 0;
+  }
+  void setLogicInBytes(i64 v)      { setI64("logic_in_bytes", v); }
+
   i64 rank() const                 { return getI64("rank"); }
   void setRank(i64 v)              { setI64("rank", v); }
 

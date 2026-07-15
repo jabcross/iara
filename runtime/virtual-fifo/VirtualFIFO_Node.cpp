@@ -17,6 +17,11 @@ i64 VirtualFIFO_Node::trueInputBytes() const {
     if (!iara::runtime::virtualfifo::getProducer(e)->runtime_info.isAlloc())
       sum += e->runtime_info.cons_rate;
   }
+  // Logic (control-only) inputs also gate firing but occupy no kernel-arg slot,
+  // so they are not in getNumInputs(). Add their token contribution here so the
+  // data-triggered threshold matches every arrival (consume + consumeLogic) and
+  // so a logic-only node (e.g. a join) is not mistaken for a source.
+  sum += runtime_info.logic_in_bytes;
   return sum;
 }
 
@@ -204,10 +209,8 @@ void VirtualFIFO_Node::consumeLogic(i64 seq, i64 tokens) {
   auto l = VirtualFIFO_NormalSemaphore::LastArgs{&may_fire, &args};
 
 #ifdef IARA_DATA_TRIGGERED_ALLOC
-  // NOTE: logic-edge gating under data-triggered alloc is incomplete — the
-  // threshold below excludes the logic token (trueInputBytes counts only
-  // alloc-independent data inputs). Tracked in the ownership design doc; the
-  // legacy priming path (below) is correct and is what the tests exercise.
+  // trueInputBytes() now includes this node's logic-input tokens, so the
+  // threshold agrees with consume()'s and logic edges gate correctly.
   i64 arrive_count = trueInputBytes();
 #else
   i64 arrive_count = runtime_info.arg_bytes

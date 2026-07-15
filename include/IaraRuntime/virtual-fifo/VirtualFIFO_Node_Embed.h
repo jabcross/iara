@@ -47,6 +47,14 @@ struct VirtualFIFO_Node_RuntimeInfo {
   uint32_t total_iter_firings;
   iara::int_edge num_args;
   uint8_t flags;                          // IARA_NODE_INPUTS_INLINE | IARA_NODE_NEEDS_PRIMING
+  // Total logic (control-only) tokens that must arrive per firing: sum over
+  // this node's `none`-typed inputs (getTypeSize(none)=1 each). Legacy priming
+  // folds this into arg_bytes; the data-triggered path recomputes its threshold
+  // from trueInputBytes() and must add this back (else logic edges don't gate).
+  // Occupies the pad byte after flags so the node stays 32 bytes.
+  // ponytail: u8 caps a node at 255 logic inputs (e.g. a 255-way join); widen
+  // to int_edge (and grow the struct) if a wider join is ever needed.
+  uint8_t logic_in_bytes;
 
   bool isAlloc()   const { return arg_bytes == static_cast<i64>(NodeType::Alloc); }
   bool isDealloc() const { return arg_bytes == static_cast<i64>(NodeType::Dealloc); }
@@ -56,6 +64,7 @@ struct VirtualFIFO_Node_RuntimeInfo {
     fprintf(stderr, "  arg_bytes = %ld\n", arg_bytes);
     fprintf(stderr, "  total_iter_firings = %u\n", total_iter_firings);
     fprintf(stderr, "  num_args = %u\n", num_args);
+    fprintf(stderr, "  logic_in_bytes = %u\n", logic_in_bytes);
     fprintf(stderr, "  flags = %u\n", flags);
   }
 };

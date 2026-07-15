@@ -72,6 +72,7 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, node] : enumerate(nodes)) {
     i64 arg_bytes = 0;
     i64 num_args = 0;
+    i64 logic_in_bytes = 0;
 
     // Logic (control-only, `none`-typed) ports are normal SDF dependencies but
     // are NOT kernel arguments. A logic *input* still gates firing, so it counts
@@ -82,6 +83,8 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
       arg_bytes += getTypeSize(pure_input);
       if (!Node::isLogicValue(pure_input))
         num_args += 1;
+      else
+        logic_in_bytes += getTypeSize(pure_input);
     }
     for (auto inout : node.getInout()) {
       arg_bytes += getTypeSize(inout);
@@ -97,6 +100,7 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     Node n(node);
     n.setArgBytes(arg_bytes);
     n.setNumArgs(num_args);
+    n.setLogicInBytes(logic_in_bytes);
     n.setRank(-1);
     n.setTotalIterFirings(-1);
     n.setNeedsPriming(1);

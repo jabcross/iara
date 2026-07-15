@@ -298,6 +298,10 @@ struct EmbedSidecarEmitter {
       dst.runtime_info.total_iter_firings =
           static_cast<uint32_t>(n.totalIterFirings());
       dst.runtime_info.num_args = static_cast<iara::int_edge>(n.numArgs());
+      assert(n.logicInBytes() <= 255 &&
+             "logic_in_bytes exceeds u8; widen the field (see Embed header)");
+      dst.runtime_info.logic_in_bytes =
+          static_cast<uint8_t>(n.logicInBytes());
       dst.runtime_info.flags = node_fifo[i].flags;
       // sema_variant: zero-initialized (calloc semantics from memset above).
 

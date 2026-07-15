@@ -24,19 +24,30 @@ parameters:
       - vf-sequential
       - vf-omp
       - vf-enkits
+  # IaRa VirtualFIFO alloc mode (iara-opt codegen dim, forwarded as IARA_ALLOC_MODE)
+  - name: alloc_mode
+    type: str
+    label: "Alloc mode"
+    description: "VirtualFIFO alloc mode (data-triggered or priming)"
 
 constraints: []
 
 
 experiment_sets:
 
+  # Both alloc modes: priming folds logic tokens into arg_bytes; data-triggered
+  # recomputes the threshold from trueInputBytes() and must add logic_in_bytes
+  # back — this set is what proves logic-edge gating works data-triggered.
   - name: tests
-    description: "Tests with all schedulers"
+    description: "Tests with all schedulers x both alloc modes"
     parameters:
       scheduler:
         - vf-sequential
         - vf-omp
         - vf-enkits
+      alloc_mode:
+        - priming
+        - data-triggered
 
 execution:
   repetitions: 1
@@ -46,4 +57,5 @@ execution:
 csv_output:
   columns:
     - scheduler
-  description: "Scheduler used"
+    - alloc_mode
+  description: "Scheduler + alloc mode used"
