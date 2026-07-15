@@ -78,5 +78,10 @@ manual-builds/
 static_data.bin
 static_data.c
 
+# Generated SIFT run outputs (keypoint dumps + rendered images); inputs like
+# *.pgm stay tracked.
+**/data/*_keypoints.key
+**/data/*_wkpts.ppm
+
 # Misc
 preesm_run_large.log
