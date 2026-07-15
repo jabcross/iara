@@ -1,0 +1,57 @@
+application:
+  name: 22-ro-broadcast
+  description: "All-read-only broadcast zero-copy borrow (FirstKeepsBuffer strategy)"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "22-ro-broadcast-{scheduler}-{alloc_mode}"
+  description: "RO-broadcast test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+  - name: alloc_mode
+    type: str
+    label: "Alloc mode"
+    description: "VirtualFIFO alloc mode (data-triggered or priming)"
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "All schedulers x both alloc modes"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+      alloc_mode:
+        - priming
+        - data-triggered
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+    - alloc_mode
+  description: "Scheduler + alloc mode used"
