@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRIara
         Dialect/NodeOp.cpp
         Dialect/EdgeOp.cpp
         Dialect/Broadcast.cpp
+        Dialect/Join.cpp
 
         Passes/FlattenPass.cpp
 

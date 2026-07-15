@@ -168,6 +168,34 @@ NodeOp specializeBroadcast(NodeOp generic_broadcast, bool force_copy) {
   return generic_broadcast;
 }
 
+bool broadcastOutputsAllReadOnly(NodeOp broadcast) {
+  // Every fanned-out output must be borrowed read-only: its consumer takes the
+  // value in its `in` (read-only) segment, not `inout` (read-write). Follows
+  // one EdgeOp hop (SIFT topologies wire broadcast->edge->consumer; auto-
+  // inserted broadcasts do too by the time this runs). Any non-node user, a
+  // dangling output, or an inout consumer disqualifies the broadcast.
+  for (auto out : broadcast.getAllOutputs()) {
+    for (auto *user : out.getUsers()) {
+      NodeOp consumer;
+      Value consumed = out;
+      if (auto edge = llvm::dyn_cast<EdgeOp>(user)) {
+        auto users = edge.getOut().getUsers();
+        if (users.empty())
+          return false;
+        consumer = llvm::dyn_cast<NodeOp>(*users.begin());
+        consumed = edge.getOut();
+      } else {
+        consumer = llvm::dyn_cast<NodeOp>(user);
+      }
+      if (!consumer)
+        return false;
+      if (!llvm::is_contained(consumer.getIn(), consumed))
+        return false;
+    }
+  }
+  return true;
+}
+
 NodeOp insertBroadcast(Value value, bool force_copy) {
   OpBuilder builder(value.getDefiningOp());
   builder.setInsertionPointAfter(value.getDefiningOp());
