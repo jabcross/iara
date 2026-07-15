@@ -83,8 +83,7 @@ static VirtualFIFO_Chunk makeAllocChunkForFiring(VirtualFIFO_Edge *e, i64 seq) {
     i64 total_delays = e->runtime_info.delay_offset + e->runtime_info.delay_size;
     if (block == 0 && total_delays > 0) {
       VirtualFIFO_Chunk full{
-          .allocated = base, .virtual_offset = 0, .data = base,
-          .data_size = block_size};
+          .allocated = base, .data = base, .data_size = block_size};
       auto delays = full.take_front(total_delays);
       e->propagate_delays(delays);
     }

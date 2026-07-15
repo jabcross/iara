@@ -37,8 +37,8 @@ VirtualFIFO_Chunk VirtualFIFO_Chunk::allocate(i64 size, i64 virtual_offset) {
   // #endif
   return VirtualFIFO_Chunk{
       .allocated = allocated,
-      .virtual_offset = virtual_offset,
       .data = allocated,
       .data_size = size,
+      .virtual_offset = virtual_offset,
   };
 }

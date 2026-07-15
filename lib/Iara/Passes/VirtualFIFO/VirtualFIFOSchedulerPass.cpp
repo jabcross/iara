@@ -197,33 +197,32 @@ struct VirtualFIFOSchedulerPass::Impl {
       kernel_args.push_back(new_const->getResult(0));
     }
 
+    auto loc = node_op.getLoc();
+    auto i8_type = IntegerType::get(ctx(), 8);
     for (size_t i = 0; i < num_buffers; i++) {
 
-      // arg1 is a span struct. We want to get its data field.
+      // arg1 is a std::span<VirtualFIFO_Chunk>; field 0 is its data pointer,
+      // i.e. &chunk[0]. Each chunk is a rank-1 memref descriptor
+      // { allocated, aligned, offset, size, stride, virtual_offset }.
+      auto chunks = CREATE(LLVM::ExtractValueOp, func_builder, loc,
+                           func_builder.getBlock()->getArgument(1), {0});
 
-      auto data_ptr = CREATE(LLVM::ExtractValueOp,
-                                       func_builder,
-                                       node_op.getLoc(),
-                                       func_builder.getBlock()->getArgument(1), {0});
+      // Resolve chunk[i] to the plain pointer the kernel expects: aligned +
+      // offset (i8 elements, stride 1). This is the node-wrapper map-resolution
+      // site — for the identity layout it is a bare offset add; a toroidal
+      // multi-rate read-only edge wraps the index (offset mod L) here before the
+      // GEP. Field 1 = aligned, field 2 = offset (see VirtualFIFO_Chunk).
+      auto aligned_pp = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
+                               chunk_type(), chunks, {(i32)i, 1});
+      auto aligned = CREATE(LLVM::LoadOp, func_builder, loc, opaque_ptr_type,
+                            aligned_pp);
+      auto offset_pp = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
+                              chunk_type(), chunks, {(i32)i, 2});
+      auto offset = CREATE(LLVM::LoadOp, func_builder, loc, i64type(), offset_pp);
+      auto resolved = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
+                             i8_type, aligned, ValueRange{offset});
 
-      // data_ptr is a pointer to the first chunk. we want the `data` field.
-
-      // get pointer from array
-      auto pointer_to_pointer = CREATE(LLVM::GEPOp,
-                                       func_builder,
-                                       node_op.getLoc(),
-                                       opaque_ptr_type,
-                                       chunk_type(),
-                                       data_ptr,
-                                       {(i32)i, 2 /* `data field` */});
-
-      auto pointer_to_data = CREATE(LLVM::LoadOp,
-                                    func_builder,
-                                    node_op.getLoc(),
-                                    opaque_ptr_type,
-                                    pointer_to_pointer);
-
-      kernel_args.push_back(pointer_to_data);
+      kernel_args.push_back(resolved);
     }
 
     auto func = module.lookupSymbol(node_op.getImpl());
