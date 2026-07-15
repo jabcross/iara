@@ -2,6 +2,7 @@
 #include "Iara/Dialect/Broadcast.h"
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/CompilerTypes.h"
+#include "Iara/Util/EnvOption.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/Range.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -42,19 +43,39 @@ EdgeOp expandImplicitEdge(Value val) {
 }
 
 void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
-  // First, expand all broadcasts.
-  for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
-    for (auto result : op->getResults()) {
-      // Logic (`none`) outputs never fan out through a memcpy broadcast; a
-      // logic fan-out is expressed as several distinct logic edges (handled by
-      // the ownership pass), not by a data-copying broadcast node.
-      if (isa<NoneType>(result.getType()))
-        continue;
-      auto uses = result.getUses() | Pointers() | IntoVector();
-      if (uses.size() > 1) {
-        auto _ = iara::dialect::broadcast::insertBroadcast(result, false);
+  // Ownership strategy for read-only fan-outs (CLI absent here — this pass has
+  // no options — so env only; see [[iara-opt-config-knobs]]). Default keeps the
+  // copy-all-but-one behavior; first-keeps-buffer enables zero-copy borrows.
+  bool borrow_mode = iara::util::optionOrEnv(false, "",
+                                             "IARA_BROADCAST_OWNERSHIP",
+                                             "copy-all-but-one") ==
+                     "first-keeps-buffer";
+
+  // Expand all fan-outs. A borrow transform rebuilds its consumer nodes (to add
+  // a logic output feeding the join), which invalidates any snapshot of the op
+  // list — so find one fan-out, transform it, and re-scan from scratch, until
+  // none remain. Each transform resolves one multi-use data result into
+  // single-use edges, so this terminates.
+  auto findAndExpandOne = [&]() -> bool {
+    for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
+      for (auto result : op->getResults()) {
+        // Logic (`none`) outputs never fan out through a memcpy broadcast; a
+        // logic fan-out is expressed as several distinct logic edges, not a
+        // data-copying broadcast node.
+        if (isa<NoneType>(result.getType()))
+          continue;
+        if ((result.getUses() | Pointers() | Count()) <= 1)
+          continue;
+        if (borrow_mode && iara::dialect::broadcast::usesAllReadOnly(result))
+          iara::dialect::broadcast::insertBroadcastBorrow(result);
+        else
+          iara::dialect::broadcast::insertBroadcast(result, false);
+        return true; // op list mutated; caller re-scans
       }
     }
+    return false;
+  };
+  while (findAndExpandOne()) {
   }
 
   for (auto node : actor.getOps<NodeOp>() | IntoVector()) {

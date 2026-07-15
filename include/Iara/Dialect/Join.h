@@ -16,11 +16,11 @@
 
 namespace iara::dialect {
 
-// TODO(F3): insert a join node with N logic inputs (one per reader/writer
-// being joined) and a single logic output, wired via SDF.h::isLogicEdge
-// edges. Firing threshold = N (one token per input, no data). Downstream of
-// the join: a dealloc (all-read-only case) or a gated consumer (mixed case).
-NodeOp insertJoin(llvm::ArrayRef<mlir::Value> logicInputs);
+// Insert a join owning a read-only-broadcast buffer: `dataInput` is the buffer
+// (a data value), `logicInputs` are one `none` token per read-only reader. The
+// join has no output; GMMN generates its dealloc and W5 logic gating frees the
+// buffer only after every reader has signalled. Kernel is a no-op (iara_join).
+NodeOp insertJoin(mlir::Value dataInput, llvm::ArrayRef<mlir::Value> logicInputs);
 
 } // namespace iara::dialect
 

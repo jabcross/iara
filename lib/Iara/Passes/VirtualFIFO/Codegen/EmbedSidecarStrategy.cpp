@@ -99,10 +99,12 @@ sortEdgesChainContiguous(std::span<EdgeCodegenData> edges) {
     }
   }
 
-  // Logic edges belong to no inout chain; they are appended separately by the
-  // caller (grouped per producer). Every other edge must have been reached.
+  // Logic and borrow edges belong to no inout chain; they are appended
+  // separately by the caller (grouped per producer). Every other edge must have
+  // been reached.
   for (auto &e : edges) {
-    if (!visited.count(&e) && !isLogicEdge(e.edge_op)) {
+    if (!visited.count(&e) && !isLogicEdge(e.edge_op) &&
+        !isBorrowEdge(e.edge_op)) {
       assert(false && "Edge not reached during chain-contiguous sort");
     }
   }
@@ -238,6 +240,10 @@ struct EmbedSidecarEmitter {
       u8 flags = 0;
       if (n.needsPriming())
         flags |= IARA_NODE_NEEDS_PRIMING;
+      // All-read-only broadcast: fire() dispatches to fireBroadcast(); its
+      // borrow reader edges are stored in the logic_out range.
+      if (nd.node_op->hasAttr("broadcast_borrow"))
+        flags |= IARA_NODE_IS_BROADCAST;
 
       if (count <= 2) {
         flags |= IARA_NODE_INPUTS_INLINE;

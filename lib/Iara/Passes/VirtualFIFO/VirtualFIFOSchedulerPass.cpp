@@ -122,6 +122,25 @@ struct VirtualFIFOSchedulerPass::Impl {
       rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
       return rv;
     }
+    if (node_op->hasAttr("broadcast_borrow")) {
+      // fireBroadcast() aliases the buffers directly; the kernel is never
+      // called. Emit one empty shared wrapper so the node still gets a
+      // kernel_id/dispatch slot with no link dependency on a nonexistent
+      // iara_bcast_borrow kernel symbol.
+      std::string sym = "iara_node_wrapper_iara_bcast_borrow";
+      if (auto existing = module.lookupSymbol<LLVM::LLVMFuncOp>(sym))
+        return existing;
+      auto rv = CREATE(LLVM::LLVMFuncOp, mod_builder, node_op.getLoc(), sym,
+                       wrapper_type());
+      rv.setVisibility(mlir::SymbolTable::Visibility::Public);
+      rv->setAttr("llvm.emit_c_interface", mod_builder.getUnitAttr());
+      auto *block = &rv.getFunctionBody().emplaceBlock();
+      for (auto type : wrapper_type().getParams())
+        block->addArgument(type, rv->getLoc());
+      auto b = OpBuilder::atBlockBegin(block);
+      CREATE(LLVM::ReturnOp, b, rv->getLoc(), ValueRange{});
+      return rv;
+    }
 
     // Deduplicate by (impl, params): nodes sharing the same kernel and
     // compile-time params share a single wrapper + kernel_id.

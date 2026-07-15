@@ -12,7 +12,7 @@ application:
 
 
 test_naming:
-  template: "22-ro-broadcast-{scheduler}-{alloc_mode}"
+  template: "22-ro-broadcast-{scheduler}-{alloc_mode}-{broadcast_ownership}"
   description: "RO-broadcast test naming pattern"
 
 parameters:
@@ -28,6 +28,13 @@ parameters:
     type: str
     label: "Alloc mode"
     description: "VirtualFIFO alloc mode (data-triggered or priming)"
+  - name: broadcast_ownership
+    type: str
+    label: "Broadcast ownership"
+    description: "Broadcast fan-out strategy (copy-all-but-one or first-keeps-buffer)"
+    choices:
+      - copy-all-but-one
+      - first-keeps-buffer
 
 constraints: []
 
@@ -35,7 +42,7 @@ constraints: []
 experiment_sets:
 
   - name: tests
-    description: "All schedulers x both alloc modes"
+    description: "All schedulers x both alloc modes, zero-copy borrow strategy"
     parameters:
       scheduler:
         - vf-sequential
@@ -44,6 +51,8 @@ experiment_sets:
       alloc_mode:
         - priming
         - data-triggered
+      broadcast_ownership:
+        - first-keeps-buffer
 
 execution:
   repetitions: 1
@@ -54,4 +63,5 @@ csv_output:
   columns:
     - scheduler
     - alloc_mode
-  description: "Scheduler + alloc mode used"
+    - broadcast_ownership
+  description: "Scheduler + alloc mode + broadcast ownership strategy used"

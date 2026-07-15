@@ -2,38 +2,44 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include <cassert>
+#include <llvm/ADT/SmallVector.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinTypes.h>
 
 namespace iara::dialect {
 
-// Insert an N-ary join: N logic (`none`) inputs, one logic output. Firing
-// threshold is N tokens (one per input) via the F1/W5 logic-gating mechanism —
-// no data buffer, no alloc/dealloc. Downstream of the join goes a dealloc
-// (all-read-only broadcast: free after all readers finish) or a gated consumer.
-NodeOp insertJoin(llvm::ArrayRef<mlir::Value> logicInputs) {
-  assert(!logicInputs.empty() && "join needs at least one logic input");
+// Insert a join that owns a read-only-broadcast buffer. It takes the buffer as
+// its single data (`in`) input plus N logic (`none`) inputs — one per read-only
+// reader that borrows the buffer — and produces no output. GMMN threads the
+// data input into a pass-through + dealloc as for any consumer, and W5 logic
+// gating makes it fire (and thus free the buffer) only after every reader has
+// signalled. The kernel is a no-op (`iara_join`, defined in the runtime).
+NodeOp insertJoin(mlir::Value dataInput, llvm::ArrayRef<mlir::Value> logicInputs) {
+  assert(dataInput && "join needs a data (buffer) input");
+
+  llvm::SmallVector<mlir::Value> ins;
+  ins.push_back(dataInput);
+  ins.append(logicInputs.begin(), logicInputs.end());
 
   // Insert after the latest-defined input so every operand dominates the join.
-  mlir::Operation *insert_after = logicInputs.front().getDefiningOp();
-  for (auto v : logicInputs) {
+  mlir::Operation *insert_after = dataInput.getDefiningOp();
+  for (auto v : ins) {
     auto *op = v.getDefiningOp();
     if (op && insert_after && insert_after->isBeforeInBlock(op))
       insert_after = op;
   }
-  assert(insert_after && "logic inputs must be op results");
+  assert(insert_after && "join inputs must be op results");
 
   auto builder = mlir::OpBuilder(insert_after);
   builder.setInsertionPointAfter(insert_after);
 
-  auto none = mlir::NoneType::get(builder.getContext());
   auto join = CREATE(NodeOp,
                      builder,
                      insert_after->getLoc(),
-                     mlir::TypeRange{none},
+                     /*results=*/mlir::TypeRange{},
                      "iara_join",
-                     mlir::ValueRange{},
-                     /*in=*/logicInputs,
+                     /*params=*/mlir::ValueRange{},
+                     /*in=*/ins,
                      /*inout=*/mlir::ValueRange{});
   return join;
 }

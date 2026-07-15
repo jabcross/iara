@@ -22,6 +22,13 @@ bool isDeallocEdge(EdgeOp edge);
 // chains, and kernel-arg accounting.
 bool isLogicEdge(EdgeOp edge);
 
+// A borrow edge (tagged `borrow`) is a read-only zero-copy alias produced by an
+// all-read-only broadcast: it carries data (a kernel arg for the consumer) but
+// owns no buffer — it aliases the broadcast's input, which a join frees once.
+// Like a logic edge it belongs to no inout chain and gets no alloc/dealloc; the
+// producer pushes the aliased chunk in fireBroadcast() (not the chain walk).
+bool isBorrowEdge(EdgeOp edge);
+
 Vec<EdgeOp> getInoutChain(EdgeOp edge);
 
 NodeOp findFirstNodeOfChain(EdgeOp edge);

@@ -32,6 +32,12 @@ i64 iara_runtime_num_threads = 0; // 0 = let openmp decide
 
 // std::unordered_map<void *, int> allocated_ptrs;
 
+// No-op kernel for the join that owns an all-read-only broadcast buffer. It has
+// one inout data port (the buffer) and N logic inputs; the buffer passes through
+// to its dealloc automatically (inout), and the logic gating (W5) makes the join
+// fire — hence free — only after every reader has signalled. Nothing to compute.
+extern "C" void iara_join(void *) {}
+
 extern "C" void iara_runtime_alloc(i64 seq, VirtualFIFO_Chunk *chunk) {
 #ifdef IARA_MOCK_ALLOC
   chunk->allocated = (i8 *)iara_mock_alloc(chunk->data_size);

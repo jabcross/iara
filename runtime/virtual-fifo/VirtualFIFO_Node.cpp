@@ -281,7 +281,51 @@ void VirtualFIFO_Node::prime(i64 seq) {
     fire(seq, args);
 }
 
+void VirtualFIFO_Node::fireBroadcast(i64 seq, std::span<VirtualFIFO_Chunk> args) {
+#ifdef IARA_DATA_TRIGGERED_ALLOC
+  i64 limit = iara_data_alloc_run_iter * (i64)runtime_info.total_iter_firings;
+  if (seq >= limit) {
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
+    runtime_info.sema_variant.normal->semaphore.release(seq);
+#else
+    free(args.data());
+#endif
+    return;
+  }
+#endif
+  auto _this = this;
+  iara_submit_task([_this, args, seq]() {
+    using namespace iara::runtime::virtualfifo;
+    auto input = args[0];
+    // Owned buffer -> the join (chain output 0), read-write: allocated stays the
+    // real base so the join's dealloc frees it once, after all readers finish.
+    auto *owner = getEdge(_this->getOutputEdge(0));
+    auto owned = input;
+    owned.data_size = owner->runtime_info.prod_rate;
+    owner->push(owned);
+    // Read-only borrows -> every reader (the logic_out range for a broadcast).
+    // allocated=null marks a non-owning alias: no borrower path frees the shared
+    // buffer, and `data` still points at it so the reader sees the real bytes.
+    for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
+      auto *be = getEdge(_this->getLogicOutputEdge(k));
+      auto borrow = input;
+      borrow.allocated = nullptr;
+      borrow.data_size = be->runtime_info.prod_rate;
+      be->push(borrow);
+    }
+#ifdef IARA_SEMAPHORE_ATOMIC_RING
+    _this->runtime_info.sema_variant.normal->semaphore.release(seq);
+#else
+    free(args.data());
+#endif
+  });
+}
+
 void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
+  if (runtime_info.flags & IARA_NODE_IS_BROADCAST) {
+    fireBroadcast(seq, args);
+    return;
+  }
 #ifdef IARA_DATA_TRIGGERED_ALLOC
   // Self-timed feedback can make a firing ready before its iteration is
   // released. Only fire seq < (released iterations) * (firings per iteration).
@@ -317,7 +361,15 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
     iara::runtime::virtualfifo::fireKernel(_this, seq, args);
 
     for (iara::int_edge idx = 0; idx < _this->getNumOutputs(); idx++) {
-      auto *out = iara::runtime::virtualfifo::getEdge(_this->getOutputEdge(idx));
+      auto out_idx = _this->getOutputEdge(idx);
+      // A borrow (read-only alias) input has no chain-successor output; its
+      // getOutputEdge(idx) = input+1 lands on an unrelated edge (or past the
+      // end). Skip any output this node does not actually produce.
+      if (out_idx >= (iara::int_edge)iara::runtime::virtualfifo::getNumEdges())
+        continue;
+      auto *out = iara::runtime::virtualfifo::getEdge(out_idx);
+      if (iara::runtime::virtualfifo::getProducer(out) != _this)
+        continue;
       // The kernel writes this node's full per-firing output (prod_rate bytes)
       // into a contiguous buffer. The arg chunk's data_size, however, reflects
       // only the first input slice when the input was gathered over several
@@ -353,7 +405,13 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
     iara::runtime::virtualfifo::fireKernel(_this, seq, args);
 
     for (iara::int_edge idx = 0; idx < _this->getNumOutputs(); idx++) {
-      auto *out = iara::runtime::virtualfifo::getEdge(_this->getOutputEdge(idx));
+      auto out_idx = _this->getOutputEdge(idx);
+      // Skip a borrow input's phantom output (see the data-triggered path).
+      if (out_idx >= (iara::int_edge)iara::runtime::virtualfifo::getNumEdges())
+        continue;
+      auto *out = iara::runtime::virtualfifo::getEdge(out_idx);
+      if (iara::runtime::virtualfifo::getProducer(out) != _this)
+        continue;
       out->push(args[idx]);
     }
 

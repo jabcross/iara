@@ -13,6 +13,16 @@ getOrCodegenBroadcastImpl(iara::dialect::NodeOp broadcast);
 
 iara::NodeOp insertBroadcast(mlir::Value value, bool force_copy);
 
+// True when every use of `value` is a read-only consumer (operand in the owner
+// node's `in` segment). Gates the zero-copy borrow fan-out below.
+bool usesAllReadOnly(mlir::Value value);
+
+// All-read-only zero-copy fan-out: aliases `value`'s one buffer to every reader
+// (borrow, no copy) and inserts a join that owns the buffer and frees it once
+// after all readers finish. See BroadcastOwnership.h / Join.h. Returns the
+// broadcast node. Precondition: usesAllReadOnly(value).
+iara::NodeOp insertBroadcastBorrow(mlir::Value value);
+
 iara::NodeOp specializeBroadcast(NodeOp generic_broadcast, bool force_copy);
 
 // True when every output of `broadcast` is borrowed read-only (each consumer

@@ -283,17 +283,43 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
   // inout operand with a pass-through result feeding a dealloc, and each data
   // output is fed by a fresh alloc. With no logic ports this is identical to the
   // previous behavior.
-  SmallVector<Value> data_pure_ins, logic_pure_ins;
-  for (auto v : old_node.getIn())
-    (Node::isLogicValue(v) ? logic_pure_ins : data_pure_ins).push_back(v);
+  // Borrow (read-only alias) ports carry data but own no buffer: a borrow
+  // pure-in stays a pure `in` (its consumer reads the aliased buffer — no
+  // pass-through, no dealloc), and a borrow pure-out stays a pure result (the
+  // broadcast aliases it in fireBroadcast — no alloc). Detected via the `borrow`
+  // tag on the edge on the value's data side.
+  auto isBorrowIn = [](Value v) {
+    auto e = v.getDefiningOp<EdgeOp>();
+    return e && isBorrowEdge(e);
+  };
+  auto isBorrowOut = [](Value v) {
+    auto e = llvm::dyn_cast_or_null<EdgeOp>(*v.getUsers().begin());
+    return e && isBorrowEdge(e);
+  };
+
+  SmallVector<Value> data_pure_ins, logic_pure_ins, borrow_pure_ins;
+  for (auto v : old_node.getIn()) {
+    if (Node::isLogicValue(v))
+      logic_pure_ins.push_back(v);
+    else if (isBorrowIn(v))
+      borrow_pure_ins.push_back(v);
+    else
+      data_pure_ins.push_back(v);
+  }
 
   SmallVector<Value> inout_ins = llvm::to_vector(old_node.getInout());
   auto inout_results =
       old_node.getResults().take_front(old_node.getInout().size());
 
-  SmallVector<Value> data_pure_outs, logic_pure_outs;
-  for (auto v : old_node.getPureOuts())
-    (Node::isLogicValue(v) ? logic_pure_outs : data_pure_outs).push_back(v);
+  SmallVector<Value> data_pure_outs, logic_pure_outs, borrow_pure_outs;
+  for (auto v : old_node.getPureOuts()) {
+    if (Node::isLogicValue(v))
+      logic_pure_outs.push_back(v);
+    else if (isBorrowOut(v))
+      borrow_pure_outs.push_back(v);
+    else
+      data_pure_outs.push_back(v);
+  }
 
   auto alloc_inputs = createAllocations(data_pure_outs);
 
@@ -304,7 +330,7 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
   inout_operands.append(alloc_inputs.begin(), alloc_inputs.end());
 
   // Result types: paired block (matches inout_operands order) then the unpaired
-  // logic pure-out results.
+  // pure-out results (logic, then borrow).
   SmallVector<Type> new_result_types;
   for (auto v : data_pure_ins)
     new_result_types.push_back(v.getType());
@@ -314,6 +340,14 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
     new_result_types.push_back(v.getType());
   for (auto v : logic_pure_outs)
     new_result_types.push_back(v.getType());
+  for (auto v : borrow_pure_outs)
+    new_result_types.push_back(v.getType());
+
+  // Pure `in` operands: logic tokens plus borrow aliases (both gate/feed firing
+  // without an inout pass-through).
+  SmallVector<Value> pure_in_operands;
+  pure_in_operands.append(logic_pure_ins.begin(), logic_pure_ins.end());
+  pure_in_operands.append(borrow_pure_ins.begin(), borrow_pure_ins.end());
 
   auto new_node = CREATE(NodeOp,
                          builder,
@@ -321,7 +355,7 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
                          new_result_types,
                          old_node.getImpl(),
                          old_node.getParams(),
-                         /*in=*/logic_pure_ins,
+                         /*in=*/pure_in_operands,
                          /*inout=*/inout_operands);
 
   // Copy attributes from old_node to new_node
@@ -350,6 +384,9 @@ LogicalResult generateAllocsAndFrees(NodeOp old_node,
     oldr.replaceAllUsesWith(new_results[base + k]);
   base += data_pure_outs.size();
   for (auto [k, oldr] : llvm::enumerate(logic_pure_outs))
+    oldr.replaceAllUsesWith(new_results[base + k]);
+  base += logic_pure_outs.size();
+  for (auto [k, oldr] : llvm::enumerate(borrow_pure_outs))
     oldr.replaceAllUsesWith(new_results[base + k]);
 
   old_node->erase();

@@ -1,4 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Join.h"
 #include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Util/CompilerTypes.h"
 #include "Iara/Util/Mlir.h"
@@ -194,6 +195,120 @@ bool broadcastOutputsAllReadOnly(NodeOp broadcast) {
     }
   }
   return true;
+}
+
+// True when every use of `value` is a read-only consumer: the using operand
+// lives in the owner node's `in` (read-only) segment, not `inout`. Classifies
+// before the broadcast/edges are formed (operands still point at `value`).
+bool usesAllReadOnly(Value value) {
+  for (auto &use : value.getUses()) {
+    auto consumer = llvm::dyn_cast<NodeOp>(use.getOwner());
+    if (!consumer)
+      return false;
+    if (!llvm::is_contained(consumer.getIn(), value))
+      return false;
+  }
+  return true;
+}
+
+// Rebuild `consumer` with one extra `none` (logic) output. Returns the new
+// logic result Value. Used to signal a join once a read-only reader finishes.
+static Value addLogicOutput(NodeOp consumer) {
+  OpBuilder builder(consumer);
+  SmallVector<Type> result_types(consumer.getResultTypes().begin(),
+                                 consumer.getResultTypes().end());
+  result_types.push_back(NoneType::get(builder.getContext()));
+  auto nw = CREATE(NodeOp,
+                   builder,
+                   consumer.getLoc(),
+                   result_types,
+                   consumer.getImpl(),
+                   consumer.getParams(),
+                   /*in=*/consumer.getIn(),
+                   /*inout=*/consumer.getInout());
+  nw->setDiscardableAttrs(consumer->getDiscardableAttrDictionary());
+  for (auto [old, _new] : llvm::zip(consumer.getResults(), nw.getResults()))
+    old.replaceAllUsesWith(_new);
+  consumer->erase();
+  return nw.getResults().back();
+}
+
+// All-read-only zero-copy fan-out. `value` has N read-only uses. Build:
+//   value --inout--> broadcast --passthrough(RW)--> join      (owns the buffer)
+//                              --borrow_i---------> consumer_i (aliases, no copy)
+//   consumer_i --logic--> join
+// The broadcast is a special runtime node (fireBroadcast) that aliases its one
+// input to every reader; the join owns the buffer and, gated by all N logic
+// tokens (W5), frees it once after every reader finishes (GMMN generates the
+// dealloc). Borrow output edges are tagged `borrow` so GMMN/codegen treat them
+// as read-only aliases, not chain buffers. Returns the broadcast node.
+NodeOp insertBroadcastBorrow(Value value) {
+  OpBuilder builder(value.getDefiningOp());
+  builder.setInsertionPointAfter(value.getDefiningOp());
+
+  // Ordered uses (program order), mirroring insertBroadcast.
+  auto uses = value.getUses() | Pointers() | IntoVector();
+  Vec<OpOperand *> ordered_uses;
+  for (auto &op : value.getDefiningOp()->getParentRegion()->getOps()) {
+    for (auto use : uses) {
+      if (use->getOwner() != &op)
+        continue;
+      ordered_uses.push_back(use);
+      break;
+    }
+  }
+  assert(ordered_uses.size() == uses.size());
+  size_t N = ordered_uses.size();
+
+  // ponytail: assumes each reader consumes `value` once (distinct owners), so
+  // the rebuild below never invalidates a not-yet-processed OpOperand*. True for
+  // every current topology; revisit if a node reads the same fan-out twice.
+
+  auto ty = value.getType();
+  SmallVector<Type> result_types(N + 1, ty); // [passthrough, borrow_0..borrow_{N-1}]
+  auto bcast = CREATE(NodeOp,
+                      builder,
+                      value.getDefiningOp()->getLoc(),
+                      result_types,
+                      "iara_bcast_borrow",
+                      /*params=*/ValueRange{},
+                      /*in=*/ValueRange{},
+                      /*inout=*/ValueRange{value});
+  bcast->setAttr("broadcast_borrow", builder.getUnitAttr());
+
+  Value passthrough = bcast.getResult(0);
+
+  SmallVector<Value> logic_inputs;
+  for (size_t i = 0; i < N; i++) {
+    Value borrow = bcast.getResult(i + 1);
+    ordered_uses[i]->set(borrow); // consumer now reads the borrow alias
+    NodeOp consumer = cast<NodeOp>(ordered_uses[i]->getOwner());
+    logic_inputs.push_back(addLogicOutput(consumer));
+  }
+
+  iara::dialect::insertJoin(passthrough, logic_inputs);
+
+  // Expand implicit edges for every raw connection (mirrors insertBroadcast).
+  if (!isa<EdgeOp>(value.getDefiningOp()))
+    passes::canonicalize::expandImplicitEdge(value);
+  for (auto res : bcast.getResults()) {
+    auto users = res.getUsers() | IntoVector();
+    assert(users.size() == 1);
+    if (!isa<EdgeOp>(users.front()))
+      passes::canonicalize::expandImplicitEdge(res);
+  }
+  for (auto logic : logic_inputs) {
+    auto users = logic.getUsers() | IntoVector();
+    assert(users.size() == 1);
+    if (!isa<EdgeOp>(users.front()))
+      passes::canonicalize::expandImplicitEdge(logic);
+  }
+  // Tag borrow output edges (results 1..N) as read-only aliases.
+  for (size_t i = 0; i < N; i++) {
+    auto edge = cast<EdgeOp>(*bcast.getResult(i + 1).getUsers().begin());
+    edge->setAttr("borrow", builder.getUnitAttr());
+  }
+  return bcast;
 }
 
 NodeOp insertBroadcast(Value value, bool force_copy) {

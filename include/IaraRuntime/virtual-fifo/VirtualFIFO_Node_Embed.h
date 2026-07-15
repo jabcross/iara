@@ -27,6 +27,12 @@ struct VirtualFIFO_Edge;
 // Flags for VirtualFIFO_Node_CodegenInfo::flags
 static constexpr uint8_t IARA_NODE_INPUTS_INLINE = 1 << 0;
 static constexpr uint8_t IARA_NODE_NEEDS_PRIMING  = 1 << 1;
+// All-read-only broadcast: fire() dispatches to fireBroadcast(), which aliases
+// the one input buffer to every reader (zero copy). The reader edges are the
+// node's logic_out range (logic_out_start/count are overloaded to hold them,
+// since a borrow broadcast has no real logic outputs). The single inout-chain
+// output (index 0) carries the owned buffer to the join.
+static constexpr uint8_t IARA_NODE_IS_BROADCAST   = 1 << 2;
 
 extern "C" {
 
@@ -124,6 +130,11 @@ struct VirtualFIFO_Node {
   void init();
   void prime(i64 seq);
   void fire(i64 seq, std::span<VirtualFIFO_Chunk>);
+  // All-read-only broadcast fire (IARA_NODE_IS_BROADCAST). Aliases the one input
+  // buffer to every reader: pushes it read-write to the owned chain output
+  // (index 0, → the join that frees it once) and as a borrow (allocated=null,
+  // same data) to each reader edge in the logic_out range.
+  void fireBroadcast(i64 seq, std::span<VirtualFIFO_Chunk>);
   void fireAlloc(i64 seq);
   void ensureAlloc(i64 firing);
   std::pair<i64, i64> getAllocDependentFirings(i64 iteration);

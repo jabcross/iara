@@ -34,6 +34,8 @@ bool isLogicEdge(EdgeOp edge) {
   return Node::isLogicValue(edge.getOut()) || Node::isLogicValue(edge.getIn());
 }
 
+bool isBorrowEdge(EdgeOp edge) { return edge->hasAttr("borrow"); }
+
 Vec<EdgeOp> getInoutChain(EdgeOp edge) {
   Vec<EdgeOp> rv;
   auto first = findFirstEdgeOfChain(edge);
@@ -53,8 +55,8 @@ NodeOp findFirstNodeOfChain(EdgeOp edge) {
 Vec<Vec<EdgeOp>> getInoutChains(ActorOp actor) {
   Vec<Vec<EdgeOp>> chains;
   for (auto edge : actor.getOps<EdgeOp>()) {
-    // Logic edges have no buffer and belong to no inout chain.
-    if (isLogicEdge(edge))
+    // Logic and borrow edges have no buffer and belong to no inout chain.
+    if (isLogicEdge(edge) || isBorrowEdge(edge))
       continue;
     // Only once per inout chain.
     if (iara::followInoutChainBackwards(edge))
@@ -93,6 +95,13 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     for (auto pure_output : node.getPureOuts()) {
       if (Node::isLogicValue(pure_output))
         continue;
+      // Borrow (read-only alias) outputs own no buffer and are produced by
+      // aliasing in fireBroadcast(), not by an alloc the node waits on — exclude
+      // them from the firing threshold and kernel-arg count (like logic outs).
+      if (auto e = llvm::dyn_cast_or_null<EdgeOp>(
+              *pure_output.getUsers().begin());
+          e && isBorrowEdge(e))
+        continue;
       arg_bytes += getTypeSize(pure_output);
       num_args += 1;
     }
@@ -127,6 +136,26 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
       e.setDelaySize(0);
       e.setBlockSizeWithDelays(1);
       e.setBlockSizeNoDelays(1);
+      e.setProdAlpha(0);
+      e.setProdBeta(0);
+      e.setConsAlpha(0);
+      e.setConsBeta(0);
+      continue;
+    }
+    // A borrow (read-only alias) edge carries data (a real kernel arg for the
+    // consumer) but owns no buffer and belongs to no inout chain, so the chain
+    // analysis never set its delay/block/alpha/beta. Rate it as a single-block
+    // 1:1 data edge; fireBroadcast() pushes the whole aliased chunk.
+    if (isBorrowEdge(edge)) {
+      auto bytes = getProdRateBytes(edge);
+      e.setLocalIndex(0);
+      e.setProdRate(bytes);
+      e.setConsRate(getConsRateBytes(edge));
+      e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
+      e.setDelayOffset(0);
+      e.setDelaySize(0);
+      e.setBlockSizeWithDelays(bytes);
+      e.setBlockSizeNoDelays(bytes);
       e.setProdAlpha(0);
       e.setProdBeta(0);
       e.setConsAlpha(0);
