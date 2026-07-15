@@ -36,11 +36,28 @@ parameters:
     label: "Alloc mode"
     description: "VirtualFIFO alloc mode (data-triggered or priming)"
 
+  # Broadcast fan-out ownership (iara-opt codegen dim, forwarded as IARA_BROADCAST_OWNERSHIP)
+  - name: broadcast_ownership
+    type: str
+    label: "Broadcast ownership"
+    description: "Fan-out strategy: copy-all-but-one (default) or first-keeps-buffer (zero-copy RO borrow)"
+
 constraints:
   - expression: "VIDEO_FRAMES == 1 or scheduler in ('vf-omp', 'vf-enkits')"
     description: "Multi-frame video warm-up supported for IaRa VirtualFIFO backends (vf-omp/vf-enkits); preesm runs single-frame"
 
 experiment_sets:
+  # Zero-copy RO-broadcast RSS A/B: copy-all-but-one vs first-keeps-buffer on
+  # 4K, vf-omp. Expect max_rss's per-core term (RSS = 2.80*P + 0.92 GB) to
+  # collapse under first-keeps-buffer (readers alias one buffer, no P* copies).
+  - name: borrow-rss
+    description: "RO-broadcast ownership A/B: 4K vf-omp, RSS slope vs cores"
+    parameters:
+      NUM_CORES: [1, 4, 8, 16]
+      scheduler: [vf-omp]
+      VIDEO_FRAMES: [1]
+      broadcast_ownership: [copy-all-but-one, first-keeps-buffer]
+
   - name: photo
     description: "4K photo, all valid parallelism levels, single frame"
     parameters:

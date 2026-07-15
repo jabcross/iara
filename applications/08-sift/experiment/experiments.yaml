@@ -46,6 +46,12 @@ parameters:
     label: "Alloc mode"
     description: "VirtualFIFO alloc mode (data-triggered or priming)"
 
+  # Broadcast fan-out ownership (iara-opt codegen dim, forwarded as IARA_BROADCAST_OWNERSHIP)
+  - name: broadcast_ownership
+    type: str
+    label: "Broadcast ownership"
+    description: "Fan-out strategy: copy-all-but-one (default) or first-keeps-buffer (zero-copy RO borrow)"
+
 computed_parameters: []
 
 constraints:
@@ -66,6 +72,15 @@ measurements:
 
 # Experiment sets
 experiment_sets:
+  # Zero-copy RO-broadcast A/B: copy-all-but-one vs first-keeps-buffer.
+  # Correctness gate (keypoint count must match) + RSS/time comparison.
+  - name: borrow
+    description: "RO-broadcast ownership A/B on vf-omp (correctness + RSS)"
+    parameters:
+      NUM_CORES: [1, 4]
+      scheduler: [vf-omp]
+      broadcast_ownership: [copy-all-but-one, first-keeps-buffer]
+
   # Single core, both schedulers — fast sanity check
   - name: quick
     description: "Quick sanity check: 1 core, both schedulers"
