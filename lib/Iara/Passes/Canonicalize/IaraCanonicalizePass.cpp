@@ -78,6 +78,11 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   while (findAndExpandOne()) {
   }
 
+  // Explicit `@iara_broadcast` nodes (e.g. SIFT's topology emits these). Borrow
+  // conversion for these runs POST-FLATTEN (in VirtualFIFOSchedulerPass): here
+  // their consumers may still be actor instances, and adding a logic output to
+  // an instance breaks its signature match with the actor definition. So just
+  // specialize to the copy impl now; the scheduler pass rewrites borrowable ones.
   for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
     if (node.getImpl() == "iara_broadcast") {
       broadcast::specializeBroadcast(node, false);

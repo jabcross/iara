@@ -5,6 +5,7 @@
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
 #include "Iara/Passes/Common/Codegen/Codegen.h"
 #include "Iara/Passes/VirtualFIFO/VirtualFIFOSchedulerPass.h"
+#include "Iara/Dialect/Broadcast.h"
 #include "Iara/Util/EnvOption.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
@@ -461,12 +462,41 @@ struct VirtualFIFOSchedulerPass::Impl {
     return success();
   }
 
+  // Rewrite pure read-only same-size broadcasts into the zero-copy borrow shape.
+  // Runs post-flatten (leaf consumers) so adding a reader's logic output can't
+  // break an actor-instance signature. CLI absent here -> env only, matching the
+  // canonicalize-side auto-fanout knob.
+  bool borrowModeEnabled() {
+    return iara::util::optionOrEnv(false, "", "IARA_BROADCAST_OWNERSHIP",
+                                   "copy-all-but-one") == "first-keeps-buffer";
+  }
+
+  void convertPureBorrowBroadcasts(ActorOp actor) {
+    for (auto node : llvm::to_vector(actor.getOps<NodeOp>())) {
+      if (!node.getImpl().starts_with("iara_broadcast"))
+        continue;
+      if (iara::dialect::broadcast::broadcastIsPureBorrowable(node))
+        iara::dialect::broadcast::convertBroadcastToBorrow(node);
+    }
+  }
+
   LogicalResult runOnOperation(ModuleOp module) {
     auto main_actor = getMainActor(module);
 
     upgradeDelaysToDenseArrays(main_actor);
 
     breakLoops(main_actor);
+
+    // Borrow conversion needs the repetition vector (reader firing counts) to
+    // gate/rate each join logic edge, so (only when borrowing) analyze the copy
+    // graph first, convert, then re-analyze with the joins/borrow edges in
+    // place. After breakLoops so feedback is already resolved (borrowable
+    // broadcasts also exclude any remaining delayed edges).
+    if (borrowModeEnabled()) {
+      auto pre = sdf::analyzeAndAnnotate(main_actor);
+      if (llvm::succeeded(pre))
+        convertPureBorrowBroadcasts(main_actor);
+    }
 
     auto static_analysis = sdf::analyzeAndAnnotate(main_actor);
     bool ok = llvm::succeeded(static_analysis);

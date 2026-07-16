@@ -82,11 +82,21 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     // num_args (no kernel-arg slot). A logic *output* has no buffer and nothing
     // arrives for it, so it counts toward neither.
     for (auto pure_input : node.getIn()) {
-      arg_bytes += getTypeSize(pure_input);
-      if (!Node::isLogicValue(pure_input))
+      if (!Node::isLogicValue(pure_input)) {
+        arg_bytes += getTypeSize(pure_input);
         num_args += 1;
-      else
-        logic_in_bytes += getTypeSize(pure_input);
+      } else {
+        // A logic input gates firing with `mult` tokens (1 for a 1:1 edge, or
+        // this reader's firing multiplicity for a broadcast-join edge — see
+        // annotateEdgeInfo). Add that many to the threshold, not one token.
+        i64 mult = 1;
+        if (auto e =
+                llvm::dyn_cast_or_null<EdgeOp>(pure_input.getDefiningOp()))
+          if (auto a = e->getAttrOfType<mlir::IntegerAttr>("logic_mult"))
+            mult = a.getInt();
+        arg_bytes += mult;
+        logic_in_bytes += mult;
+      }
     }
     for (auto inout : node.getInout()) {
       arg_bytes += getTypeSize(inout);
@@ -123,19 +133,24 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
     Edge e(edge);
     // A logic edge carries no buffer and is skipped by the inout-chain analysis
-    // that would otherwise set delay/block/alpha/beta. Give it a well-defined
-    // 1:1 token rating and no delays/blocks so the blob is valid; it is not a
-    // kernel arg (cons_arg_idx = -1) and its token is delivered directly in
-    // fire() (never through the byte-slicing push path).
+    // that would otherwise set delay/block/alpha/beta. Producer emits 1 token
+    // per firing (prod_rate 1); cons_rate is normally 1, but a broadcast-join
+    // logic edge is MULTI-RATE (cons_rate = `logic_mult`, this reader's firings
+    // per join firing), so the join gates on that many increments and fire()
+    // maps the producer seq to the join seq. Not a kernel arg (cons_arg_idx=-1);
+    // its token is delivered directly in fire() (never the byte-slicing path).
     if (isLogicEdge(edge)) {
+      i64 mult = 1;
+      if (auto a = edge->getAttrOfType<mlir::IntegerAttr>("logic_mult"))
+        mult = a.getInt();
       e.setLocalIndex(0);
-      e.setProdRate(getProdRateBytes(edge)); // getTypeSize(none) == 1
-      e.setConsRate(getConsRateBytes(edge)); // 1
+      e.setProdRate(1);
+      e.setConsRate(mult);
       e.setConsArgIdx(-1);
       e.setDelayOffset(0);
       e.setDelaySize(0);
-      e.setBlockSizeWithDelays(1);
-      e.setBlockSizeNoDelays(1);
+      e.setBlockSizeWithDelays(mult);
+      e.setBlockSizeNoDelays(mult);
       e.setProdAlpha(0);
       e.setProdBeta(0);
       e.setConsAlpha(0);

@@ -31,5 +31,14 @@ iara::NodeOp specializeBroadcast(NodeOp generic_broadcast, bool force_copy);
 // instead of copying. See BroadcastOwnership.h.
 bool broadcastOutputsAllReadOnly(iara::dialect::NodeOp broadcast);
 
+// True when a formed broadcast borrows read-only AND every output is the same
+// byte size as the input (1:1 alias, no multi-rate gather). See Broadcast.cpp.
+bool broadcastIsPureBorrowable(iara::dialect::NodeOp broadcast);
+
+// Rewrite a formed pure-borrowable broadcast (e.g. SIFT's explicit
+// `@iara_broadcast` nodes) into the zero-copy borrow+join shape in place.
+// Precondition: broadcastIsPureBorrowable(broadcast).
+iara::NodeOp convertBroadcastToBorrow(iara::dialect::NodeOp broadcast);
+
 } // namespace iara::dialect::broadcast
 #endif

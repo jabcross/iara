@@ -378,12 +378,18 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       out->push(out_chunk);
     }
 
-    // Deliver control tokens on this node's logic outputs (1:1 with firing).
+    // Deliver control tokens on this node's logic outputs. A multi-rate logic
+    // edge (cons_rate = this reader's firings per join firing) maps this
+    // producer firing to the consumer's (join's) firing and delivers prod_rate
+    // (=1) token, so a reader firing R times gates exactly one join firing (see
+    // convertBroadcastToBorrow). A 1:1 logic edge is unchanged (cons_seq = seq).
     for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
       auto *le =
           iara::runtime::virtualfifo::getEdge(_this->getLogicOutputEdge(k));
-      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(
-          seq, le->runtime_info.cons_rate);
+      i64 prod = le->runtime_info.prod_rate;
+      i64 cons = le->runtime_info.cons_rate;
+      i64 cons_seq = (cons > 0) ? (seq * prod / cons) : seq;
+      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(cons_seq, prod);
     }
 
 #ifdef IARA_SEMAPHORE_ATOMIC_RING
@@ -414,12 +420,18 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       out->push(args[idx]);
     }
 
-    // Deliver control tokens on this node's logic outputs (1:1 with firing).
+    // Deliver control tokens on this node's logic outputs. A multi-rate logic
+    // edge (cons_rate = this reader's firings per join firing) maps this
+    // producer firing to the consumer's (join's) firing and delivers prod_rate
+    // (=1) token, so a reader firing R times gates exactly one join firing (see
+    // convertBroadcastToBorrow). A 1:1 logic edge is unchanged (cons_seq = seq).
     for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
       auto *le =
           iara::runtime::virtualfifo::getEdge(_this->getLogicOutputEdge(k));
-      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(
-          seq, le->runtime_info.cons_rate);
+      i64 prod = le->runtime_info.prod_rate;
+      i64 cons = le->runtime_info.cons_rate;
+      i64 cons_seq = (cons > 0) ? (seq * prod / cons) : seq;
+      iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(cons_seq, prod);
     }
 
 #ifdef IARA_DEBUGPRINT
