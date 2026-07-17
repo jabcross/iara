@@ -32,10 +32,12 @@ iara::NodeOp specializeBroadcast(NodeOp generic_broadcast, bool force_copy);
 bool broadcastOutputsAllReadOnly(iara::dialect::NodeOp broadcast);
 
 // True when a formed broadcast can be rewritten into the zero-copy borrow shape:
-// all outputs read-only, no delayed (feedback) input/output, the broadcast itself
-// fires exactly once per iteration, and every reader has an integer firing
-// multiplicity. Replicating outputs (L -> K*L) ARE borrowable — the reader
-// re-reads the one L-byte buffer via the toroidal wrap. See Broadcast.cpp.
+// all outputs read-only, no delayed (feedback) input/output, every reader has an
+// integer firing multiplicity, and every reader's per-firing read size divides
+// the input size L (so a read never straddles the toroidal wrap point).
+// Replicating outputs (L -> K*L), multi-firing readers and multi-firing
+// broadcasts are all supported — readers re-read the one L-byte buffer through
+// the wrap. See Broadcast.cpp.
 bool broadcastIsPureBorrowable(iara::dialect::NodeOp broadcast);
 
 // Rewrite a formed pure-borrowable broadcast (e.g. SIFT's explicit

@@ -284,26 +284,25 @@ bool broadcastIsPureBorrowable(NodeOp broadcast) {
   if (!broadcastOutputsAllReadOnly(broadcast))
     return false;
   // Every reader must have an integer firing multiplicity (see
-  // readerMultiplicity). Replication (L -> K*L) and multi-firing readers are
-  // supported: the borrow output keeps the original (logical) rate so the SDF is
-  // unchanged from the copy graph, the join's multi-rate logic edges gate the
-  // free, and fireBroadcast + the toroidal layout map alias the L-physical buffer
-  // across the K logical reads.
-  // The broadcast itself must fire exactly once per graph iteration. A
-  // multi-firing broadcast (bc_reps > 1, e.g. SIFT's octave-loop counter/pyramid
-  // feedback) reads a fresh input slice each firing; aliasing that with the
-  // toroidal wrap (period L = one firing's input) and a global FIFO offset is not
-  // yet correct (the input-slice offset is lost / the per-firing buffers alias
-  // wrong). Single-firing broadcasts with multi-read readers (bc_reps==1, mult>1
-  // -- the coefficient and big image replications, the actual RSS drivers) ARE
-  // correct: one buffer, readers re-read it via the wrap. Restrict to those.
-  if (Node(broadcast).totalIterFirings() != 1)
-    return false;
+  // readerMultiplicity). Replication (L -> K*L), multi-firing readers, and
+  // multi-firing broadcasts are all supported: the borrow output keeps the
+  // original (logical) rate so the SDF is unchanged from the copy graph, the
+  // join's multi-rate logic edges gate the free, and fireBroadcast + the toroidal
+  // layout map alias the L-byte physical buffer across the K logical reads.
+  i64 buf_L = getTypeSize(broadcast.getAllInputs().front());
   for (auto out : broadcast.getAllOutputs()) {
     if (hasDelay(out))
       return false; // feedback reader
     auto edge = llvm::cast<EdgeOp>(*out.getUsers().begin());
     if (readerMultiplicity(broadcast, edge) == 0)
+      return false;
+    // Reader firing j reads `cons` bytes at logical offset j*cons, resolved to
+    // buf + (j*cons mod L). That read must stay inside one period, i.e. `cons`
+    // must divide L; otherwise a read straddles the wrap point, which a single
+    // `mod` cannot express (the copy path can, since it concatenates real
+    // copies). Rare in practice -- fall back to copy.
+    i64 cons = getTypeSize(edge.getOut());
+    if (cons <= 0 || buf_L % cons != 0)
       return false;
   }
   return true;

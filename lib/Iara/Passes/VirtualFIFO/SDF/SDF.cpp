@@ -161,18 +161,26 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
     // analysis never set its delay/block/alpha/beta. Rate it as a single-block
     // 1:1 data edge; fireBroadcast() pushes the whole aliased chunk.
     if (isBorrowEdge(edge)) {
-      auto bytes = getProdRateBytes(edge);
+      // One block = one broadcast firing's production (prod bytes, no delays),
+      // read `cons` at a time by the reader. cons_alpha is the number of
+      // consumer firings a block backs (see VirtualFIFO_Edge_Embed.h: `zero =
+      // block_size_with_delays - cons_rate*cons_alpha`), so it MUST be
+      // prod/cons -- otherwise getConsumerSlice's second regime
+      // (`(vo - block)/cons + cons_alpha`) restarts seq at 0 for every
+      // broadcast firing past the first, colliding onto firing 0's slots.
+      auto prod = getProdRateBytes(edge);
+      auto cons = getConsRateBytes(edge);
       e.setLocalIndex(0);
-      e.setProdRate(bytes);
-      e.setConsRate(getConsRateBytes(edge));
+      e.setProdRate(prod);
+      e.setConsRate(cons);
       e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
       e.setDelayOffset(0);
       e.setDelaySize(0);
-      e.setBlockSizeWithDelays(bytes);
-      e.setBlockSizeNoDelays(bytes);
-      e.setProdAlpha(0);
+      e.setBlockSizeWithDelays(prod);
+      e.setBlockSizeNoDelays(prod);
+      e.setProdAlpha(1); // the broadcast fills the whole block in one firing
       e.setProdBeta(0);
-      e.setConsAlpha(0);
+      e.setConsAlpha(cons > 0 ? prod / cons : 0); // firings backed by one block
       e.setConsBeta(0);
       continue;
     }
