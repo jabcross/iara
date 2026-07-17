@@ -45,11 +45,13 @@ EdgeOp expandImplicitEdge(Value val) {
 void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   // Ownership strategy for read-only fan-outs (CLI absent here — this pass has
   // no options — so env only; see [[iara-opt-config-knobs]]). Default keeps the
-  // copy-all-but-one behavior; first-keeps-buffer enables zero-copy borrows.
+  // copy-all-but-one behavior; join-owns-buffer enables zero-copy borrows: the
+  // readers all alias one buffer and a synthesized join owns it, freeing it once
+  // after every reader signals.
   bool borrow_mode = iara::util::optionOrEnv(false, "",
                                              "IARA_BROADCAST_OWNERSHIP",
                                              "copy-all-but-one") ==
-                     "first-keeps-buffer";
+                     "join-owns-buffer";
 
   // Expand all fan-outs. A borrow transform rebuilds its consumer nodes (to add
   // a logic output feeding the join), which invalidates any snapshot of the op

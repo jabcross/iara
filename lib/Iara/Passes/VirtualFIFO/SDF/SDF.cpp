@@ -31,7 +31,11 @@ enum class Direction { Forward, Backward };
 bool isDeallocEdge(EdgeOp edge) { return getConsumerNode(edge).isDealloc(); }
 
 bool isLogicEdge(EdgeOp edge) {
-  return Node::isLogicValue(edge.getOut()) || Node::isLogicValue(edge.getIn());
+  // Either internal form (tagged, i8, may be multi-rate) or the `none`-typed
+  // source sugar (always 1:1). See Node::isLogicValue.
+  return edge->hasAttr("logic_edge") ||
+         llvm::isa<mlir::NoneType>(edge.getOut().getType()) ||
+         llvm::isa<mlir::NoneType>(edge.getIn().getType());
 }
 
 bool isBorrowEdge(EdgeOp edge) { return edge->hasAttr("borrow"); }
@@ -86,14 +90,10 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
         arg_bytes += getTypeSize(pure_input);
         num_args += 1;
       } else {
-        // A logic input gates firing with `mult` tokens (1 for a 1:1 edge, or
-        // this reader's firing multiplicity for a broadcast-join edge — see
-        // annotateEdgeInfo). Add that many to the threshold, not one token.
-        i64 mult = 1;
-        if (auto e =
-                llvm::dyn_cast_or_null<EdgeOp>(pure_input.getDefiningOp()))
-          if (auto a = e->getAttrOfType<mlir::IntegerAttr>("logic_mult"))
-            mult = a.getInt();
+        // A logic input gates firing with `mult` tokens: getTypeSize reads its
+        // i8 type (1 for a 1:1 edge, or this reader's firing multiplicity for a
+        // multi-rate broadcast-join edge). Add that many to the threshold.
+        i64 mult = getTypeSize(pure_input);
         arg_bytes += mult;
         logic_in_bytes += mult;
       }
@@ -133,24 +133,23 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, edge] : llvm::enumerate(actor.getOps<EdgeOp>())) {
     Edge e(edge);
     // A logic edge carries no buffer and is skipped by the inout-chain analysis
-    // that would otherwise set delay/block/alpha/beta. Producer emits 1 token
-    // per firing (prod_rate 1); cons_rate is normally 1, but a broadcast-join
-    // logic edge is MULTI-RATE (cons_rate = `logic_mult`, this reader's firings
-    // per join firing), so the join gates on that many increments and fire()
-    // maps the producer seq to the join seq. Not a kernel arg (cons_arg_idx=-1);
-    // its token is delivered directly in fire() (never the byte-slicing path).
+    // that would otherwise set delay/block/alpha/beta. Its rate lives in its i8
+    // types like any edge: the producer (reader) emits 1 token per firing
+    // (in 1xi8), and a broadcast-join edge is MULTI-RATE (out `mult`xi8), so the
+    // join gates on `mult` increments per firing and fire() maps producer seq to
+    // join seq. Not a kernel arg (cons_arg_idx=-1); its token is delivered
+    // directly in fire() (never the byte-slicing path).
     if (isLogicEdge(edge)) {
-      i64 mult = 1;
-      if (auto a = edge->getAttrOfType<mlir::IntegerAttr>("logic_mult"))
-        mult = a.getInt();
+      i64 prod = getProdRateBytes(edge);
+      i64 cons = getConsRateBytes(edge);
       e.setLocalIndex(0);
-      e.setProdRate(1);
-      e.setConsRate(mult);
+      e.setProdRate(prod);
+      e.setConsRate(cons);
       e.setConsArgIdx(-1);
       e.setDelayOffset(0);
       e.setDelaySize(0);
-      e.setBlockSizeWithDelays(mult);
-      e.setBlockSizeNoDelays(mult);
+      e.setBlockSizeWithDelays(cons);
+      e.setBlockSizeNoDelays(cons);
       e.setProdAlpha(0);
       e.setProdBeta(0);
       e.setConsAlpha(0);
@@ -317,6 +316,11 @@ LogicalResult annotateTotalFirings(ActorOp actor, StaticAnalysisData &data) {
       continue;
     }
     for (auto [direction, edge, neighbor] : getNeighbors(node)) {
+      // Logic edges are real SDF dependencies and carry their rate in their i8
+      // types like any edge: a broadcast->join logic edge is MULTI-RATE (in
+      // 1xi8 = 1 token/reader-firing, out `mult`xi8), so getFlowRatio gives
+      // 1:mult and join_firings = reader_firings / mult, consistent with the
+      // passthrough data edge. No special case needed.
       Rational flow_ratio = getFlowRatio(edge).normalized();
       if (direction == Direction::Backward) {
         flow_ratio = flow_ratio.reciprocal();

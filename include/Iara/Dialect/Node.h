@@ -101,10 +101,23 @@ public:
     return llvm::map_range(getPureOuts(), valueToOutEdge);
   }
 
-  // A logic (control-only) port is typed `none`: no data buffer, not a kernel
-  // arg, only gates firing. Everything else is a data port.
+  // A logic (control-only) port carries no data buffer and is not a kernel arg,
+  // only gates firing. Two equivalent forms: a `none`-typed port (hand-written
+  // source sugar for a 1:1 logic edge, e.g. applications/21-logic-dep), or an
+  // i8-typed port whose edge is tagged `logic_edge` (the internal form the
+  // broadcast->join transform emits -- i8 so a MULTI-RATE edge can carry `mult`
+  // tokens in its type like any SDF rate, which `none` cannot express). The i8
+  // type alone is ambiguous with real byte data, so the edge tag is what marks
+  // it there.
   static bool isLogicValue(mlir::Value v) {
-    return llvm::isa<mlir::NoneType>(v.getType());
+    if (llvm::isa<mlir::NoneType>(v.getType()))
+      return true;
+    if (auto e = llvm::dyn_cast_or_null<EdgeOp>(v.getDefiningOp()))
+      return e->hasAttr("logic_edge");
+    if (!v.use_empty())
+      if (auto e = llvm::dyn_cast<EdgeOp>(*v.getUsers().begin()))
+        return e->hasAttr("logic_edge");
+    return false;
   }
   auto dataIns() {
     return llvm::make_filter_range(

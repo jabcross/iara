@@ -1,4 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Node.h"
 // #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Passes/VirtualFIFO/BreakLoops.h"
 #include "Iara/Passes/VirtualFIFO/Codegen/Codegen.h"
@@ -158,10 +159,11 @@ struct VirtualFIFOSchedulerPass::Impl {
       return existing;
     }
 
-    // Logic (`none`) ports carry no buffer and are excluded from the kernel's
-    // buffer-arg count: a logic `in` has no data-pointer arg, and a logic pure
-    // `out` (past the inout-paired prefix of getOut()) has none either.
-    auto isLogic = [](Value v) { return llvm::isa<NoneType>(v.getType()); };
+    // Logic ports carry no buffer and are excluded from the kernel's buffer-arg
+    // count: a logic `in` has no data-pointer arg, and a logic pure `out` (past
+    // the inout-paired prefix of getOut()) has none either. Identified by the
+    // `logic_edge` tag (Node::isLogicValue), not their i8 type.
+    auto isLogic = [](Value v) { return iara::dialect::Node::isLogicValue(v); };
     size_t num_buffers =
         llvm::count_if(node_op.getIn(), std::not_fn(isLogic)) +
         llvm::count_if(node_op.getOut(), std::not_fn(isLogic));
@@ -200,6 +202,30 @@ struct VirtualFIFOSchedulerPass::Impl {
 
     auto loc = node_op.getLoc();
     auto i8_type = IntegerType::get(ctx(), 8);
+
+    // Collapse each input edge's affine layout map (carried through the pipeline,
+    // composable) into the address arithmetic baked here, at wrapper codegen
+    // (late). Today the only map is the read-only broadcast's toroidal
+    // (d) -> (d mod L); record cons_arg_idx -> L so that arg's offset is wrapped.
+    llvm::DenseMap<int64_t, int64_t> arg_period;
+    for (auto in : node_op.getAllInputs()) {
+      auto e = in.getDefiningOp<EdgeOp>();
+      if (!e)
+        continue;
+      auto lm = e->getAttrOfType<mlir::AffineMapAttr>("layout");
+      auto ai = e->getAttrOfType<mlir::IntegerAttr>("cons_arg_idx");
+      if (!lm || !ai)
+        continue;
+      auto bin =
+          llvm::dyn_cast<mlir::AffineBinaryOpExpr>(lm.getAffineMap().getResult(0));
+      if (!bin || bin.getKind() != mlir::AffineExprKind::Mod)
+        continue;
+      auto c = llvm::dyn_cast<mlir::AffineConstantExpr>(bin.getRHS());
+      if (!c)
+        continue;
+      arg_period[ai.getInt()] = c.getValue();
+    }
+
     for (size_t i = 0; i < num_buffers; i++) {
 
       // arg1 is a std::span<VirtualFIFO_Chunk>; field 0 is its data pointer,
@@ -209,17 +235,23 @@ struct VirtualFIFOSchedulerPass::Impl {
                            func_builder.getBlock()->getArgument(1), {0});
 
       // Resolve chunk[i] to the plain pointer the kernel expects: aligned +
-      // offset (i8 elements, stride 1). This is the node-wrapper map-resolution
-      // site — for the identity layout it is a bare offset add; a toroidal
-      // multi-rate read-only edge wraps the index (offset mod L) here before the
-      // GEP. Field 1 = aligned, field 2 = offset (see VirtualFIFO_Chunk).
+      // map(offset) (i8 elements, stride 1). Field 1 = aligned, field 2 = offset.
+      // For the identity layout map(offset) = offset; a toroidal borrow edge
+      // wraps it (offset mod L) so a replication reader re-reads the L-physical
+      // buffer zero-copy.
       auto aligned_pp = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
                                chunk_type(), chunks, {(i32)i, 1});
       auto aligned = CREATE(LLVM::LoadOp, func_builder, loc, opaque_ptr_type,
                             aligned_pp);
       auto offset_pp = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
                               chunk_type(), chunks, {(i32)i, 2});
-      auto offset = CREATE(LLVM::LoadOp, func_builder, loc, i64type(), offset_pp);
+      Value offset =
+          CREATE(LLVM::LoadOp, func_builder, loc, i64type(), offset_pp);
+      if (auto it = arg_period.find((int64_t)i); it != arg_period.end()) {
+        auto Lc = CREATE(LLVM::ConstantOp, func_builder, loc, i64type(),
+                         func_builder.getI64IntegerAttr(it->second));
+        offset = CREATE(LLVM::SRemOp, func_builder, loc, i64type(), offset, Lc);
+      }
       auto resolved = CREATE(LLVM::GEPOp, func_builder, loc, opaque_ptr_type,
                              i8_type, aligned, ValueRange{offset});
 
@@ -468,15 +500,25 @@ struct VirtualFIFOSchedulerPass::Impl {
   // canonicalize-side auto-fanout knob.
   bool borrowModeEnabled() {
     return iara::util::optionOrEnv(false, "", "IARA_BROADCAST_OWNERSHIP",
-                                   "copy-all-but-one") == "first-keeps-buffer";
+                                   "copy-all-but-one") == "join-owns-buffer";
   }
 
   void convertPureBorrowBroadcasts(ActorOp actor) {
-    for (auto node : llvm::to_vector(actor.getOps<NodeOp>())) {
-      if (!node.getImpl().starts_with("iara_broadcast"))
-        continue;
-      if (iara::dialect::broadcast::broadcastIsPureBorrowable(node))
-        iara::dialect::broadcast::convertBroadcastToBorrow(node);
+    // convertBroadcastToBorrow rebuilds (erases) consumer nodes to add their
+    // logic output, invalidating any op-list snapshot — so find one borrowable
+    // broadcast, convert it, and re-scan, until none remain.
+    auto findAndConvertOne = [&]() -> bool {
+      for (auto node : llvm::to_vector(actor.getOps<NodeOp>())) {
+        if (!node.getImpl().starts_with("iara_broadcast"))
+          continue;
+        if (iara::dialect::broadcast::broadcastIsPureBorrowable(node)) {
+          iara::dialect::broadcast::convertBroadcastToBorrow(node);
+          return true;
+        }
+      }
+      return false;
+    };
+    while (findAndConvertOne()) {
     }
   }
 

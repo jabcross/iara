@@ -252,18 +252,15 @@ static i64 readerMultiplicity(NodeOp broadcast, EdgeOp outEdge) {
   i64 bc_reps = Node(broadcast).totalIterFirings();
   auto consumer = llvm::cast<NodeOp>(*outEdge.getOut().getUsers().begin());
   i64 rd_reps = Node(consumer).totalIterFirings();
+  // The reader must fire an integer number of times per buffer instance so its
+  // multi-rate logic edge gates the join exactly once per buffer. A fractional
+  // count means the reader gathers across buffers — unsupported. Replication
+  // (reader re-reads the buffer, e.g. SIFT's L -> K*L broadcasts) IS supported:
+  // fireBroadcast K-pushes the physical buffer with a toroidal (j*cons mod L)
+  // offset, so no restriction on the read/buffer size ratio here.
   if (bc_reps <= 0 || rd_reps <= 0 || rd_reps % bc_reps != 0)
-    return 0; // fractional multiplicity: reader spans multiple buffers
-  i64 mult = rd_reps / bc_reps;
-  // No replication: over its `mult` firings the reader must read exactly the
-  // aliased buffer once (mult * per-firing bytes == buffer bytes). Otherwise it
-  // re-reads the buffer (needs a toroidal map), which the plain per-buffer join
-  // can't free. Compare against the broadcast INPUT (buffer) size — not
-  // outEdge.getIn(), which the caller may already have repointed to the borrow.
-  i64 buf_sz = getTypeSize(broadcast.getAllInputs().front());
-  if (mult * getTypeSize(outEdge.getOut()) != buf_sz)
     return 0;
-  return mult;
+  return rd_reps / bc_reps;
 }
 
 bool broadcastIsPureBorrowable(NodeOp broadcast) {
@@ -286,20 +283,27 @@ bool broadcastIsPureBorrowable(NodeOp broadcast) {
     return false;
   if (!broadcastOutputsAllReadOnly(broadcast))
     return false;
-  // The buffer is produced once per graph iteration (a single-firing top-level
-  // fan-out). Multi-firing broadcasts (parallel/pyramid regions) reshape the
-  // repetition vector in ways the per-buffer join does not yet reconcile.
+  // Every reader must have an integer firing multiplicity (see
+  // readerMultiplicity). Replication (L -> K*L) and multi-firing readers are
+  // supported: the borrow output keeps the original (logical) rate so the SDF is
+  // unchanged from the copy graph, the join's multi-rate logic edges gate the
+  // free, and fireBroadcast + the toroidal layout map alias the L-physical buffer
+  // across the K logical reads.
+  // The broadcast itself must fire exactly once per graph iteration. A
+  // multi-firing broadcast (bc_reps > 1, e.g. SIFT's octave-loop counter/pyramid
+  // feedback) reads a fresh input slice each firing; aliasing that with the
+  // toroidal wrap (period L = one firing's input) and a global FIFO offset is not
+  // yet correct (the input-slice offset is lost / the per-firing buffers alias
+  // wrong). Single-firing broadcasts with multi-read readers (bc_reps==1, mult>1
+  // -- the coefficient and big image replications, the actual RSS drivers) ARE
+  // correct: one buffer, readers re-read it via the wrap. Restrict to those.
   if (Node(broadcast).totalIterFirings() != 1)
     return false;
-  // Every reader must read the whole buffer in exactly one firing (mult == 1).
-  // Multi-rate readers (mult > 1) are supported by the join's multi-rate logic
-  // edges in principle, but are gated off until validated on the complex SIFT
-  // graphs; a mult of 0 is a gather/replication reader (needs the toroidal map).
   for (auto out : broadcast.getAllOutputs()) {
     if (hasDelay(out))
       return false; // feedback reader
     auto edge = llvm::cast<EdgeOp>(*out.getUsers().begin());
-    if (readerMultiplicity(broadcast, edge) != 1)
+    if (readerMultiplicity(broadcast, edge) == 0)
       return false;
   }
   return true;
@@ -315,7 +319,14 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
 
   OpBuilder builder(broadcast);
   auto ty = input.getType();
-  SmallVector<Type> result_types(N + 1, ty); // [passthrough, borrow_0..borrow_{N-1}]
+  // result[0] = passthrough (owns the L-byte physical buffer, → join); the
+  // borrows KEEP the original (logical) output types so the graph's rates are
+  // identical to the copy broadcast (a replication output is K*L logical, aliased
+  // to the L physical buffer at runtime via the toroidal layout map).
+  SmallVector<Type> result_types;
+  result_types.push_back(ty);
+  for (size_t i = 0; i < N; i++)
+    result_types.push_back(broadcast.getResult(i).getType());
   auto nb = CREATE(NodeOp,
                    builder,
                    broadcast.getLoc(),
@@ -327,6 +338,15 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
   nb->setAttr("broadcast_borrow", builder.getUnitAttr());
   Value passthrough = nb.getResult(0);
 
+  // Physical buffer period L (bytes): the reader's logical offset wraps mod L to
+  // alias the one buffer. Carried as an affine layout map on each borrow edge and
+  // collapsed to `offset mod L` at wrapper codegen (late), leaving room for
+  // future map composition (e.g. transpose cancellation) before that.
+  i64 buf_L = getTypeSize(input);
+  auto d0 = mlir::getAffineDimExpr(0, builder.getContext());
+  auto layout = mlir::AffineMap::get(1, 0, d0 % buf_L, builder.getContext());
+  auto layoutAttr = mlir::AffineMapAttr::get(layout);
+
   // Redirect each output edge to read the borrow alias; give its consumer a
   // logic output feeding the join.
   SmallVector<Value> logic_inputs;
@@ -335,6 +355,7 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
     auto edge = cast<EdgeOp>(*broadcast.getResult(i).getUsers().begin());
     edge->setOperand(0, nb.getResult(i + 1)); // edge now reads the borrow
     edge->setAttr("borrow", builder.getUnitAttr());
+    edge->setAttr("layout", layoutAttr); // toroidal (d) -> (d mod L)
     // This reader fires `mult` times per buffer (from the repetition vector), so
     // its logic edge to the join is multi-rate: the join expects that many
     // increments before it fires (and frees). broadcastIsPureBorrowable already
@@ -346,32 +367,41 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
     logic_inputs.push_back(addLogicOutput(consumer));
   }
 
-  iara::dialect::insertJoin(passthrough, logic_inputs);
+  auto join = iara::dialect::insertJoin(passthrough, logic_inputs);
   if (!isa<EdgeOp>(*passthrough.getUsers().begin()))
     passes::canonicalize::expandImplicitEdge(passthrough);
+  // Materialize each reader->join logic edge as a MULTI-RATE edge: the reader
+  // emits 1 token/firing (in tensor<1xi8>), the join consumes `mult` per firing
+  // (out tensor<mult xi8>). The `logic_edge` tag marks it control-only (no
+  // buffer, not a kernel arg); its 1:mult rate lives in the types, so
+  // getFlowRatio gives join_firings = reader_firings/mult (see SDF.cpp).
+  auto i8 = builder.getI8Type();
   for (size_t i = 0; i < N; i++) {
-    if (!isa<EdgeOp>(*logic_inputs[i].getUsers().begin()))
-      passes::canonicalize::expandImplicitEdge(logic_inputs[i]);
-    // Tag the join's logic edge with the reader multiplicity; SDF rates it
-    // cons_rate = mult (see annotateEdgeInfo) so the join gates on `mult`
-    // increments from this reader per firing.
-    if (mults[i] != 1) {
-      auto le = cast<EdgeOp>(*logic_inputs[i].getUsers().begin());
-      le->setAttr("logic_mult", builder.getI64IntegerAttr(mults[i]));
-    }
+    Value logic_out = logic_inputs[i];
+    OpBuilder eb(join);
+    auto le = CREATE(EdgeOp,
+                     eb,
+                     join.getLoc(),
+                     mlir::RankedTensorType::get({mults[i]}, i8),
+                     logic_out);
+    le->setAttr("logic_edge", builder.getUnitAttr());
+    logic_out.replaceAllUsesExcept(le.getOut(), {le});
   }
 
   broadcast->erase();
   return nb;
 }
 
-// Rebuild `consumer` with one extra `none` (logic) output. Returns the new
-// logic result Value. Used to signal a join once a read-only reader finishes.
+// Rebuild `consumer` with one extra logic output: a `tensor<1xi8>` (one token
+// per firing). The edge that will carry it is tagged `logic_edge`, which is what
+// marks it control-only (the i8 type alone does not). Returns the new logic
+// result Value. Used to signal a join once a read-only reader finishes.
 static Value addLogicOutput(NodeOp consumer) {
   OpBuilder builder(consumer);
   SmallVector<Type> result_types(consumer.getResultTypes().begin(),
                                  consumer.getResultTypes().end());
-  result_types.push_back(NoneType::get(builder.getContext()));
+  result_types.push_back(
+      mlir::RankedTensorType::get({1}, builder.getI8Type()));
   auto nw = CREATE(NodeOp,
                    builder,
                    consumer.getLoc(),
@@ -461,12 +491,17 @@ NodeOp insertBroadcastBorrow(Value value) {
   // Join owns the buffer (RW passthrough) and gates on all readers finishing.
   iara::dialect::insertJoin(passthrough, logic_inputs);
 
-  // Materialize the passthrough and logic-output edges.
+  // Materialize the passthrough and logic-output edges. Each reader here consumes
+  // `value` once (mult=1), so the logic edges are 1:1 (tensor<1xi8> both sides);
+  // tag them `logic_edge` to mark them control-only.
   if (!isa<EdgeOp>(*passthrough.getUsers().begin()))
     passes::canonicalize::expandImplicitEdge(passthrough);
-  for (auto logic : logic_inputs)
-    if (!isa<EdgeOp>(*logic.getUsers().begin()))
-      passes::canonicalize::expandImplicitEdge(logic);
+  for (auto logic : logic_inputs) {
+    EdgeOp le = dyn_cast<EdgeOp>(*logic.getUsers().begin());
+    if (!le)
+      le = passes::canonicalize::expandImplicitEdge(logic);
+    le->setAttr("logic_edge", builder.getUnitAttr());
+  }
   return bcast;
 }
 

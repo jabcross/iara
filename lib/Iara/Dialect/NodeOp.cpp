@@ -1,4 +1,5 @@
 #include "Iara/Dialect/IaraOps.h"
+#include "Iara/Dialect/Node.h"
 #include "Iara/Util/Range.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/FormatVariadic.h>
@@ -88,10 +89,11 @@ FunctionType NodeOp::getKernelFunctionType() {
   auto builder = OpBuilder(*this);
   SmallVector<Type> types;
 
-  // Logic (`none`) ports are not kernel arguments: they carry no buffer and
-  // `none` has no memref lowering. Skip them so the kernel signature matches the
-  // data-only argument list the dispatch passes.
-  auto isLogic = [](Value v) { return llvm::isa<mlir::NoneType>(v.getType()); };
+  // Logic ports are not kernel arguments: they carry no buffer, only gate
+  // firing. Skip them so the kernel signature matches the data-only argument
+  // list the dispatch passes. Identified by the `logic_edge` tag (see
+  // Node::isLogicValue), not their i8 type.
+  auto isLogic = [](Value v) { return Node::isLogicValue(v); };
   for (auto p : getParams()) {
     types.push_back(p.getType());
   }

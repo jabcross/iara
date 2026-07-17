@@ -303,14 +303,29 @@ void VirtualFIFO_Node::fireBroadcast(i64 seq, std::span<VirtualFIFO_Chunk> args)
     owned.data_size = owner->runtime_info.prod_rate;
     owner->push(owned);
     // Read-only borrows -> every reader (the logic_out range for a broadcast).
-    // allocated=null marks a non-owning alias: no borrower path frees the shared
-    // buffer, and `data` still points at it so the reader sees the real bytes.
+    // The reader fires K = prod/cons times per buffer; deliver one borrow per
+    // firing, each aliasing the L-byte physical buffer (allocated=null: no
+    // borrower path frees it). The logical offset j*cons is wrapped mod L in the
+    // reader's wrapper (toroidal layout map), so a replication reader (prod > L)
+    // re-reads the same physical bytes zero-copy.
     for (iara::int_edge k = 0; k < _this->getNumLogicOutputs(); k++) {
       auto *be = getEdge(_this->getLogicOutputEdge(k));
-      auto borrow = input;
-      borrow.allocated = nullptr;
-      borrow.data_size = be->runtime_info.prod_rate;
-      be->push(borrow);
+      i64 cons = be->runtime_info.cons_rate;
+      i64 prod = be->runtime_info.prod_rate;
+      i64 K = (cons > 0) ? (prod / cons) : 1;
+      for (i64 j = 0; j < K; j++) {
+        auto borrow = input;
+        borrow.allocated = nullptr;
+        borrow.data_size = cons;
+        borrow.offset = j * cons; // logical, within THIS firing's buffer; wrapped mod L
+        // FIFO routing is GLOBAL across broadcast firings: this firing (seq)
+        // produces `prod` bytes on the edge, so its K sub-pushes land at
+        // seq*prod + j*cons. Using only j*cons collides seq>0 firings onto
+        // seq 0's already-consumed slots -> readers past the first buffer starve
+        // (deadlock in multi-firing broadcasts like SIFT's octave loop).
+        borrow.virtual_offset = seq * prod + j * cons;
+        be->push(borrow);
+      }
     }
 #ifdef IARA_SEMAPHORE_ATOMIC_RING
     _this->runtime_info.sema_variant.normal->semaphore.release(seq);

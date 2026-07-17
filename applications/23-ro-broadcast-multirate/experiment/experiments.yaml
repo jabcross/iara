@@ -1,6 +1,6 @@
 application:
-  name: 22-ro-broadcast
-  description: "All-read-only broadcast zero-copy borrow (FirstKeepsBuffer strategy)"
+  name: 23-ro-broadcast-multirate
+  description: "Multi-rate all-read-only broadcast zero-copy borrow (replication / toroidal wrap)"
   app_type: regression_test
 
   sources:
@@ -12,8 +12,8 @@ application:
 
 
 test_naming:
-  template: "22-ro-broadcast-{scheduler}-{alloc_mode}-{broadcast_ownership}"
-  description: "RO-broadcast test naming pattern"
+  template: "23-ro-broadcast-multirate-{scheduler}-{alloc_mode}-{broadcast_ownership}"
+  description: "Multi-rate RO-broadcast test naming pattern"
 
 parameters:
   - name: scheduler
