@@ -54,10 +54,17 @@ int main() {
     struct timespec t1, t2;
     clock_gettime(CLOCK_MONOTONIC, &t1);
 
-    // Run SIFT pipeline (re-reads input file, overwrites outputs)
+    // Run SIFT pipeline (re-reads input file, overwrites outputs).
+    // run_iteration submits OpenMP tasks; they only run in parallel inside an
+    // `omp parallel` region. One thread kicks the sources under `single`; the
+    // rest steal the firing tasks. The end-of-region barrier waits for all
+    // tasks (incl. descendants), so no separate iara_runtime_wait is needed.
     // #ifdef SCHEDULER_IARA
-    iara_runtime_run_iteration(0, 0);
-    iara_runtime_wait();
+#pragma omp parallel
+    {
+#pragma omp single
+      iara_runtime_run_iteration(0, 0);
+    }
     // #endif
 
     clock_gettime(CLOCK_MONOTONIC, &t2);
