@@ -236,7 +236,9 @@ struct EmbedSidecarEmitter {
     for (size_t i = 0; i < num_nodes; i++) {
       auto &nd = node_pairs[i];
       Node n(nd.node_op);
-      size_t count = nd.inputs.size();
+      size_t count = nd.inputs.size();          // data (kernel-arg) inputs
+      size_t n_logic = nd.logic_inputs.size();  // logic (gating) inputs
+      size_t total = count + n_logic;           // full firing-threshold slice
       u8 flags = 0;
       if (n.needsPriming())
         flags |= IARA_NODE_NEEDS_PRIMING;
@@ -245,7 +247,13 @@ struct EmbedSidecarEmitter {
       if (nd.node_op->hasAttr("broadcast_borrow"))
         flags |= IARA_NODE_IS_BROADCAST;
 
-      if (count <= 2) {
+      // Inline path is only valid when the WHOLE input slice fits in the two
+      // inline slots. Logic inputs must live in the slice too (so the runtime
+      // threshold loop sees them), so any logic input forces the indirect path
+      // even for <=2 data inputs. getNumInputs() still returns num_args (data
+      // only) for kernel arg-fill and the output chain; the extra logic entries
+      // sit past num_args and carry cons_arg_idx == -1.
+      if (n_logic == 0 && count <= 2) {
         flags |= IARA_NODE_INPUTS_INLINE;
         node_fifo[i].flags = flags;
         node_fifo[i].inline_inputs[0] =
@@ -259,8 +267,14 @@ struct EmbedSidecarEmitter {
         node_fifo[i].flags = flags;
         node_fifo[i].indirect_start =
             static_cast<iara::int_edge>(fifo_flat.size());
-        node_fifo[i].indirect_count = static_cast<iara::int_edge>(count);
+        // indirect_count = data + logic. num_args (data only) is stored
+        // separately in runtime_info; this count is what the threshold loop
+        // walks (getNumInputEdges). Data inputs first, logic inputs after, so
+        // getInputEdge(0..num_args) still yields the kernel args in order.
+        node_fifo[i].indirect_count = static_cast<iara::int_edge>(total);
         for (auto *e : nd.inputs)
+          fifo_flat.push_back(edge_idx[e]);
+        for (auto *e : nd.logic_inputs)
           fifo_flat.push_back(edge_idx[e]);
       }
     }
@@ -304,10 +318,10 @@ struct EmbedSidecarEmitter {
       dst.runtime_info.total_iter_firings =
           static_cast<uint32_t>(n.totalIterFirings());
       dst.runtime_info.num_args = static_cast<iara::int_edge>(n.numArgs());
-      assert(n.logicInBytes() <= 255 &&
-             "logic_in_bytes exceeds u8; widen the field (see Embed header)");
-      dst.runtime_info.logic_in_bytes =
-          static_cast<uint8_t>(n.logicInBytes());
+      // No logic_in_bytes: the join's logic-input tokens are now summed at
+      // runtime from the logic input edges appended to its input-fifo slice
+      // (cons_arg_idx == -1), so nothing to emit and no u8 overflow at high
+      // parallelism. See NodeCodegenData::logic_inputs / trueInputBytes.
       dst.runtime_info.flags = node_fifo[i].flags;
       // sema_variant: zero-initialized (calloc semantics from memset above).
 

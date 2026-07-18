@@ -43,11 +43,20 @@ struct NodeCodegenData {
   LLVMFuncOp wrapper = nullptr;
   u8 kernel_id = 0; // index into the per-module iara_dispatch_kernel switch
   std::string name;
+  // Data (kernel-arg) input edges only. num_args == inputs.size(); the inout
+  // output chain and kernel arg-fill both index this list.
   std::vector<EdgeCodegenData *> inputs = {};
   std::vector<EdgeCodegenData *> outputs = {};
-  // Logic (control-only, `none`) output edges. Not part of the inout-chain
-  // output enumeration; the producer pushes a token on each in fire().
+  // Logic (control-only) output edges. Not part of the inout-chain output
+  // enumeration; the producer pushes a token on each in fire().
   std::vector<EdgeCodegenData *> logic_outputs = {};
+  // Logic (control-only) INPUT edges (a join's reader tokens). Not kernel args,
+  // so excluded from `inputs`/num_args, but they gate firing: the embed appends
+  // them to this node's input-fifo slice (after the data inputs) so the runtime
+  // firing-threshold loop sums their cons_rate directly, reconstructing the old
+  // `logic_in_bytes` field for free (they carry cons_arg_idx == -1). See
+  // EmbedSidecarStrategy and VirtualFIFO_Node::trueInputBytes.
+  std::vector<EdgeCodegenData *> logic_inputs = {};
   Value input_fifos_span_ptr = {};
   Value output_fifos_span_ptr = {};
 };

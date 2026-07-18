@@ -11,17 +11,21 @@
 #include <gtl/phmap.hpp>
 
 i64 VirtualFIFO_Node::trueInputBytes() const {
+  // Walk the FULL input-fifo slice (data inputs + any appended logic inputs),
+  // summing cons_rate for everything not fed by an alloc node (a node produces
+  // its own alloc-fed buffers inline in fire(), so those don't gate). This
+  // reconstructs the old logic_in_bytes field: logic inputs (a join's reader
+  // tokens, cons_arg_idx == -1) have a non-alloc producer and cons_rate == their
+  // per-firing token count, so they fall out of the same loop -- in i64, no u8
+  // overflow. It also keeps a logic-only node (a join) from looking like a
+  // source. getNumInputs() (num_args) stays the kernel-arg count; getNumInputEdges
+  // covers the logic tail (the edges are contiguous, so no extra cache misses).
   i64 sum = 0;
-  for (iara::int_edge i = 0; i < getNumInputs(); i++) {
+  for (iara::int_edge i = 0; i < getNumInputEdges(); i++) {
     auto *e = iara::runtime::virtualfifo::getEdge(getInputEdge(i));
     if (!iara::runtime::virtualfifo::getProducer(e)->runtime_info.isAlloc())
       sum += e->runtime_info.cons_rate;
   }
-  // Logic (control-only) inputs also gate firing but occupy no kernel-arg slot,
-  // so they are not in getNumInputs(). Add their token contribution here so the
-  // data-triggered threshold matches every arrival (consume + consumeLogic) and
-  // so a logic-only node (e.g. a join) is not mistaken for a source.
-  sum += runtime_info.logic_in_bytes;
   return sum;
 }
 

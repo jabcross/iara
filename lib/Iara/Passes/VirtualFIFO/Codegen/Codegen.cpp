@@ -42,11 +42,14 @@ void fillOutPairPointers(std::span<NodeCodegenData> node_codegen_datas,
       assert(edge_to_data.contains(edge_op));
       auto edge_codegen_data = edge_to_data[edge_op];
       edge_codegen_data->consumer = &node_codegen_data;
-      // Logic inputs are not kernel args and not part of the input-fifo list;
-      // the consumer link above is still recorded so the producer can deliver
-      // the token.
+      // Logic inputs are not kernel args (excluded from `inputs`/num_args), but
+      // they still gate firing. Collect them separately; the embed appends them
+      // to this node's input-fifo slice after the data inputs so the runtime
+      // threshold loop can sum their cons_rate (reconstructing logic_in_bytes).
       if (!isLogicEdge(edge_op))
         node_codegen_data.inputs.push_back(edge_codegen_data);
+      else
+        node_codegen_data.logic_inputs.push_back(edge_codegen_data);
     }
     for (auto output : node_codegen_data.node_op.getAllOutputs()) {
       auto users = llvm::to_vector(output.getUsers());

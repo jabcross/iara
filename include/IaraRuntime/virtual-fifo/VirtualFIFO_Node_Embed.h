@@ -53,14 +53,13 @@ struct VirtualFIFO_Node_RuntimeInfo {
   uint32_t total_iter_firings;
   iara::int_edge num_args;
   uint8_t flags;                          // IARA_NODE_INPUTS_INLINE | IARA_NODE_NEEDS_PRIMING
-  // Total logic (control-only) tokens that must arrive per firing: sum over
-  // this node's `none`-typed inputs (getTypeSize(none)=1 each). Legacy priming
-  // folds this into arg_bytes; the data-triggered path recomputes its threshold
-  // from trueInputBytes() and must add this back (else logic edges don't gate).
-  // Occupies the pad byte after flags so the node stays 32 bytes.
-  // ponytail: u8 caps a node at 255 logic inputs (e.g. a 255-way join); widen
-  // to int_edge (and grow the struct) if a wider join is ever needed.
-  uint8_t logic_in_bytes;
+  // Reserved pad byte (keeps the node at 32 bytes). Formerly logic_in_bytes: a
+  // u8 sum of a join's logic-input tokens that overflowed past 255 at high
+  // parallelism. Removed -- trueInputBytes() now reconstructs that sum in i64 by
+  // walking the logic input edges the embed appends to this node's input-fifo
+  // slice (cons_arg_idx == -1). Single source of truth (edge cons_rate), no
+  // overflow, no struct growth.
+  uint8_t reserved0_;
 
   bool isAlloc()   const { return arg_bytes == static_cast<i64>(NodeType::Alloc); }
   bool isDealloc() const { return arg_bytes == static_cast<i64>(NodeType::Dealloc); }
@@ -70,7 +69,6 @@ struct VirtualFIFO_Node_RuntimeInfo {
     fprintf(stderr, "  arg_bytes = %ld\n", arg_bytes);
     fprintf(stderr, "  total_iter_firings = %u\n", total_iter_firings);
     fprintf(stderr, "  num_args = %u\n", num_args);
-    fprintf(stderr, "  logic_in_bytes = %u\n", logic_in_bytes);
     fprintf(stderr, "  flags = %u\n", flags);
   }
 };
@@ -103,6 +101,17 @@ struct VirtualFIFO_Node {
   iara::int_edge getOutputEdge(iara::int_edge idx) const;
   iara::int_edge getNumInputs() const;
   iara::int_edge getInputEdge(iara::int_edge idx) const;
+
+  // Full input-fifo slice = data inputs (num_args, the kernel args) followed by
+  // any logic inputs (a join's reader tokens, cons_arg_idx == -1). getNumInputs
+  // returns only num_args (arg-fill + output chain); this returns the whole
+  // slice for the firing-threshold loop. Inline nodes never carry logic inputs
+  // (the embed forces indirect when any exist), so their total == num_args.
+  iara::int_edge getNumInputEdges() const {
+    return (runtime_info.flags & IARA_NODE_INPUTS_INLINE)
+               ? runtime_info.num_args
+               : codegen_info.input_fifos.indirect.count;
+  }
 
   // Logic (control-only) outputs: contiguous edge indices, delivered as tokens
   // in fire() (not part of the inout-chain output enumeration).

@@ -78,13 +78,14 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
   for (auto [i, node] : enumerate(nodes)) {
     i64 arg_bytes = 0;
     i64 num_args = 0;
-    i64 logic_in_bytes = 0;
 
-    // Logic (control-only, `none`-typed) ports are normal SDF dependencies but
-    // are NOT kernel arguments. A logic *input* still gates firing, so it counts
-    // toward arg_bytes (the arrival threshold; getTypeSize(none)=1 token) but not
-    // num_args (no kernel-arg slot). A logic *output* has no buffer and nothing
-    // arrives for it, so it counts toward neither.
+    // Logic (control-only) ports are normal SDF dependencies but are NOT kernel
+    // arguments. A logic *input* still gates firing, so it counts toward
+    // arg_bytes (the priming arrival threshold) but not num_args (no kernel-arg
+    // slot). The data-triggered threshold no longer relies on a precomputed
+    // logic-token field; it sums the logic input edges directly at runtime (see
+    // trueInputBytes), so nothing extra is stored here. A logic *output* has no
+    // buffer and nothing arrives for it, so it counts toward neither.
     for (auto pure_input : node.getIn()) {
       if (!Node::isLogicValue(pure_input)) {
         arg_bytes += getTypeSize(pure_input);
@@ -92,10 +93,8 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
       } else {
         // A logic input gates firing with `mult` tokens: getTypeSize reads its
         // i8 type (1 for a 1:1 edge, or this reader's firing multiplicity for a
-        // multi-rate broadcast-join edge). Add that many to the threshold.
-        i64 mult = getTypeSize(pure_input);
-        arg_bytes += mult;
-        logic_in_bytes += mult;
+        // multi-rate broadcast-join edge). Add that many to the priming threshold.
+        arg_bytes += getTypeSize(pure_input);
       }
     }
     for (auto inout : node.getInout()) {
@@ -119,7 +118,6 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     Node n(node);
     n.setArgBytes(arg_bytes);
     n.setNumArgs(num_args);
-    n.setLogicInBytes(logic_in_bytes);
     n.setRank(-1);
     n.setTotalIterFirings(-1);
     n.setNeedsPriming(1);
