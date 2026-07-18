@@ -8,6 +8,8 @@
 
   #include "enkiTS/TaskScheduler.h"
   #include <atomic>
+  #include <cstdint>
+  #include <cstdlib>
   #include <functional>
   #include <mutex>
   #include <vector>
@@ -89,11 +91,34 @@ inline int iara_get_num_threads() {
          1; // +1 for main thread
 }
 
+// Thread count for the enkiTS pool. Honor OMP_NUM_THREADS so vf-enkits and
+// vf-omp run on the SAME number of cores -- otherwise enkiTS defaults to
+// GetNumHardwareThreads() (every core, e.g. 48) while libomp respects
+// OMP_NUM_THREADS, making any scaling/ceiling comparison between the two
+// backends unfair. enkiTS's numThreads_ counts the main thread, so passing N
+// gives N total threads (N-1 workers + main), matching libomp's N. Unset or
+// invalid -> return 0, which selects enkiTS's hardware-threads default.
+inline uint32_t iara_enkits_num_threads() {
+  if (const char *e = std::getenv("OMP_NUM_THREADS")) {
+    int n = std::atoi(e);
+    if (n > 0)
+      return static_cast<uint32_t>(n);
+  }
+  return 0;
+}
+
+inline void iara_enkits_initialize(enki::TaskScheduler *sched) {
+  if (uint32_t n = iara_enkits_num_threads())
+    sched->Initialize(n);
+  else
+    sched->Initialize();
+}
+
 // Initialize parallelism runtime (called once at startup)
 inline void iara_parallelism_init() {
   if (!iara_enkits::g_scheduler) {
     iara_enkits::g_scheduler = new enki::TaskScheduler();
-    iara_enkits::g_scheduler->Initialize();
+    iara_enkits_initialize(iara_enkits::g_scheduler);
   }
 }
 

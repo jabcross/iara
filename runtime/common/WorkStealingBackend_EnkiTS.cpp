@@ -56,7 +56,9 @@ void iara_task_wait_c(void) {
 void iara_parallelism_init_c(void) {
   if (!iara_enkits::g_scheduler) {
     iara_enkits::g_scheduler = new enki::TaskScheduler();
-    iara_enkits::g_scheduler->Initialize();
+    // Honor OMP_NUM_THREADS to match libomp's core count (fair backend
+    // comparison); falls back to enkiTS's hardware default. See the header.
+    iara_enkits_initialize(iara_enkits::g_scheduler);
   }
 }
 
