@@ -154,6 +154,12 @@ struct VirtualFIFO_Node {
   // delay tokens now, so the feedback consumer has its seed input before the
   // data-driven cascade starts. Cached so fire() reuses the same block.
   void seedFeedbackDelays();
+
+  // Data-triggered-alloc mode: seed the front delay region of each DELAYED
+  // borrow output of a broadcast, so a delayed-borrow reader's firing 0 gets its
+  // initial instance (delayBorrowEnabled zero-copy feedback). No-op unless this
+  // is a broadcast with a delayed borrow output.
+  void seedBorrowDelays();
 };
 
 void iara_runtime_node_init(VirtualFIFO_Node *node);

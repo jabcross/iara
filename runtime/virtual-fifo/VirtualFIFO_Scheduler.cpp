@@ -215,6 +215,8 @@ extern "C" void iara_runtime_init() {
 #else
   for (auto &node : iara_runtime_nodes)
     node.seedFeedbackDelays();
+  for (auto &node : iara_runtime_nodes)
+    node.seedBorrowDelays();
 #endif
 }
 

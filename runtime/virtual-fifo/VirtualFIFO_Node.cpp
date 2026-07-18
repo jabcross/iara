@@ -126,6 +126,31 @@ void VirtualFIFO_Node::seedFeedbackDelays() {
         [&](auto ctor) { ctor(key, BlockEntry{base, 0}); });
   }
 }
+
+// Seed the front [0,D) of each DELAYED borrow output's virtual stream with the
+// edge's initial delay tokens, so a delayed-borrow reader's firing 0 gets the
+// initial instance before the producer's aliases start (fireBroadcast shifts
+// those past [0,D)). Mirrors seedFeedbackDelays for the borrow path. The tokens
+// come from iara_runtime_edge_delays_flat via propagate_delays -- delays may
+// carry real init values, not just zeros, so this memcpy (not a memset) is
+// required. Only broadcasts have borrow outputs; delay_size == 0 skips plain
+// (non-delayed) borrows.
+void VirtualFIFO_Node::seedBorrowDelays() {
+  if (!(runtime_info.flags & IARA_NODE_IS_BROADCAST))
+    return;
+  for (iara::int_edge k = 0; k < getNumLogicOutputs(); k++) {
+    auto *be = iara::runtime::virtualfifo::getEdge(getLogicOutputEdge(k));
+    i64 D = be->runtime_info.delay_size;
+    if (D <= 0)
+      continue;
+    // ponytail: the seed buffer (D bytes) is a one-time owned allocation with no
+    // dealloc node, so it outlives firing 0 (a small one-shot leak, << the GBs of
+    // copies eliminated). Give it a real dealloc path if the leak ever matters.
+    auto chunk = VirtualFIFO_Chunk::allocate(D, 0);
+    auto delays = chunk.take_front(D);
+    be->propagate_delays(delays);
+  }
+}
 #endif // IARA_DATA_TRIGGERED_ALLOC
 
 iara::int_edge VirtualFIFO_Node::getNumOutputs() const {
@@ -327,7 +352,12 @@ void VirtualFIFO_Node::fireBroadcast(i64 seq, std::span<VirtualFIFO_Chunk> args)
         // seq*prod + j*cons. Using only j*cons collides seq>0 firings onto
         // seq 0's already-consumed slots -> readers past the first buffer starve
         // (deadlock in multi-firing broadcasts like SIFT's octave loop).
-        borrow.virtual_offset = seq * prod + j * cons;
+        // A DELAYED borrow (delay_size > 0) shifts the whole stream past the
+        // seed region [0,D) so this firing's instance lands at the reader's
+        // NEXT slot -> the reader aliases the PREVIOUS instance (the delay).
+        // seedBorrowDelays fills [0,D). delay_size == 0 for a plain borrow.
+        borrow.virtual_offset =
+            be->runtime_info.delay_size + seq * prod + j * cons;
         be->push(borrow);
       }
     }

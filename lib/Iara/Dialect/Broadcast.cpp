@@ -3,6 +3,7 @@
 #include "Iara/Dialect/Node.h"
 #include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Util/CompilerTypes.h"
+#include "Iara/Util/EnvOption.h"
 #include "Iara/Util/Mlir.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
@@ -263,12 +264,30 @@ static i64 readerMultiplicity(NodeOp broadcast, EdgeOp outEdge) {
   return rd_reps / bc_reps;
 }
 
+// Delayed borrow (IARA_DELAY_PINGPONG=1 + data-triggered): a delayed broadcast
+// output normally forces the whole broadcast onto the copy path (its consumer
+// reads the PREVIOUS buffer instance, and aliasing the live producer buffer
+// would be a hazard under single-buffering). Under data-triggered alloc every
+// iteration already gets a DISTINCT physical buffer, so a read-only consumer of
+// a delayed output can alias the previous instance zero-copy — the FIFO's
+// virtual-offset routing (getConsumerSlice subtracts delay_offset) already maps
+// the reader to the right buffer. Gated to data-triggered (priming reuses
+// buffers → real hazard) and read-only (broadcastOutputsAllReadOnly enforced
+// below).
+static bool delayBorrowEnabled() {
+  return iara::util::optionOrEnv(false, "", "IARA_DELAY_PINGPONG", "0") == "1" &&
+         iara::util::optionOrEnv(false, "", "IARA_ALLOC_MODE", "") ==
+             "data-triggered";
+}
+
 bool broadcastIsPureBorrowable(NodeOp broadcast) {
   if (broadcast.getAllInputs().size() != 1)
     return false;
   // A delayed/feedback edge on the input means the buffer lives across graph
   // iterations (re-read with a delay); aliasing it is unsafe — leave it to the
-  // copy path (breakLoops already handles feedback). Same for outputs.
+  // copy path (breakLoops already handles feedback). Same for outputs. Under
+  // delayBorrowEnabled(), a read-only consumer under data-triggered CAN alias
+  // the previous distinct buffer instance (see above), so allow it.
   auto hasDelay = [](mlir::Value v) {
     for (auto *u : v.getUsers())
       if (auto e = llvm::dyn_cast<EdgeOp>(u))
@@ -279,7 +298,8 @@ bool broadcastIsPureBorrowable(NodeOp broadcast) {
         return true;
     return false;
   };
-  if (hasDelay(broadcast.getAllInputs().front()))
+  bool allow_delay = delayBorrowEnabled();
+  if (hasDelay(broadcast.getAllInputs().front()) && !allow_delay)
     return false;
   if (!broadcastOutputsAllReadOnly(broadcast))
     return false;
@@ -291,7 +311,7 @@ bool broadcastIsPureBorrowable(NodeOp broadcast) {
   // layout map alias the L-byte physical buffer across the K logical reads.
   i64 buf_L = getTypeSize(broadcast.getAllInputs().front());
   for (auto out : broadcast.getAllOutputs()) {
-    if (hasDelay(out))
+    if (hasDelay(out) && !allow_delay)
       return false; // feedback reader
     auto edge = llvm::cast<EdgeOp>(*out.getUsers().begin());
     if (readerMultiplicity(broadcast, edge) == 0)

@@ -168,17 +168,26 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
       // broadcast firing past the first, colliding onto firing 0's slots.
       auto prod = getProdRateBytes(edge);
       auto cons = getConsRateBytes(edge);
+      // A DELAYED borrow (delayBorrowEnabled feedback): the reader aliases the
+      // PREVIOUS instance, so preserve delay routing instead of zeroing it. The
+      // virtual stream is [seed D][inst0 prod][inst1 prod]...; block 0 holds the
+      // seed + first instance (D+prod bytes), backing (D+prod)/cons reader
+      // firings, and getConsumerSlice maps the reader to the delayed instance.
+      // fireBroadcast pushes each alias shifted by D and a one-time seed fills
+      // [0,D) from the delay table (see seedBorrowDelays). D=0 → the plain
+      // single-block borrow below.
+      auto delay = getDelaySizeBytes(edge);
       e.setLocalIndex(0);
       e.setProdRate(prod);
       e.setConsRate(cons);
       e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
       e.setDelayOffset(0);
-      e.setDelaySize(0);
-      e.setBlockSizeWithDelays(prod);
+      e.setDelaySize(delay);
+      e.setBlockSizeWithDelays(delay + prod);
       e.setBlockSizeNoDelays(prod);
       e.setProdAlpha(1); // the broadcast fills the whole block in one firing
       e.setProdBeta(0);
-      e.setConsAlpha(cons > 0 ? prod / cons : 0); // firings backed by one block
+      e.setConsAlpha(cons > 0 ? (delay + prod) / cons : 0); // firings in block 0
       e.setConsBeta(0);
       continue;
     }
