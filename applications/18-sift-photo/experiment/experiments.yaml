@@ -107,6 +107,56 @@ experiment_sets:
     include:
       - {scheduler: preesm, VIDEO_FRAMES: 1}
 
+  # ---- Scaling comparison: IaRa copy vs borrow vs Preesm across cores ----
+  # Does the zero-copy RO-broadcast borrow stop the anti-scaling, and how does it
+  # scale vs Preesm? vf-omp data-triggered atomic-ring, both ownership arms +
+  # Preesm, 4K single-frame. copy = old anti-scaling reference, borrow = new,
+  # preesm = scaling target. (IaRa may fail to link at high core counts due to
+  # the known large-BSS issue; those instances just fail to build.)
+  - name: borrow-vs-preesm
+    description: "4K 1-frame scaling: IaRa vf-omp copy vs join-owns-buffer vs Preesm; cores{1,4,8,12,16,20}"
+    parameters:
+      NUM_CORES: [1, 4, 8, 12, 16, 20]
+    matrix:
+      scheduler: [vf-omp]
+      semaphore: [atomic-ring]
+      alloc_mode: [data-triggered]
+      VIDEO_FRAMES: [1]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+    include:
+      - {scheduler: preesm, VIDEO_FRAMES: 1}
+
+  # ---- Backend A/B: vf-omp vs vf-enkits at 8 cores (task-runtime overhead) ----
+  # perf showed vf-omp spends ~41% of wall in libomp task scheduling; enkits is a
+  # lighter work-stealing backend. Same borrow/alloc/sema, single 4K frame.
+  - name: enkits-ab
+    description: "8-core borrow: vf-omp vs vf-enkits (task-runtime overhead A/B)"
+    parameters:
+      NUM_CORES: [8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring]
+      alloc_mode: [data-triggered]
+      VIDEO_FRAMES: [1]
+      broadcast_ownership: [join-owns-buffer]
+
+  # ---- BATTERY: comprehensive backend/baseline comparison (4K, 1 frame) ----
+  # IaRa vf-omp + vf-enkits (join-owns-buffer borrow, data-triggered, atomic-ring)
+  # vs Preesm, across cores. All IaRa runs use the new zero-copy RO-broadcast
+  # borrow; enkits now honors OMP_NUM_THREADS (fair core count).
+  - name: battery
+    description: "Battery: IaRa vf-omp/vf-enkits (borrow) vs Preesm; 4K, cores 1/4/8"
+    parameters:
+      NUM_CORES: [1, 4, 8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring]
+      alloc_mode: [data-triggered]
+      VIDEO_FRAMES: [1]
+      broadcast_ownership: [join-owns-buffer]
+    include:
+      - {scheduler: preesm, VIDEO_FRAMES: 1}
+
 measurements:
   - name: keypoints_found
     type: int

@@ -264,6 +264,24 @@ experiment_sets:
       NUM_BLOCKS: [20, 24, 28]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
+  # ---- BATTERY: IaRa vf-omp/vf-enkits vs native baselines, NUM_BLOCKS sweep ----
+  # Fixed matrix, sweep block granularity (parallelism) at OMP_NUM_THREADS=8.
+  # IaRa runs use data-triggered + atomic-ring; baselines are the native
+  # sequential / omp-task / enkits-task reference implementations.
+  - name: battery
+    description: "Battery: IaRa vf-omp/vf-enkits vs sequential/omp-task/enkits-task; NUM_BLOCKS sweep"
+    parameters:
+      MATRIX_SIZE: [10080]
+      NUM_BLOCKS: [4, 8, 16]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring]
+      alloc_mode: [data-triggered]
+    include:
+      - {scheduler: sequential}
+      - {scheduler: omp-task}
+      - {scheduler: enkits-task}
+
 
 # Execution configuration
 execution:

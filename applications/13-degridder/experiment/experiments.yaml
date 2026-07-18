@@ -301,6 +301,26 @@ experiment_sets:
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, preesm]
 
+  # ---- BATTERY: IaRa vf-omp/vf-enkits vs Preesm, core sweep ----
+  # SIZE large. NUM_CHUNK 8 = chunk>=cores at every point (1/4/8) so the degrid
+  # kernel actually parallelizes; report the INSTRUMENTED degrid_kernel_time span
+  # (end-to-end wall is I/O-bound, Amdahl-capped ~1.25x, hides kernel scaling).
+  # chunk=8 preesm scenarios exist (see `compare`). IaRa: data-triggered +
+  # atomic-ring; enkits honors OMP_NUM_THREADS.
+  - name: battery
+    description: "Battery: IaRa vf-omp/vf-enkits vs Preesm; large, chunk=8, cores 1/4/8 (kernel-time)"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1, 4, 8]
+      NUM_CHUNK: [8]
+      NUM_KERNEL_SUPPORT: [8]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      semaphore: [atomic-ring]
+      alloc_mode: [data-triggered]
+    include:
+      - {scheduler: preesm}
+
 
 # Execution configuration
 execution:
