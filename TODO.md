@@ -206,6 +206,12 @@ future sprint; see doc for mechanism, code anchors, SOTA refs, validation.
 
 ---
 
+# Experiment framework — Slurm dispatcher snapshots build — 2026-07-18
+
+- [ ] **Slurm dispatcher: copy sources + `iara-opt` into the job's own dir before running**, so in-flight jobs use a frozen snapshot and the compiler (`build/bin/iara-opt`, runtime headers/sources) can be rebuilt on `main` while experiments run. Today all jobs share `build/bin/iara-opt` on the shared FS → rebuilding mid-run corrupts in-flight builds and blocks compiler work. Snapshot the compiler binary (+ any headers/runtime sources the build reads) per submission; point the generated CTest/build commands at the snapshot.
+
+---
+
 # Experiment framework — interactive notebook pivots — 2026-06-28
 
 - [ ] **Get the Perspective widget working** — richer drag-pivot than PivotTable.js (Group/Split/Order shelves, grid↔chart), but its widget model won't load in either env: VSCode's renderer fetches widget JS from a CDN where `@perspective-dev/jupyterlab` isn't published; JupyterLab throws `Failed to load model class 'PerspectiveModel'` (perspective 4.5 vs `@jupyter-widgets/jupyterlab-manager` 5.x mismatch) despite `jupyter labextension list` = enabled OK. Currently dropped from `notebook.py`; only PivotTable.js ships. Try: pin compatible perspective / jupyterlab-widgets versions, or use perspective's standalone (non-widget) HTML/`<perspective-viewer>` export instead of the ipywidget.
