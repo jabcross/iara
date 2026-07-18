@@ -2,14 +2,30 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Passes/Canonicalize/IaraCanonicalizePass.h"
 #include "Iara/Passes/VirtualFIFO/SDF/SDF.h"
+#include "Iara/Util/EnvOption.h"
 #include "Iara/Util/OpCreateHelper.h"
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
 #include <mlir/IR/Builders.h>
 
 namespace iara::passes::virtualfifo {
 
+// Ping-pong feedback (IARA_DELAY_PINGPONG=1): under data-triggered alloc every
+// firing already gets a distinct per-block malloc (makeAllocChunkForFiring), so
+// a feedback consumer reading block N-1 while the producer writes block N never
+// aliases the live write — the copy breakEdge would insert is redundant. Skip
+// it: the delay edge alone breaks the SDF cycle (initial tokens), and the
+// per-block buffers ARE the ping-pong. Only under data-triggered alloc (priming
+// mode has no per-block malloc, so in-place would genuinely alias).
+static bool pingpongDelayEnabled() {
+  return iara::util::optionOrEnv(false, "", "IARA_DELAY_PINGPONG", "0") == "1" &&
+         iara::util::optionOrEnv(false, "", "IARA_ALLOC_MODE", "") ==
+             "data-triggered";
+}
+
 // insert a copy.
 void breakEdge(EdgeOp edge) {
+  if (pingpongDelayEnabled() && edge->hasAttr("delay"))
+    return;
   auto builder = OpBuilder(edge);
   auto bc = broadcast::insertBroadcast(edge.getIn(), true);
   LLVM::LLVMFuncOp impl = broadcast::getOrCodegenBroadcastImpl(bc);
