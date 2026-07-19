@@ -438,6 +438,14 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       i64 prod = le->runtime_info.prod_rate;
       i64 cons = le->runtime_info.cons_rate;
       i64 cons_seq = (cons > 0) ? (seq * prod / cons) : seq;
+      // Delayed-borrow reader: this firing read the PREVIOUS buffer instance
+      // (B_{k-shift}), so its token frees join firing (cons_seq - shift) — the
+      // join that owns the buffer it read. shift == 0 for normal logic edges.
+      // The first `shift` firings read the (leaked) seed buffers, owned by no
+      // join firing (negative) — drop those tokens.
+      cons_seq -= le->runtime_info.delay_offset;
+      if (cons_seq < 0)
+        continue;
       iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(cons_seq, prod);
     }
 
@@ -480,6 +488,14 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
       i64 prod = le->runtime_info.prod_rate;
       i64 cons = le->runtime_info.cons_rate;
       i64 cons_seq = (cons > 0) ? (seq * prod / cons) : seq;
+      // Delayed-borrow reader: this firing read the PREVIOUS buffer instance
+      // (B_{k-shift}), so its token frees join firing (cons_seq - shift) — the
+      // join that owns the buffer it read. shift == 0 for normal logic edges.
+      // The first `shift` firings read the (leaked) seed buffers, owned by no
+      // join firing (negative) — drop those tokens.
+      cons_seq -= le->runtime_info.delay_offset;
+      if (cons_seq < 0)
+        continue;
       iara::runtime::virtualfifo::getConsumer(le)->consumeLogic(cons_seq, prod);
     }
 

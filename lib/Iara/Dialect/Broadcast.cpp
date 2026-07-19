@@ -377,8 +377,17 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
   // logic output feeding the join.
   SmallVector<Value> logic_inputs;
   SmallVector<i64> mults;
+  SmallVector<i64> join_shifts;
   for (size_t i = 0; i < N; i++) {
     auto edge = cast<EdgeOp>(*broadcast.getResult(i).getUsers().begin());
+    // A DELAYED borrow reader reads the PREVIOUS buffer instance: firing k reads
+    // B_{k-D} where D = delay/L buffers. Its logic token must therefore free the
+    // buffer it actually read (B_{k-D}, owned by join firing k-D), NOT join
+    // firing k — else the join frees each buffer D iterations before this reader
+    // reads it (use-after-free). Carry D as a per-edge join-firing shift; the
+    // runtime subtracts it when delivering the token (fire()).
+    i64 join_shift = buf_L > 0 ? getDelaySizeBytes(edge) / buf_L : 0;
+    join_shifts.push_back(join_shift);
     edge->setOperand(0, nb.getResult(i + 1)); // edge now reads the borrow
     edge->setAttr("borrow", builder.getUnitAttr());
     edge->setAttr("layout", layoutAttr); // toroidal (d) -> (d mod L)
@@ -411,6 +420,10 @@ NodeOp convertBroadcastToBorrow(NodeOp broadcast) {
                      mlir::RankedTensorType::get({mults[i]}, i8),
                      logic_out);
     le->setAttr("logic_edge", builder.getUnitAttr());
+    // Delayed-borrow readers gate an EARLIER join firing (see join_shifts).
+    if (join_shifts[i] > 0)
+      le->setAttr("join_seq_shift",
+                  builder.getI64IntegerAttr(join_shifts[i]));
     logic_out.replaceAllUsesExcept(le.getOut(), {le});
   }
 

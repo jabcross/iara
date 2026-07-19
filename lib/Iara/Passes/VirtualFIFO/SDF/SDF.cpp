@@ -144,7 +144,14 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
       e.setProdRate(prod);
       e.setConsRate(cons);
       e.setConsArgIdx(-1);
-      e.setDelayOffset(0);
+      // delay_offset is unused by logic edges (they never hit the byte-slicing
+      // path), so it carries the delayed-borrow join-firing shift: fire()
+      // delivers this reader's token to join firing (cons_seq - shift), so the
+      // buffer is freed by the reader that actually read it. 0 for normal logic.
+      i64 join_shift = 0;
+      if (auto a = edge->getAttrOfType<mlir::IntegerAttr>("join_seq_shift"))
+        join_shift = a.getInt();
+      e.setDelayOffset(join_shift);
       e.setDelaySize(0);
       e.setBlockSizeWithDelays(cons);
       e.setBlockSizeNoDelays(cons);
