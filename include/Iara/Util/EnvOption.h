@@ -25,6 +25,17 @@ inline std::string optionOrEnv(bool cli_set, const std::string &cli_value,
   return fallback;
 }
 
+// Single source of truth for the effective alloc mode. data-triggered is the
+// default (priming is DEPRECATED); the compiler feature gates (zero-copy borrow,
+// pingpong feedback, delay-borrow) all key on this so they agree with the build
+// default when IARA_ALLOC_MODE is unset. Env-based: the experiment framework
+// drives alloc mode via IARA_ALLOC_MODE; a CLI-only --alloc-mode override is not
+// reflected here (unused by the framework).
+inline bool dataTriggeredActive() {
+  return optionOrEnv(false, "", "IARA_ALLOC_MODE", "data-triggered") ==
+         "data-triggered";
+}
+
 } // namespace iara::util
 
 #endif

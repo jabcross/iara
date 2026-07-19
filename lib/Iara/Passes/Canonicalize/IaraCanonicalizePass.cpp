@@ -50,7 +50,7 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   // after every reader signals.
   bool borrow_mode = iara::util::optionOrEnv(false, "",
                                              "IARA_BROADCAST_OWNERSHIP",
-                                             "copy-all-but-one") ==
+                                             "join-owns-buffer") ==
                      "join-owns-buffer";
 
   // Expand all fan-outs. A borrow transform rebuilds its consumer nodes (to add

@@ -81,22 +81,35 @@ extern "C" void iara_runtime_run_iteration(i64 graph_iteration,
   // consume() -> fire(). fire() allocates each node's own output buffers and
   // refuses firings past the released window.
   iara_data_alloc_run_iter = graph_iteration + 1;
-  for (auto &node : iara_runtime_nodes) {
-    if (node.runtime_info.isAlloc() || node.runtime_info.isDealloc())
-      continue;
-    if (node.trueInputBytes() != 0)
-      continue; // not a source; will be triggered by its inputs arriving
-    auto *node_ptr = &node;
-    i64 total = node.runtime_info.total_iter_firings;
-    for (i64 seq = graph_iteration * total; seq < (graph_iteration + 1) * total;
-         seq++) {
-      auto *data = (VirtualFIFO_Chunk *)calloc(node.runtime_info.num_args,
-                                               sizeof(VirtualFIFO_Chunk));
-      node_ptr->fire(seq, {data, (size_t)node.runtime_info.num_args});
+  auto kick_sources = [&]() {
+    for (auto &node : iara_runtime_nodes) {
+      if (node.runtime_info.isAlloc() || node.runtime_info.isDealloc())
+        continue;
+      if (node.trueInputBytes() != 0)
+        continue; // not a source; will be triggered by its inputs arriving
+      auto *node_ptr = &node;
+      i64 total = node.runtime_info.total_iter_firings;
+      for (i64 seq = graph_iteration * total;
+           seq < (graph_iteration + 1) * total; seq++) {
+        auto *data = (VirtualFIFO_Chunk *)calloc(node.runtime_info.num_args,
+                                                 sizeof(VirtualFIFO_Chunk));
+        node_ptr->fire(seq, {data, (size_t)node.runtime_info.num_args});
+      }
     }
-  }
-  if (wait_for_tasks)
+  };
+  if (wait_for_tasks) {
+    // Deep wait: a source task spawns consumer tasks (grandchildren) and then
+    // returns, so a bare omp `taskwait` (iara_task_wait) waits only for the
+    // sources and lets the caller's completion check race the still-pending
+    // consumers. `taskgroup` waits for the entire descendant cascade (matches
+    // the priming path). The trailing iara_task_wait keeps the deep wait for the
+    // enkits backend (global) where the omp pragma is inert.
+#pragma omp taskgroup
+    { kick_sources(); }
     iara_task_wait();
+  } else {
+    kick_sources();
+  }
   return;
 #endif
 

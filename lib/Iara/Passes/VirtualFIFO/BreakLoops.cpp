@@ -16,10 +16,13 @@ namespace iara::passes::virtualfifo {
 // it: the delay edge alone breaks the SDF cycle (initial tokens), and the
 // per-block buffers ARE the ping-pong. Only under data-triggered alloc (priming
 // mode has no per-block malloc, so in-place would genuinely alias).
+// Default OFF: the pingpong feedback skip is correct on simple self-loops
+// (12-average3) but drifts SIFT's per-octave gaussian feedback (kp 1339 vs 1343)
+// — the delayed-feedback aliasing is not yet correct at scale. Opt-in until it
+// is. RO fan-out borrow (join-owns-buffer) is a separate, default-on knob.
 static bool pingpongDelayEnabled() {
   return iara::util::optionOrEnv(false, "", "IARA_DELAY_PINGPONG", "0") == "1" &&
-         iara::util::optionOrEnv(false, "", "IARA_ALLOC_MODE", "") ==
-             "data-triggered";
+         iara::util::dataTriggeredActive();
 }
 
 // insert a copy.
@@ -28,6 +31,12 @@ void breakEdge(EdgeOp edge) {
     return;
   auto builder = OpBuilder(edge);
   auto bc = broadcast::insertBroadcast(edge.getIn(), true);
+  // This broadcast exists solely to break a feedback/inout cycle by copying;
+  // its output feeds the copy node below. Never borrow-convert it: aliasing a
+  // cycle-break buffer reintroduces the hazard the copy was inserted to avoid
+  // (and tangles the borrow join with the feedback). Only reached when pingpong
+  // is off (data-triggered + pingpong skips this copy entirely).
+  bc->setAttr("no_borrow", builder.getUnitAttr());
   LLVM::LLVMFuncOp impl = broadcast::getOrCodegenBroadcastImpl(bc);
   auto value_in = edge.getIn();
   DEF_OP(NodeOp,

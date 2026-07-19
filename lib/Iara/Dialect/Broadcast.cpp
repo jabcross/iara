@@ -274,14 +274,21 @@ static i64 readerMultiplicity(NodeOp broadcast, EdgeOp outEdge) {
 // the reader to the right buffer. Gated to data-triggered (priming reuses
 // buffers → real hazard) and read-only (broadcastOutputsAllReadOnly enforced
 // below).
+// Default OFF (shares IARA_DELAY_PINGPONG with the breakEdge feedback skip): the
+// delayed-broadcast borrow drifts SIFT keypoints (1339 vs 1343) — the delayed
+// aliasing needs correctness hardening. Opt-in until then. RO (non-delayed)
+// borrow stays on via join-owns-buffer.
 static bool delayBorrowEnabled() {
   return iara::util::optionOrEnv(false, "", "IARA_DELAY_PINGPONG", "0") == "1" &&
-         iara::util::optionOrEnv(false, "", "IARA_ALLOC_MODE", "") ==
-             "data-triggered";
+         iara::util::dataTriggeredActive();
 }
 
 bool broadcastIsPureBorrowable(NodeOp broadcast) {
   if (broadcast.getAllInputs().size() != 1)
+    return false;
+  // A cycle-break broadcast (breakEdge, feedback under priming) must stay a
+  // copy — borrowing it reintroduces the WAR hazard and tangles the join.
+  if (broadcast->hasAttr("no_borrow"))
     return false;
   // A delayed/feedback edge on the input means the buffer lives across graph
   // iterations (re-read with a delay); aliasing it is unsafe — leave it to the

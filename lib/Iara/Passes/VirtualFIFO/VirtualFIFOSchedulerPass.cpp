@@ -500,7 +500,7 @@ struct VirtualFIFOSchedulerPass::Impl {
   // canonicalize-side auto-fanout knob.
   bool borrowModeEnabled() {
     return iara::util::optionOrEnv(false, "", "IARA_BROADCAST_OWNERSHIP",
-                                   "copy-all-but-one") == "join-owns-buffer";
+                                   "join-owns-buffer") == "join-owns-buffer";
   }
 
   void convertPureBorrowBroadcasts(ActorOp actor) {
@@ -570,18 +570,24 @@ struct VirtualFIFOSchedulerPass::Impl {
     }
     // Alloc mode: data-triggered #defines, priming #undefs (overriding any -D
     // from build.defines, since this header is force-included after -D flags).
-    // Empty (unset) leaves whatever the build define dictates.
+    // data-triggered is the default; priming is DEPRECATED (kept only for A/B
+    // comparison — zero-copy borrow, pingpong feedback, and delay-borrow all
+    // require data-triggered's distinct per-iteration buffers). Keep this default
+    // in sync with iara::util::dataTriggeredActive().
     std::string alloc = iara::util::optionOrEnv(
         pass->alloc_mode.hasValue(), pass->alloc_mode.getValue(),
-        "IARA_ALLOC_MODE", "");
+        "IARA_ALLOC_MODE", "data-triggered");
     std::string alloc_define;
     if (alloc == "data-triggered")
       alloc_define = "#define IARA_DATA_TRIGGERED_ALLOC 1\n";
-    else if (alloc == "priming")
+    else if (alloc == "priming") {
       alloc_define = "#undef IARA_DATA_TRIGGERED_ALLOC\n";
-    else if (!alloc.empty())
+      llvm::errs() << "warning: alloc mode 'priming' is DEPRECATED; "
+                      "data-triggered is the default. Zero-copy borrow and "
+                      "delay-borrow are disabled under priming.\n";
+    } else if (!alloc.empty())
       llvm::errs() << "Unknown --alloc-mode value '" << alloc
-                   << "', leaving build define as-is\n";
+                   << "', defaulting to data-triggered\n";
     std::error_code ec;
     llvm::raw_fd_ostream os("iara_runtime_config.h", ec);
     if (ec) {
