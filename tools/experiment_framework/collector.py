@@ -10,6 +10,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1104,6 +1105,39 @@ def execute_instance_slurm(
     return execution_result
 
 
+# Vetted benchmark pool: identical 48-core nodes (Intel Xeon Gold 6252 @2.10GHz,
+# 1 socket x 24C x 2T, 35.8 MiB L3). Confirmed same processor on cpu1/cpu2/cpu3;
+# cpu4 is the same spec but was launch-flaky when last checked (2026-07-20).
+# Benchmarks MUST stay on this pool so timings are comparable across runs. Pass
+# --nodelist to force a specific member.
+BENCHMARK_NODES = ['sorgan-cpu1', 'sorgan-cpu2', 'sorgan-cpu3']
+
+
+def _resolve_single_node(partition: Optional[str] = None) -> Optional[str]:
+    """Pick ONE node from the vetted same-processor pool so every instance runs
+    on identical hardware (all jobs are already --exclusive → node not shared).
+
+    No core-count heuristic: the pool is a hand-verified list of identical
+    machines. Returns the first idle pool member (else the first pool member).
+    Falls back to None only if Slurm state can't be read; pass --nodelist to
+    override.
+    """
+    try:
+        out = subprocess.run(['sinfo', '-h', '-N', '-o', '%n %t'],
+                             capture_output=True, text=True, timeout=15)
+        state = {}
+        for ln in out.stdout.splitlines():
+            f = ln.split()
+            if f:
+                state.setdefault(f[0], f[1] if len(f) > 1 else '')
+    except Exception:
+        state = {}
+    for n in BENCHMARK_NODES:
+        if state.get(n, '').startswith('idle'):
+            return n
+    return BENCHMARK_NODES[0]
+
+
 def collect_all_measurements(
     build_results: Dict[str, Any],
     config: Dict[str, Any],
@@ -1171,6 +1205,24 @@ def collect_all_measurements(
     measurements = STANDARD_MEASUREMENTS + app_measurements
 
     logger.info(f"Execution config: repetitions={final_repetitions}, timeout={final_timeout}s")
+
+    # Same-node enforcement: each instance is a separate --exclusive sbatch job,
+    # so without a fixed nodelist Slurm scatters them across heterogeneous nodes
+    # and cross-instance timings become incomparable. If slurm is on and no node
+    # was pinned, resolve ONE node now and pin every instance to it.
+    if slurm and not nodelist:
+        nodelist = _resolve_single_node(partition)
+        if nodelist:
+            logger.warning("No --nodelist given; pinning ALL instances to single "
+                           "node %s for a fair same-node comparison", nodelist)
+            print(f"  [Slurm] Pinning all instances to node {nodelist} "
+                  f"(same-node comparison)", file=sys.stderr)
+        else:
+            logger.warning("No --nodelist and could not resolve a node; instances "
+                           "may scatter across nodes — comparisons NOT node-fair")
+            print("  [Slurm] WARNING: could not pin a node; instances may scatter "
+                  "across heterogeneous nodes (timings not comparable)",
+                  file=sys.stderr)
 
     # Extract application info
     app_name = config['application']['name']
