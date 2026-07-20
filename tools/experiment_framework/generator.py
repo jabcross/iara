@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Parameters that select an iara-opt codegen variant. They are forwarded to
 # iara-opt per-instance as env IARA_<UPPER>=<value> (see iara_add_application),
 # NOT emitted as -D defines or generic PARAMETERS. Extend as new knobs land.
-IARA_CODEGEN_DIMS = ("semaphore", "alloc_mode", "broadcast_ownership")  # future: "allocator", "mnc"
+IARA_CODEGEN_DIMS = ("semaphore", "alloc_mode", "broadcast_ownership", "malloc")
 
 
 def generate_instance_name(

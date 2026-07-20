@@ -538,6 +538,11 @@ function(iara_add_application)
                 string(SUBSTRING "${_opt}" ${_val_start} -1 _dim_val)
                 string(TOUPPER "${_dim_key}" _dim_key_upper)
                 list(APPEND _codegen_dim_env "IARA_${_dim_key_upper}=${_dim_val}")
+                # jemalloc is a link-time choice, not a codegen dim. Export it now
+                # so the link step in iara_add_application_build can see it.
+                if(_dim_key_upper STREQUAL "MALLOC")
+                    set(ENV{IARA_MALLOC} "${_dim_val}")
+                endif()
             endif()
         endforeach()
 
@@ -650,6 +655,13 @@ function(iara_add_application)
     endif()
 
     add_executable(${target_name} ${exec_sources})
+
+    # TEMP control-experiment hook: force large code model on ANY scheduler to
+    # isolate the -mcmodel=large penalty (Preesm needs it for its >2GB BSS).
+    if(DEFINED ENV{IARA_FORCE_MCMODEL_LARGE})
+        target_compile_options(${target_name} PRIVATE -mcmodel=large)
+        target_link_options(${target_name} PRIVATE -mcmodel=large)
+    endif()
 
     if(schedule_obj)
         set_source_files_properties(${schedule_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
@@ -853,6 +865,12 @@ function(iara_add_application)
         list(APPEND link_libraries ${OpenMP_CXX_LIBRARY})
     endif()
     target_link_libraries(${target_name} PRIVATE ${link_libraries})
+
+    # jemalloc: drop-in malloc replacement (IARA_MALLOC=jemalloc)
+    if(DEFINED ENV{IARA_MALLOC} AND "$ENV{IARA_MALLOC}" STREQUAL "jemalloc")
+        target_link_libraries(${target_name} PRIVATE
+            -Wl,--whole-archive ${PROJECT_SOURCE_DIR}/external/jemalloc/lib/libjemalloc.a -Wl,--no-whole-archive)
+    endif()
 
     set(link_options "-stdlib=libstdc++" "-Wl,--gc-sections")
     if("${scheduler}" MATCHES "omp")

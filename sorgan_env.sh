@@ -83,3 +83,23 @@ if command -v register-python-argcomplete &>/dev/null; then
 fi
 
 echo 'Done!'
+
+# --- External dependencies: download and build once ---
+
+# jemalloc: drop-in malloc replacement for experiment comparison
+if [ ! -f "$IARA_DIR/external/jemalloc/lib/libjemalloc.a" ]; then
+    echo "Building jemalloc..."
+    mkdir -p "$IARA_DIR/external"
+    JEMALLOC_URL="https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2"
+    if [ ! -d "$IARA_DIR/external/jemalloc" ]; then
+        curl -sL "$JEMALLOC_URL" -o /tmp/jemalloc.tar.bz2
+        tar xf /tmp/jemalloc.tar.bz2 -C "$IARA_DIR/external/"
+        mv "$IARA_DIR/external/jemalloc-5.3.0" "$IARA_DIR/external/jemalloc"
+        rm /tmp/jemalloc.tar.bz2
+    fi
+    cd "$IARA_DIR/external/jemalloc" && \
+      CC="$LLVM_INSTALL/bin/clang" CXX="$LLVM_INSTALL/bin/clang++" \
+      ./configure --enable-static --disable-shared --with-jemalloc-prefix= --disable-stats --disable-prof > /dev/null 2>&1 && \
+      make -j$(nproc) > /dev/null 2>&1
+    cd "$IARA_DIR"
+fi

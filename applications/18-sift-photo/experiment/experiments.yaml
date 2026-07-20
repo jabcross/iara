@@ -42,6 +42,12 @@ parameters:
     label: "Broadcast ownership"
     description: "Fan-out strategy: copy-all-but-one (default) or join-owns-buffer (zero-copy RO borrow)"
 
+  # malloc implementation (build-time link flag, forwarded as IARA_MALLOC)
+  - name: malloc
+    type: str
+    label: "Malloc impl"
+    description: "malloc/free backend: glibc (default) or jemalloc (drop-in replacement)"
+
 constraints:
   - expression: "VIDEO_FRAMES == 1 or scheduler in ('vf-omp', 'vf-enkits')"
     description: "Multi-frame video warm-up supported for IaRa VirtualFIFO backends (vf-omp/vf-enkits); preesm runs single-frame"
@@ -154,6 +160,7 @@ experiment_sets:
       alloc_mode: [data-triggered]
       VIDEO_FRAMES: [1]
       broadcast_ownership: [join-owns-buffer]
+      malloc: [glibc, jemalloc]
     include:
       - {scheduler: preesm, VIDEO_FRAMES: 1}
 

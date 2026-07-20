@@ -83,5 +83,8 @@ static_data.c
 **/data/*_keypoints.key
 **/data/*_wkpts.ppm
 
+# External deps with download+compile step (sorgan_env.sh)
+external/jemalloc/
+
 # Misc
 preesm_run_large.log
