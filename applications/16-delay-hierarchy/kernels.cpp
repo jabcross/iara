@@ -58,8 +58,8 @@ extern "C" void c(const int32_t in[9]) {
 void exec() {
   iara_runtime_init();
 
-  iara_runtime_run_iteration(0, 0);
-  iara_runtime_run_iteration(1, 0);
+  iara_runtime_run_iteration(0, 1);
+  iara_runtime_run_iteration(1, 1);
 
   printf("end of exec\n");
 }
