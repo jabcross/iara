@@ -133,17 +133,17 @@ struct IaraCanonicalizePass::Impl {
   void canonicalizeTypes(ActorOp actor) {
     for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
       if (auto in_port = dyn_cast<InPortOp>(op)) {
-        assert(in_port.getDynSizes().empty());
         auto res = in_port->getResult(0);
         auto new_type = canonicalizeType(res.getType());
-        if (new_type != res.getType()) {
+        SmallVector<Value> dyn_sizes(in_port.getDynSizes());
+        if (new_type != res.getType() || !in_port.getDynSizes().empty()) {
           DEF_OP(Value,
                  new_val,
                  InPortOp,
                  OpBuilder(op),
                  op->getLoc(),
                  new_type,
-                 {},
+                 dyn_sizes,
                  in_port.getInout());
           res.replaceAllUsesWith(new_val);
           in_port->erase();
@@ -151,17 +151,19 @@ struct IaraCanonicalizePass::Impl {
         continue;
       }
       if (auto out_port = dyn_cast<OutPortOp>(op)) {
-        assert(out_port.getDynSizes().empty());
         auto in = out_port.getValue();
         auto new_type = canonicalizeType(in.getType());
-        if (new_type != in.getType()) {
+        SmallVector<Value> dyn_sizes(out_port.getDynSizes());
+        if (new_type != in.getType() || !out_port.getDynSizes().empty()) {
+          SmallVector<Value> operands(dyn_sizes.begin(), dyn_sizes.end());
+          operands.push_back(out_port.getValue());
           DEF_OP(OutPortOp,
                  new_val,
                  OutPortOp,
                  OpBuilder(op),
                  op->getLoc(),
-                 {},
-                 out_port.getValue(),
+                 TypeRange{},
+                 operands,
                  out_port->getAttrs());
           out_port->erase();
         }

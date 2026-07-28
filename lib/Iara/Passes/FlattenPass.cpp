@@ -175,12 +175,33 @@ public:
     ActorOp new_actor{impl_actor_op->clone()};
     assert(new_actor->getParentOp() == nullptr);
 
+    // Replace callee block args with caller param operands.
+    auto &callee_block = new_actor.getBody().front();
+    size_t num_params = node.getParams().size();
+    if (num_params > 0) {
+      assert(num_params <= callee_block.getNumArguments() &&
+             "Callee block arg count insufficient for caller param count");
+      for (auto [callee_arg, caller_param] :
+           llvm::zip(callee_block.getArguments().take_front(num_params),
+                     node.getParams())) {
+        callee_arg.replaceAllUsesWith(caller_param);
+      }
+      callee_block.eraseArguments(0, num_params);
+    }
+
     SmallVector<InPortOp> in_ops{new_actor.getOps<InPortOp>()};
 
-    if (in_ops.size() != node->getNumOperands()) {
+    // Build the in+inout value list (excluding params) for matching.
+    SmallVector<Value> node_in_inout;
+    for (auto v : node.getIn())
+      node_in_inout.push_back(v);
+    for (auto v : node.getInout())
+      node_in_inout.push_back(v);
+
+    if (in_ops.size() != node_in_inout.size()) {
       node.emitError(
-          "Mismatch in number of node parameters and actor InPortOps (")
-          << node.getParams().size() << " vs " << in_ops.size() << ")";
+          "Mismatch in number of node in+inout and actor InPortOps (")
+          << node_in_inout.size() << " vs " << in_ops.size() << ")";
       llvm::errs() << "Actor:\n";
       new_actor.dump();
       llvm::errs() << "Node:\n";
@@ -190,7 +211,7 @@ public:
     }
 
     for (auto [inner_input_port_op, outer_input_value] :
-         llvm::zip(in_ops, node.getOperands())) {
+         llvm::zip(in_ops, node_in_inout)) {
 
       inner_input_port_op.getResult().replaceAllUsesWith(outer_input_value);
       inner_input_port_op->erase();

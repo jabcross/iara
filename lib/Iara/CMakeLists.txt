@@ -9,6 +9,7 @@ add_mlir_dialect_library(MLIRIara
         Dialect/Join.cpp
 
         Passes/FlattenPass.cpp
+        Passes/ParamMaterialize/IaraParameterMaterializePass.cpp
 
         Passes/Common/Codegen/Codegen.cpp
 

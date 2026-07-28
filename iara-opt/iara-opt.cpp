@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
 
   iara::passes::canonicalize::registerIaraCanonicalizePass();
   iara::passes::registerFlattenPass();
+  iara::passes::registerParameterMaterializePass();
   iara::passes::virtualfifo::registerVirtualFIFOSchedulerPass();
   iara::passes::ringbuffer::registerRingBufferSchedulerPass();
   iara::passes::analysis::registerMNCAnalysisPass();
