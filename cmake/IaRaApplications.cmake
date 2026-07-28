@@ -318,7 +318,7 @@ function(iara_add_application)
 
     # Collect extra arguments
     if(NOT is_baseline_scheduler AND final_iara_opt)
-        iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --${final_iara_opt}=main-actor=${APP_MAIN_ACTOR})
+        iara_collect_args(iara_flags "IARA_FLAGS" --iara-canonicalize --flatten --iara-param-materialize --${final_iara_opt}=main-actor=${APP_MAIN_ACTOR})
     endif()
     iara_collect_args(schedule_extra_args "EXTRA_SCHEDULE_ARGS")
     iara_collect_args(kernel_extra_args "EXTRA_KERNEL_ARGS")
@@ -1041,7 +1041,7 @@ message(STATUS \"Cleaned build artifacts for ${instance_name}\")
 
     if(_test_iara_opt)
         iara_collect_args(_test_iara_flags "IARA_FLAGS"
-            --iara-canonicalize --flatten --${_test_iara_opt}=main-actor=${TEST_MAIN_ACTOR})
+            --iara-canonicalize --flatten --iara-param-materialize --${_test_iara_opt}=main-actor=${TEST_MAIN_ACTOR})
     else()
         set(_test_iara_flags "")
     endif()

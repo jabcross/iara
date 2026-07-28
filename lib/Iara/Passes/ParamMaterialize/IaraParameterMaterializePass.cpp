@@ -168,6 +168,21 @@ public:
   void runOnOperation() final {
     auto module = getOperation();
 
+    // No-op fast path: if no actor carries block-arg params and no port has
+    // dyn_sizes, there is nothing to materialize. Skip Phase 2's SCCP entirely
+    // so param-less graphs (incl. delay-feedback cycles) are left untouched.
+    bool hasWork = false;
+    module.walk([&](mlir::Operation *op) {
+      if (auto a = llvm::dyn_cast<ActorOp>(op))
+        hasWork |= a.getBody().front().getNumArguments() > 0;
+      else if (auto in = llvm::dyn_cast<InPortOp>(op))
+        hasWork |= !in.getDynSizes().empty();
+      else if (auto out = llvm::dyn_cast<OutPortOp>(op))
+        hasWork |= !out.getDynSizes().empty();
+    });
+    if (!hasWork)
+      return;
+
     // Phase 1.
     for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
       if (actor.isKernelDeclaration())
