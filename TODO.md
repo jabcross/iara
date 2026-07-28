@@ -53,7 +53,7 @@ Priority: 🔴 bug / 🟠 soon / 🔵 cleanup / 💬 discuss
 
 ## 🔴 Bugs
 
-- [ ] **`include/Iara/Util/CommonTypes.h:12`** `using u32 = uint64_t` → `uint32_t`
+- [x] **`include/Iara/Util/CommonTypes.h:12`** `using u32 = uint64_t` → `uint32_t` — DONE 2026-07-28 (u32 only used as local index/count vars, no struct-layout impact)
 - [ ] **`lib/.../Common/Codegen/Codegen.cpp`** add `#include "Iara/Passes/Common/Codegen/Codegen.h"`
 - [ ] **`runtime/ring-buffer/MutexRingBuffer.cpp:108`** add nullptr check on `aligned_alloc` return
 
@@ -199,7 +199,7 @@ future sprint; see doc for mechanism, code anchors, SOTA refs, validation.
 - [ ] **T1 — static peak estimate + preallocated arena** — peak = max-weight antichain (min-cut) over inout-chain lifetimes, per parallelism level; MEG = lower bound only for a dynamic runtime. mmap once + hugepages.
 - [ ] **T2 — slab/region sub-allocator** — per-size-class slab pools sized by per-class max antichain; malloc overflow fallback. Open: worst-case concurrent-live-chains-per-size algorithm.
 - [ ] **T3 — per-core lock-free NUMA-bound arenas** — kill global malloc lock (4-core sys-time).
-- [ ] **T4 — ownership-aware zero-copy broadcast (RO-borrow)** ← copy fix + research differentiator. No refcount: compile-time dependency edges via existing `KeyedSemaphore` count (`0cf074e` hook); `getInoutPairs` 1→N fork; no memcpy for read-only same-size outputs. Prep region-overlap dependency-gen for multidim (paper Slice/Concat).
+- [x] **T4 — ownership-aware zero-copy broadcast (RO-borrow)** — DONE 2026-07-28. join-owns-buffer shape (synthesized Join owner + `none` logic gate per reader, W5 threshold); default ON (`borrowModeActive`, requires data-triggered), toggle `IARA_BROADCAST_OWNERSHIP=copy-all-but-one`. RSS slope collapse validated (flat ~3.7GB, Preesm-class scaling — see [[battery-2026-07-18]]). Multidim region-overlap (Slice/Concat) still future. ← copy fix + research differentiator.
 - [ ] **T5 — locality/transfer-aware allocation** — Preesm MEG-split (hal-01390486) is distributed-mem, mapping-first; we bias dynamically (NUMA hints, transfer-weighted).
 - [ ] **T6 — co-schedule compute+memory (data-parallel vs pipeline)** — locality-guided work-stealing default + coarse per-stage bandit (penalty = cheap proxy, not per-firing/PMU).
 - [ ] **T7 — profiling** — (1) always-on compiler per-`kernel_id` counters (evolve DebugPrint to in-memory accumulator); (2) offline perf/PMU for locality calibration.

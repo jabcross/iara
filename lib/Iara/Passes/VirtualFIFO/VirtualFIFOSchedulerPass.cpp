@@ -496,12 +496,9 @@ struct VirtualFIFOSchedulerPass::Impl {
 
   // Rewrite pure read-only same-size broadcasts into the zero-copy borrow shape.
   // Runs post-flatten (leaf consumers) so adding a reader's logic output can't
-  // break an actor-instance signature. CLI absent here -> env only, matching the
-  // canonicalize-side auto-fanout knob.
-  bool borrowModeEnabled() {
-    return iara::util::optionOrEnv(false, "", "IARA_BROADCAST_OWNERSHIP",
-                                   "join-owns-buffer") == "join-owns-buffer";
-  }
+  // break an actor-instance signature. Same knob as the canonicalize-side
+  // auto-fanout (default ON, requires data-triggered — borrowModeActive).
+  bool borrowModeEnabled() { return iara::util::borrowModeActive(); }
 
   void convertPureBorrowBroadcasts(ActorOp actor) {
     // convertBroadcastToBorrow rebuilds (erases) consumer nodes to add their
@@ -588,6 +585,12 @@ struct VirtualFIFOSchedulerPass::Impl {
     } else if (!alloc.empty())
       llvm::errs() << "Unknown --alloc-mode value '" << alloc
                    << "', defaulting to data-triggered\n";
+    // Effective RO-broadcast borrow decision (default ON, off under priming or
+    // explicit copy-all-but-one). Emitted so app/runtime code can assert on the
+    // compiler's actual choice rather than re-deriving it from env at runtime.
+    std::string borrow_define = iara::util::borrowModeActive()
+                                    ? "#define IARA_BROADCAST_BORROW 1\n"
+                                    : "#undef IARA_BROADCAST_BORROW\n";
     std::error_code ec;
     llvm::raw_fd_ostream os("iara_runtime_config.h", ec);
     if (ec) {
@@ -600,6 +603,8 @@ struct VirtualFIFOSchedulerPass::Impl {
        << define
        << "// alloc_mode = " << (alloc.empty() ? "(build default)" : alloc) << "\n"
        << alloc_define
+       << "// broadcast borrow = " << (iara::util::borrowModeActive() ? "on" : "off") << "\n"
+       << borrow_define
        << "#endif // IARA_RUNTIME_CONFIG_H\n";
   }
 };

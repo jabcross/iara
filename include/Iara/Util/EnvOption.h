@@ -36,6 +36,18 @@ inline bool dataTriggeredActive() {
          "data-triggered";
 }
 
+// Single source of truth for the zero-copy read-only broadcast (RO-borrow).
+// Default ON (join-owns-buffer), toggle off with IARA_BROADCAST_OWNERSHIP=
+// copy-all-but-one. Requires data-triggered alloc: borrowers alias one buffer
+// across per-iteration readers, which priming's reused buffers cannot provide.
+// When off (priming or explicit copy-all-but-one) the broadcast falls back to
+// the copy path — still correct, only more memory + slower.
+inline bool borrowModeActive() {
+  return dataTriggeredActive() &&
+         optionOrEnv(false, "", "IARA_BROADCAST_OWNERSHIP",
+                     "join-owns-buffer") == "join-owns-buffer";
+}
+
 } // namespace iara::util
 
 #endif

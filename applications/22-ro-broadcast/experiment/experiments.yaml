@@ -42,7 +42,11 @@ constraints: []
 experiment_sets:
 
   - name: tests
-    description: "All schedulers x both alloc modes, zero-copy borrow strategy"
+    description: "All schedulers x both alloc modes x both ownership strategies.
+      Oracle asserts 0 mistakes always; reuse count keys on the compiler's
+      effective borrow decision (IARA_BROADCAST_BORROW). borrow ON only under
+      data-triggered+join-owns-buffer (=> 3 reuses); every other combo takes the
+      copy path (=> 1 reuse), which must still run correctly."
     parameters:
       scheduler:
         - vf-sequential
@@ -53,6 +57,7 @@ experiment_sets:
         - data-triggered
       broadcast_ownership:
         - join-owns-buffer
+        - copy-all-but-one
 
 execution:
   repetitions: 1

@@ -61,14 +61,24 @@ int main() {
          N - num_reuses, (N - num_reuses == 1) ? "" : "s",
          num_reuses, (num_reuses == 1) ? "" : "s");
 
-  // Target: all-read-only borrow => 0 copies, N reuses, 0 mistakes.
+  // Correctness (every mode): the read value is always right => 0 mistakes.
+  // Reuse count is a mode property, not correctness: with borrow ON every
+  // reader aliases @a's buffer (N reuses, zero-copy); with borrow OFF
+  // (priming / copy-all-but-one) the copy path keeps only the first buffer
+  // (1 reuse, N-1 copies). Assert against the compiler's actual choice
+  // (IARA_BROADCAST_BORROW from iara_runtime_config.h), not env.
+#ifdef IARA_BROADCAST_BORROW
+  const int expected_reuses = N;
+#else
+  const int expected_reuses = 1;
+#endif
   if (num_mistakes != 0) {
     fprintf(stderr, "ERROR: expected 0 mistakes, got %d\n", num_mistakes);
     return 1;
   }
-  if (num_reuses != N) {
-    fprintf(stderr, "ERROR: expected %d reuses (zero-copy), got %d\n", N,
-            num_reuses);
+  if (num_reuses != expected_reuses) {
+    fprintf(stderr, "ERROR: expected %d reuse%s, got %d\n", expected_reuses,
+            expected_reuses == 1 ? "" : "s", num_reuses);
     return 1;
   }
   printf("Test passed\n");
