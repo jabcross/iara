@@ -198,29 +198,29 @@ experiment_sets:
       NUM_BLOCKS: [4, 8]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-sequential, vf-omp, vf-enkits]
 
-  # ---- Overnight large comparison: 8 IaRa versions + omp-task baseline ----
-  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  # ---- Overnight large comparison: 4 IaRa versions + omp-task baseline ----
+  # 4 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} (data-triggered; priming deprecated)
   - name: large-blocks
-    description: "Large: 8 IaRa versions (backend×semaphore×alloc) + omp-task; blocks{2,4,8}×matrix{2048,10080}"
+    description: "Large: 4 IaRa versions (backend×semaphore) + omp-task; blocks{2,4,8}×matrix{2048,10080}"
     parameters:
       MATRIX_SIZE: [2048, 10080]
       NUM_BLOCKS: [2, 4, 8]
     matrix:
       scheduler: [vf-omp, vf-enkits]
       semaphore: [atomic-ring, sharded-hash]
-      alloc_mode: [data-triggered, priming]
+      alloc_mode: [data-triggered]
     include:
       - {scheduler: omp-task}
 
   - name: large-scaling
-    description: "Large block-scaling: 8 IaRa versions + omp-task + enkits-task baselines; blocks{1..8}×matrix{10080}"
+    description: "Large block-scaling: 4 IaRa versions + omp-task + enkits-task baselines; blocks{1..8}×matrix{10080}"
     parameters:
       MATRIX_SIZE: [10080]
       NUM_BLOCKS: [1, 2, 3, 4, 5, 6, 7, 8]
     matrix:
       scheduler: [vf-omp, vf-enkits]
       semaphore: [atomic-ring, sharded-hash]
-      alloc_mode: [data-triggered, priming]
+      alloc_mode: [data-triggered]
     include:
       - {scheduler: omp-task}
       - {scheduler: enkits-task}

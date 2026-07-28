@@ -656,13 +656,6 @@ function(iara_add_application)
 
     add_executable(${target_name} ${exec_sources})
 
-    # TEMP control-experiment hook: force large code model on ANY scheduler to
-    # isolate the -mcmodel=large penalty (Preesm needs it for its >2GB BSS).
-    if(DEFINED ENV{IARA_FORCE_MCMODEL_LARGE})
-        target_compile_options(${target_name} PRIVATE -mcmodel=large)
-        target_link_options(${target_name} PRIVATE -mcmodel=large)
-    endif()
-
     if(schedule_obj)
         set_source_files_properties(${schedule_obj} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
     endif()

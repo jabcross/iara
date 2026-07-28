@@ -95,20 +95,20 @@ experiment_sets:
     scheduler_override:
       vf-omp: [vf-omp]
 
-  # ---- Overnight large comparison: 4K video steady-state, 8 IaRa + preesm ----
-  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  # ---- Overnight large comparison: 4K video steady-state, 4 IaRa + preesm ----
+  # 4 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} (data-triggered; priming deprecated)
   # NOTE: intended as 10-frame video (steady state), but IaRa multi-frame segfaults in
   # read_pgm on frame 2 (source-actor buffer freed by data-triggered window before frame 2
-  # re-fires) — all 8 variants, ~4GB (not OOM). Falling back to single-frame (VIDEO_FRAMES=1),
+  # re-fires) — all 4 variants, ~4GB (not OOM). Falling back to single-frame (VIDEO_FRAMES=1),
   # which works (~1400 kp). preesm is single-frame regardless.
   - name: large-sub-sched
-    description: "4K single-frame: 8 IaRa versions (frames=1) + preesm; cores{1,4,8,12,16,20}"
+    description: "4K single-frame: 4 IaRa versions (frames=1) + preesm; cores{1,4,8,12,16,20}"
     parameters:
       NUM_CORES: [1, 4, 8, 12, 16, 20]
     matrix:
       scheduler: [vf-omp, vf-enkits]
       semaphore: [atomic-ring, sharded-hash]
-      alloc_mode: [data-triggered, priming]
+      alloc_mode: [data-triggered]
       VIDEO_FRAMES: [1]
     include:
       - {scheduler: preesm, VIDEO_FRAMES: 1}

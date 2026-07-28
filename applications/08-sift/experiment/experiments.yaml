@@ -124,16 +124,16 @@ experiment_sets:
       NUM_CORES: [1, 2, 4, 5, 10, 20]
       scheduler: [vf-omp]
 
-  # ---- Overnight large comparison: 8 IaRa versions + preesm baseline ----
-  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  # ---- Overnight large comparison: 4 IaRa versions + preesm baseline ----
+  # 4 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} (data-triggered; priming deprecated)
   - name: large-sub-sched
-    description: "Large: 8 IaRa versions (backend×semaphore×alloc) + preesm; cores{1,4,10}"
+    description: "Large: 4 IaRa versions (backend×semaphore) + preesm; cores{1,4,10}"
     parameters:
       NUM_CORES: [1, 4, 10]
     matrix:
       scheduler: [vf-omp, vf-enkits]
       semaphore: [atomic-ring, sharded-hash]
-      alloc_mode: [data-triggered, priming]
+      alloc_mode: [data-triggered]
     include:
       - {scheduler: preesm}
 

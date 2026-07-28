@@ -224,10 +224,10 @@ experiment_sets:
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp, vf-enkits]
 
-  # ---- Overnight large comparison: full grid × 8 IaRa versions + preesm ----
-  # 8 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} × {data-triggered,priming}
+  # ---- Overnight large comparison: full grid × 4 IaRa versions + preesm ----
+  # 4 IaRa = {vf-omp,vf-enkits} × {atomic-ring,sharded-hash} (data-triggered; priming deprecated)
   - name: large-sub-sched
-    description: "Full grid (SIZE=large, cores{1,4,8}×chunk{1..512}): 8 IaRa versions + preesm"
+    description: "Full grid (SIZE=large, cores{1,4,8}×chunk{1..512}): 4 IaRa versions + preesm"
     parameters:
       SIZE: [large]
       NUM_CORES: [1, 4, 8]
@@ -236,7 +236,7 @@ experiment_sets:
     matrix:
       scheduler: [vf-omp, vf-enkits]
       semaphore: [atomic-ring, sharded-hash]
-      alloc_mode: [data-triggered, priming]
+      alloc_mode: [data-triggered]
     include:
       - {scheduler: preesm}
 
