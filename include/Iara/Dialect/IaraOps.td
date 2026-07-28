@@ -38,7 +38,11 @@ def ActorOp : IaraOp<"actor", [Symbol, NoTerminator, RegionKindInterface, Isolat
     }];
     let arguments = (ins SymbolNameAttr:$sym_name, OptionalAttr<TypeArrayAttr>: $params);
     let regions = (region AnyRegion:$body);
-    let assemblyFormat = [{ $sym_name ( `<` $params^ `>` )? $body attr-dict }];
+    // Func-like syntax: parameters are the entry block arguments, printed on the
+    // actor line, e.g. `iara.actor @run(%n: i64) { ... }`. The `params`
+    // TypeArrayAttr is kept in sync with the signature at parse time (elided on
+    // print) so getParameterTypes()/getImplFunctionType() keep working.
+    let hasCustomAssemblyFormat = 1;
     let hasRegionVerifier = 1;
 
     let extraClassDeclaration = [{

@@ -5,8 +5,7 @@
 //
 // Exercises end-to-end: block-arg param -> default_params -> arith.constant
 // (Phase 1) -> SCCP (Phase 2, no-op here) -> node param -> scalar kernel arg.
-iara.actor @run {
-^bb0(%n: i64):
+iara.actor @run(%n: i64) {
   %0 = iara.node @produce params %n : i64 out i32
   iara.node @check in %0 : i32
 } { default_params = [{n = 42}] }

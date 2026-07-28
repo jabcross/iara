@@ -1,5 +1,7 @@
 #include "Iara/Dialect/IaraOps.h"
 #include "Iara/Util/Range.h"
+#include <llvm/ADT/STLExtras.h>
+#include <mlir/IR/OpImplementation.h>
 
 namespace iara {
 
@@ -106,5 +108,55 @@ bool ActorOp::hasInterface() {
     }
   }
   return false;
+}
+
+// Func-like assembly:  iara.actor @name(%a: T, %b: U) { ... } attr-dict
+// Parameters are the entry block arguments. The `params` TypeArrayAttr is kept
+// in sync with them at parse (elided on print) so getParameterTypes() works.
+void ActorOp::print(::mlir::OpAsmPrinter &p) {
+  p << ' ';
+  p.printSymbolName(getSymName());
+  auto &body = getBody();
+  if (!body.empty() && body.front().getNumArguments() > 0) {
+    p << '(';
+    llvm::interleaveComma(body.front().getArguments(), p,
+                          [&](BlockArgument arg) { p.printRegionArgument(arg); });
+    p << ')';
+  }
+  p << ' ';
+  p.printRegion(body, /*printEntryBlockArgs=*/false);
+  p.printOptionalAttrDict(
+      (*this)->getAttrs(),
+      /*elidedAttrs=*/{getSymNameAttrName(), getParamsAttrName()});
+}
+
+::mlir::ParseResult ActorOp::parse(::mlir::OpAsmParser &parser,
+                                   ::mlir::OperationState &result) {
+  ::mlir::StringAttr sym_name;
+  if (parser.parseSymbolName(sym_name, getSymNameAttrName(result.name),
+                             result.attributes))
+    return ::mlir::failure();
+
+  ::llvm::SmallVector<::mlir::OpAsmParser::Argument> args;
+  if (parser.parseArgumentList(args, ::mlir::OpAsmParser::Delimiter::OptionalParen,
+                               /*allowType=*/true))
+    return ::mlir::failure();
+
+  auto *body = result.addRegion();
+  if (parser.parseRegion(*body, args))
+    return ::mlir::failure();
+
+  // Keep the params TypeArrayAttr in sync with the signature.
+  if (!args.empty()) {
+    ::llvm::SmallVector<::mlir::Attribute> param_types;
+    for (auto &a : args)
+      param_types.push_back(::mlir::TypeAttr::get(a.type));
+    result.addAttribute(getParamsAttrName(result.name),
+                        ::mlir::ArrayAttr::get(result.getContext(), param_types));
+  }
+
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return ::mlir::failure();
+  return ::mlir::success();
 }
 }
