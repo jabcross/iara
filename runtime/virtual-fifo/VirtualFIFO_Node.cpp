@@ -429,7 +429,6 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   #endif
     return;
   }
-#endif
   auto _this = this;
   iara_submit_task([_this, args, seq]() {
   #ifdef IARA_DEBUGPRINT
@@ -482,7 +481,7 @@ void VirtualFIFO_Node::fire(i64 seq, std::span<VirtualFIFO_Chunk> args) {
   });
   return;
 
-#ifdef IARA_PRIMING_ALLOC
+#else // IARA_PRIMING_ALLOC
   auto _this = this;
   iara_submit_task([_this, args, seq]() {
   #ifdef IARA_DEBUGPRINT

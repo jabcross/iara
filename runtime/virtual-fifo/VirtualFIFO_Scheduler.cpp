@@ -82,7 +82,6 @@ IARA_TASKGROUP_BEGIN
           }
         }
       }
-    }
 IARA_TASKGROUP_END
   } else {
     for (auto &node : iara_runtime_nodes) {
