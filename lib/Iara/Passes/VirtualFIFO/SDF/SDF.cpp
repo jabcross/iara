@@ -40,6 +40,19 @@ bool isLogicEdge(EdgeOp edge) {
 
 bool isBorrowEdge(EdgeOp edge) { return edge->hasAttr("borrow"); }
 
+// The consumer's buffer-argument index for an edge: the operand number of the
+// edge's use in the consumer node, minus the node's param count. Params are
+// operands (`params %p`) but not runtime chunks — the node wrapper indexes
+// buffers from 0, skipping params — so a consumer that takes a compile-time
+// param would otherwise read the wrong (empty) chunk slot and segfault.
+i64 consumerBufferArgIdx(EdgeOp edge) {
+  auto &use = *edge->getUses().begin();
+  i64 idx = use.getOperandNumber();
+  if (auto n = llvm::dyn_cast<NodeOp>(use.getOwner()))
+    idx -= (i64)n.getParams().size();
+  return idx;
+}
+
 Vec<EdgeOp> getInoutChain(EdgeOp edge) {
   Vec<EdgeOp> rv;
   auto first = findFirstEdgeOfChain(edge);
@@ -187,7 +200,7 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
       e.setLocalIndex(0);
       e.setProdRate(prod);
       e.setConsRate(cons);
-      e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
+      e.setConsArgIdx(consumerBufferArgIdx(edge));
       e.setDelayOffset(0);
       e.setDelaySize(delay);
       e.setBlockSizeWithDelays(delay + prod);
@@ -202,7 +215,7 @@ LogicalResult annotateEdgeInfo(ActorOp actor, StaticAnalysisData &data) {
     e.setLocalIndex(-1);
     e.setProdRate(getProdRateBytes(edge));
     e.setConsRate(getConsRateBytes(edge));
-    e.setConsArgIdx(edge->getUses().begin()->getOperandNumber());
+    e.setConsArgIdx(consumerBufferArgIdx(edge));
 
     // These should be already set.
     assert(e.delayOffset() != -1);
