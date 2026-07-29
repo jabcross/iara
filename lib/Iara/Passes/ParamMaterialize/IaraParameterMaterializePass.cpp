@@ -112,6 +112,43 @@ public:
       in.getResult().replaceAllUsesWith(rep.getResult());
       in.erase();
     }
+    // NodeOps with out_sizes: staticize the dynamic dims of the output tensors
+    // from the folded sizes (result-then-dim order), then rebuild the node with
+    // static result types and no out_sizes. Runs before the EdgeOp pass so edges
+    // pick up the now-static producer type.
+    for (auto node : actor.getOps<NodeOp>() | IntoVector()) {
+      if (node.getOutSizes().empty())
+        continue;
+      llvm::SmallVector<int64_t> sizes;
+      for (auto s : node.getOutSizes())
+        sizes.push_back(constIntOf(s, "NodeOp out_size"));
+      unsigned si = 0;
+      llvm::SmallVector<mlir::Type> newResultTypes;
+      for (auto r : node.getResults()) {
+        auto ty = llvm::dyn_cast<mlir::RankedTensorType>(r.getType());
+        if (!ty || ty.hasStaticShape()) {
+          newResultTypes.push_back(r.getType());
+          continue;
+        }
+        unsigned nd = 0;
+        for (auto d : ty.getShape())
+          if (mlir::ShapedType::isDynamic(d))
+            nd++;
+        assert(si + nd <= sizes.size() && "out_sizes fewer than dynamic dims");
+        newResultTypes.push_back(
+            staticize(ty, llvm::ArrayRef<int64_t>(sizes).slice(si, nd)));
+        si += nd;
+      }
+      assert(si == sizes.size() && "out_sizes count != total dynamic dims");
+      mlir::OpBuilder b(node);
+      auto rep = b.create<NodeOp>(node.getLoc(), newResultTypes, node.getImpl(),
+                                  node.getParams(), node.getIn(),
+                                  node.getInout());
+      rep->setDiscardableAttrs(node->getDiscardableAttrDictionary());
+      for (unsigned i = 0; i < node.getNumResults(); ++i)
+        node.getResult(i).replaceAllUsesWith(rep.getResult(i));
+      node.erase();
+    }
     // EdgeOps: rebuild to match a now-static input.
     for (auto edge : actor.getOps<EdgeOp>() | IntoVector()) {
       if (edge.getIn().getType() == edge.getOut().getType())
@@ -140,7 +177,8 @@ public:
       for (auto &op : llvm::make_early_inc_range(actor.getBody().front())) {
         if (mlir::isa<mlir::arith::ConstantOp, mlir::arith::AddIOp,
                       mlir::arith::MulIOp, mlir::arith::SubIOp,
-                      mlir::arith::DivSIOp, mlir::arith::DivUIOp>(&op) &&
+                      mlir::arith::DivSIOp, mlir::arith::DivUIOp,
+                      mlir::arith::IndexCastOp>(&op) &&
             op.use_empty()) {
           op.erase();
           changed = true;

@@ -53,6 +53,22 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
   // list — so find one fan-out, transform it, and re-scan from scratch, until
   // none remain. Each transform resolves one multi-use data result into
   // single-use edges, so this terminates.
+  // A value used as a node `params` or `out_sizes` operand is a compile-time
+  // scalar, not a data edge — it may be shared by many nodes (e.g. a computed
+  // size feeding several producers) and must NOT be turned into a data
+  // broadcast. Only in/inout uses are data edges that fan out.
+  auto isDataUse = [](OpOperand &use) -> bool {
+    Operation *owner = use.getOwner();
+    if (auto n = dyn_cast<NodeOp>(owner)) {
+      unsigned i = use.getOperandNumber();
+      unsigned np = n.getParams().size();
+      unsigned ndata = np + n.getIn().size() + n.getInout().size();
+      return i >= np && i < ndata; // in/inout only (not params, not out_sizes)
+    }
+    // Edges / out-ports are data consumers; arith (index_cast, addi, ...) that
+    // compute param/size values are not, and may be shared freely.
+    return isa<EdgeOp, OutPortOp>(owner);
+  };
   auto findAndExpandOne = [&]() -> bool {
     for (Operation *op : actor.getOps() | Pointers() | IntoVector()) {
       for (auto result : op->getResults()) {
@@ -61,7 +77,11 @@ void expandImplicitEdgesAndBroadcasts(ActorOp actor) {
         // data-copying broadcast node.
         if (isa<NoneType>(result.getType()))
           continue;
-        if ((result.getUses() | Pointers() | Count()) <= 1)
+        unsigned data_uses = 0;
+        for (auto &use : result.getUses())
+          if (isDataUse(use))
+            data_uses++;
+        if (data_uses <= 1)
           continue;
         if (borrow_mode && iara::dialect::broadcast::usesAllReadOnly(result))
           iara::dialect::broadcast::insertBroadcastBorrow(result);

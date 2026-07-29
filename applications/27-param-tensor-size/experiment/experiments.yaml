@@ -1,0 +1,49 @@
+application:
+  name: 27-param-tensor-size
+  description: "Param-driven node-output tensor size (F3, 'different matrix sizes')"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "27-param-tensor-size-{scheduler}"
+  description: "Param-tensor-size test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "All VirtualFIFO schedulers; n=4 sizes the output buffer, sum must be 6."
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

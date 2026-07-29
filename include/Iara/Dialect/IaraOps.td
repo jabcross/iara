@@ -89,6 +89,19 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
                        Variadic<Index>:$out_sizes);
     let results = (outs Variadic<AnyType>:$out);
 
+    // Convenience builder preserving the pre-out_sizes signature: every existing
+    // NodeOp construction site (Join, Broadcast, GMMN, canonicalize) builds with
+    // no dynamic output sizes, so default out_sizes to empty and leave them
+    // unchanged. Only the parser and --iara-param-materialize populate out_sizes.
+    let builders = [
+      OpBuilder<(ins "::mlir::TypeRange":$out, "::llvm::StringRef":$impl,
+                     "::mlir::ValueRange":$params, "::mlir::ValueRange":$in,
+                     "::mlir::ValueRange":$inout), [{
+        build($_builder, $_state, out, impl, params, in, inout,
+              /*out_sizes=*/::mlir::ValueRange{});
+      }]>
+    ];
+
     // let assemblyFormat = [{
     //     $impl
     //     (`params` $params^ `:` type($params) )?

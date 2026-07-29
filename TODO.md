@@ -206,6 +206,32 @@ future sprint; see doc for mechanism, code anchors, SOTA refs, validation.
 
 ---
 
+# Parameter system — feature coverage — 2026-07-28
+
+Compile-time params (func-like actor block-args + `default_params` +
+`--iara-param-materialize`). Regression apps landed one per discrete feature:
+F0 scalar→kernel (`24-param-materialize`), F2 computed via arith+SCCP
+(`25-param-computed`), F3 param-driven node-output tensor sizes
+(`27-param-tensor-size`, NodeOp `out_sizes`), F4 params across hierarchy
+(`26-param-hierarchy`).
+
+- [ ] **F5 — param-driven node count / replication** — cholesky NUM_BLOCKS emits a
+  *variable number* of nodes/edges (nested loops in `generate_topology.py`); SIFT
+  P is N-way parallel replication. Not expressible by fixed block-arg cloning —
+  needs generative/loop constructs in the IR (a replication/`scf.for`-like actor
+  construct the flatten/materialize passes expand by count). Blocked on + coordinated
+  with the parallel Preesm-CLI + experiment-framework param-generation work. No
+  regression app yet (would be permanently red until the construct exists).
+- [ ] **F3 multi-rate edges** — `27` covers single-rate node-output sizing;
+  degridder's `NUM_CHUNK`-way multi-rate fan-out edges (`tensor<Nx...> -> tensor<...>`)
+  need multi-rate-aware edge resolution in param-materialize Phase 3. Deferred with F5.
+- [ ] **Value plumbing (other session)** — env→`default_params` substitution + param
+  `#define` emission to `iara_runtime_config.h` are being built in the Preesm-CLI /
+  experiment-framework session; once landed, port degridder/cholesky/SIFT off their
+  Python `generate_topology.py` / guillemet templates onto the param system.
+
+---
+
 # Experiment framework — Slurm dispatcher snapshots build — 2026-07-18
 
 - [ ] **Slurm dispatcher: copy sources + `iara-opt` into the job's own dir before running**, so in-flight jobs use a frozen snapshot and the compiler (`build/bin/iara-opt`, runtime headers/sources) can be rebuilt on `main` while experiments run. Today all jobs share `build/bin/iara-opt` on the shared FS → rebuilding mid-run corrupts in-flight builds and blocks compiler work. Snapshot the compiler binary (+ any headers/runtime sources the build reads) per submission; point the generated CTest/build commands at the snapshot.

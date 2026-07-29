@@ -264,6 +264,20 @@ NodeOp getConsumerNode(EdgeOp edge) {
     if (parseTypeList(outTypes))
       return ::mlir::failure();
   }
+  if (::mlir::succeeded(parser.parseOptionalKeyword("sizes"))) {
+    outSizesOperandsLoc = parser.getCurrentLocation();
+    bool using_paren = parser.parseOptionalLParen().succeeded();
+    if (parser.parseCommaSeparatedList([&]() -> ParseResult {
+          OpAsmParser::UnresolvedOperand unresolved;
+          if (parser.parseOperand(unresolved))
+            return failure();
+          outSizesOperands.push_back(unresolved);
+          return success();
+        }))
+      return ::mlir::failure();
+    if (using_paren && parser.parseRParen())
+      return ::mlir::failure();
+  }
   {
     auto loc = parser.getCurrentLocation();
     (void)loc;
@@ -278,7 +292,8 @@ NodeOp getConsumerNode(EdgeOp edge) {
   ::llvm::copy(
       ::llvm::ArrayRef<int32_t>({static_cast<int32_t>(paramsOperands.size()),
                                  static_cast<int32_t>(inOperands.size()),
-                                 static_cast<int32_t>(inoutOperands.size())}),
+                                 static_cast<int32_t>(inoutOperands.size()),
+                                 static_cast<int32_t>(outSizesOperands.size())}),
       result.getOrAddProperties<NodeOp::Properties>()
           .operandSegmentSizes.begin());
   result.addTypes(outTypes);
@@ -290,6 +305,11 @@ NodeOp getConsumerNode(EdgeOp edge) {
     return ::mlir::failure();
   if (parser.resolveOperands(
           inoutOperands, inoutTypes, inoutOperandsLoc, result.operands))
+    return ::mlir::failure();
+  ::llvm::SmallVector<::mlir::Type, 4> outSizesTypes(
+      outSizesOperands.size(), parser.getBuilder().getIndexType());
+  if (parser.resolveOperands(
+          outSizesOperands, outSizesTypes, outSizesOperandsLoc, result.operands))
     return ::mlir::failure();
   return ::mlir::success();
 }
@@ -328,6 +348,10 @@ void NodeOp::print(::mlir::OpAsmPrinter &_odsPrinter) {
   printList("in", zip(getIn(), getIn().getTypes()));
   printList("inout", zip(getInout(), getInout().getTypes()));
   printList("out", getOut().getTypes());
+  if (!getOutSizes().empty()) {
+    _odsPrinter << " sizes ";
+    _odsPrinter.printOperands(getOutSizes());
+  }
   ::llvm::SmallVector<::llvm::StringRef, 2> elidedAttrs;
   elidedAttrs.push_back("operandSegmentSizes");
   elidedAttrs.push_back("impl");
