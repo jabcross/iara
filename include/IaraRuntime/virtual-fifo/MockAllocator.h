@@ -20,10 +20,11 @@
 // break-risk analysis: only sub-MB integer/struct edges carry control data;
 // every >1MB buffer is pure pixel data safe to alias.)
 
-#ifdef IARA_MOCK_ALLOC
-
 #include <cstdint>
 #include <cstdlib>
+
+#ifdef IARA_MOCK_ALLOC
+
 #include <mutex>
 #include <sys/mman.h>
 
@@ -66,6 +67,14 @@ inline void iara_mock_free(void *p) {
   if (!iara_mock_owns(p))
     free(p);
 }
+
+inline void *iara_malloc(int64_t size) { return iara_mock_alloc(size); }
+inline void iara_runtime_free(void *p) { iara_mock_free(p); }
+
+#else // !IARA_MOCK_ALLOC
+
+inline void *iara_malloc(int64_t size) { return malloc((size_t)size); }
+inline void iara_runtime_free(void *p) { free(p); }
 
 #endif // IARA_MOCK_ALLOC
 #endif // IARARUNTIME_VIRTUALFIFO_MOCKALLOCATOR_H

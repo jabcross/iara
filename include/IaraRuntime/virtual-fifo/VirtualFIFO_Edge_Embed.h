@@ -103,6 +103,13 @@ struct VirtualFIFO_Edge {
                    runtime_info.block_size_no_delays;
   }
 
+  inline static VirtualFIFO_Edge *getNextInChain(VirtualFIFO_Edge *e) {
+    // Implicit chain: successor is e+1 when cons_rate >= 0 (end-of-chain: cons_rate < 0).
+    if (e->runtime_info.cons_rate < 0)
+      return nullptr;
+    return e + 1;
+  }
+
   inline static std::pair<i64, i64> getConsFiringsFromVirtualOffsetRange(
       VirtualFIFO_Edge_RuntimeInfo &info, i64 begin, i64 end) {
     assert(end - begin >= 1);

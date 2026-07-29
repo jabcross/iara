@@ -156,4 +156,8 @@ void iara_parallelism_shutdown_c(void);
 }
 #endif
 
+// Taskgroup: EnkiTS uses global outstanding counter, so taskgroup is a no-op.
+#define IARA_TASKGROUP_BEGIN
+#define IARA_TASKGROUP_END
+
 #endif // IARA_RUNTIME_WORKSTEALINGBACKEND_ENKITS_H

@@ -23,13 +23,13 @@ namespace iara::runtime::virtualfifo {
 
 // ---- table accessors ----
 
-inline VirtualFIFO_Node *getNode(u32 idx) { return &iara_runtime_nodes.data()[idx]; }
-inline u32 getNodeIndex(const VirtualFIFO_Node *n) { return static_cast<u32>(n - iara_runtime_nodes.data()); }
-inline u32 getNumNodes()  { return static_cast<u32>(iara_runtime_nodes.size()); }
+inline VirtualFIFO_Node *getNode(iara::int_node idx) { return &iara_runtime_nodes.data()[idx]; }
+inline iara::int_node getNodeIndex(const VirtualFIFO_Node *n) { return static_cast<iara::int_node>(n - iara_runtime_nodes.data()); }
+inline iara::int_node getNumNodes()  { return static_cast<iara::int_node>(iara_runtime_nodes.size()); }
 
-inline VirtualFIFO_Edge *getEdge(u32 idx) { return &iara_runtime_edges.data()[idx]; }
-inline u32 getEdgeIndex(const VirtualFIFO_Edge *e) { return static_cast<u32>(e - iara_runtime_edges.data()); }
-inline u32 getNumEdges()  { return static_cast<u32>(iara_runtime_edges.size()); }
+inline VirtualFIFO_Edge *getEdge(iara::int_edge idx) { return &iara_runtime_edges.data()[idx]; }
+inline iara::int_edge getEdgeIndex(const VirtualFIFO_Edge *e) { return static_cast<iara::int_edge>(e - iara_runtime_edges.data()); }
+inline iara::int_edge getNumEdges()  { return static_cast<iara::int_edge>(iara_runtime_edges.size()); }
 
 // ---- edge cross-ref accessors ----
 
@@ -41,6 +41,9 @@ inline VirtualFIFO_Node *getConsumer(const VirtualFIFO_Edge *e) {
 }
 inline VirtualFIFO_Node *getAllocNode(const VirtualFIFO_Edge *e) {
   return &iara_runtime_nodes.data()[e->codegen_info.alloc_node_idx];
+}
+inline bool isOutputOf(const VirtualFIFO_Edge *e, const VirtualFIFO_Node *n) {
+  return getProducer(e) == n;
 }
 // Chain-contiguous layout: next = e+1 unless cons_rate < 0 (end of chain).
 inline VirtualFIFO_Edge *getNextInChain(const VirtualFIFO_Edge *e) {

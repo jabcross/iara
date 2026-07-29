@@ -62,4 +62,8 @@ inline void iara_parallelism_shutdown() {
   // OpenMP cleans up automatically
 }
 
+// Taskgroup scope: waits for all descendant tasks before leaving the scope.
+#define IARA_TASKGROUP_BEGIN _Pragma("omp taskgroup") {
+#define IARA_TASKGROUP_END   }
+
 #endif // IARA_RUNTIME_WORKSTEALINGBACKEND_OMP_H

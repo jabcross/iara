@@ -39,4 +39,8 @@ inline void iara_parallelism_shutdown() {
   // Nothing to clean up
 }
 
+// Taskgroup: no-op in sequential mode.
+#define IARA_TASKGROUP_BEGIN
+#define IARA_TASKGROUP_END
+
 #endif // IARA_RUNTIME_WORKSTEALINGBACKEND_SEQUENTIAL_H

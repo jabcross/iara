@@ -324,7 +324,7 @@ double *output_g = NULL;
   #include "kernel_split_join.inc.h"
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 1);
 }
 

@@ -31,9 +31,11 @@ import argparse
 import logging
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
+import yaml
 
 # ---------------------------------------------------------------------------
 # Graceful cancellation support
@@ -852,6 +854,55 @@ def _list_available_sets(yaml_path: Path) -> list:
         return []
 
 
+def _partial_match(value: str, options: list) -> Optional[str]:
+    """Case-insensitive substring match. Returns canonical name if exactly 1 match, else None."""
+    if not value:
+        return None
+    if value in options:
+        return value
+    lower = value.lower()
+    matches = [opt for opt in options if lower in opt.lower()]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _collect_yaml_values():
+    """Read all experiments.yaml files in parallel.
+    
+    Returns (app_types, schedulers) as sorted lists of distinct values.
+    """
+    apps = _list_available_apps()
+    if not apps:
+        return [], []
+
+    app_types = set()
+    schedulers = set()
+
+    def _read_one(app_name):
+        yaml_path = Path("applications") / app_name / "experiment" / "experiments.yaml"
+        try:
+            with open(yaml_path) as f:
+                config = yaml.safe_load(f)
+            at = config.get("application", {}).get("app_type", "experiment")
+            sch = set()
+            for param in config.get("parameters", []):
+                if param.get("name") == "scheduler":
+                    for c in param.get("choices", []):
+                        sch.add(c)
+            return at, sch
+        except Exception:
+            return None, set()
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_read_one, a): a for a in apps}
+        for f in as_completed(futures):
+            at, sch = f.result()
+            if at:
+                app_types.add(at)
+            schedulers.update(sch)
+
+    return sorted(app_types), sorted(schedulers)
+
+
 def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None, partition: Optional[str] = None, cpus: int = 48) -> int:
     """
     Submit the entire framework command to Slurm via sbatch.
@@ -1482,6 +1533,24 @@ def main() -> int:
             print("ERROR: --app and --app_type are mutually exclusive.", file=sys.stderr)
             return 2
 
+        # Collect known app_types and schedulers from all YAMLs for partial matching
+        all_app_types, all_schedulers = _collect_yaml_values()
+
+        # Validate --app_type with partial matching
+        if app_type is not None:
+            matched = _partial_match(app_type, all_app_types)
+            if matched:
+                if matched != app_type:
+                    print(f"WARNING: Interpreting '{app_type}' as '{matched}'.", file=sys.stderr)
+                    args.app_type = matched
+            else:
+                print(f"ERROR: Application type '{app_type}' not recognized.", file=sys.stderr)
+                if all_app_types:
+                    print("Available application types:", file=sys.stderr)
+                    for at in all_app_types:
+                        print(f"  {at}", file=sys.stderr)
+                return 2
+
         if not app_type:
             # Single app/set mode — validate app and set
             if not args.app:
@@ -1493,13 +1562,19 @@ def main() -> int:
 
             _yaml_path = Path("applications") / args.app / "experiment" / "experiments.yaml"
             if not _yaml_path.exists():
-                print(f"ERROR: Application '{args.app}' not found.", file=sys.stderr)
                 available = _list_available_apps()
-                if available:
-                    print("Available applications:", file=sys.stderr)
-                    for a in available:
-                        print(f"  {a}", file=sys.stderr)
-                return 2
+                matched = _partial_match(args.app, available)
+                if matched:
+                    print(f"WARNING: Interpreting '{args.app}' as '{matched}'.", file=sys.stderr)
+                    args.app = matched
+                    _yaml_path = Path("applications") / args.app / "experiment" / "experiments.yaml"
+                else:
+                    print(f"ERROR: Application '{args.app}' not found.", file=sys.stderr)
+                    if available:
+                        print("Available applications:", file=sys.stderr)
+                        for a in available:
+                            print(f"  {a}", file=sys.stderr)
+                    return 2
 
             available_sets = _list_available_sets(_yaml_path)
             if not args.set:
@@ -1509,10 +1584,31 @@ def main() -> int:
                 return 2
 
             if args.set not in available_sets:
-                print(f"ERROR: Experiment set '{args.set}' not found in '{args.app}'.", file=sys.stderr)
-                if available_sets:
-                    print("Available sets:", file=sys.stderr)
-                    for s in available_sets:
+                matched = _partial_match(args.set, available_sets)
+                if matched:
+                    print(f"WARNING: Interpreting '{args.set}' as '{matched}'.", file=sys.stderr)
+                    args.set = matched
+                else:
+                    print(f"ERROR: Experiment set '{args.set}' not found in '{args.app}'.", file=sys.stderr)
+                    if available_sets:
+                        print("Available sets:", file=sys.stderr)
+                        for s in available_sets:
+                            print(f"  {s}", file=sys.stderr)
+                    return 2
+
+        # Validate --scheduler with partial matching (build/run/generate commands)
+        scheduler_val = getattr(args, 'scheduler', None)
+        if scheduler_val is not None:
+            matched = _partial_match(scheduler_val, all_schedulers)
+            if matched:
+                if matched != scheduler_val:
+                    print(f"WARNING: Interpreting '{scheduler_val}' as '{matched}'.", file=sys.stderr)
+                    args.scheduler = matched
+            else:
+                print(f"ERROR: Scheduler '{scheduler_val}' not recognized.", file=sys.stderr)
+                if all_schedulers:
+                    print("Available schedulers:", file=sys.stderr)
+                    for s in all_schedulers:
                         print(f"  {s}", file=sys.stderr)
                 return 2
 

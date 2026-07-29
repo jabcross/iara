@@ -11,19 +11,19 @@
   #define EXTERNC
 #endif
 
-// Takes in a function that will be executed after scheduler setup.
-// Must call `iara_runtime_init` once and `iara_runtime_run_iteration`.
+// Takes in a function that will be executed after scheduler startup.
+// Must call `iara_runtime_startup` once and `iara_runtime_run_iteration`.
 
 EXTERNC void iara_runtime_exec(void (*)());
 
 // Sets up I/O sources and sinks for the runtime.
 // num_io_ports: total number of I/O ports (sources + sinks)
 // Takes variadic IaraSource* and IaraSink* arguments matching the in/inout/out
-// ports. Must be called before iara_runtime_init, if at all.
+// ports. Must be called before iara_runtime_startup, if at all.
 EXTERNC void iara_runtime_set_io(int num_io_ports, ...);
 
 // Initializes the runtime.
-EXTERNC void iara_runtime_init();
+EXTERNC void iara_runtime_startup();
 
 EXTERNC void iara_runtime_run_iteration(int64_t graph_iteration, int wait_for_tasks);
 

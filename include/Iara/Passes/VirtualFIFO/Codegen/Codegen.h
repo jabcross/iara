@@ -55,7 +55,7 @@ struct NodeCodegenData {
   // them to this node's input-fifo slice (after the data inputs) so the runtime
   // firing-threshold loop sums their cons_rate directly, reconstructing the old
   // `logic_in_bytes` field for free (they carry cons_arg_idx == -1). See
-  // EmbedSidecarStrategy and VirtualFIFO_Node::trueInputBytes.
+  // EmbedSidecarStrategy and VirtualFIFO_Node::inputDependencyBytes.
   std::vector<EdgeCodegenData *> logic_inputs = {};
   Value input_fifos_span_ptr = {};
   Value output_fifos_span_ptr = {};

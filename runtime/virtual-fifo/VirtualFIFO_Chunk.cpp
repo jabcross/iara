@@ -24,12 +24,7 @@ VirtualFIFO_Chunk VirtualFIFO_Chunk::take_back(i64 amount) {
 }
 
 VirtualFIFO_Chunk VirtualFIFO_Chunk::allocate(i64 size, i64 virtual_offset) {
-  // static int x = 1;
-#ifdef IARA_MOCK_ALLOC
-  auto allocated = (i8 *)iara_mock_alloc(size);
-#else
-  auto allocated = (i8 *)malloc(size);
-#endif
+  auto allocated = (i8 *)iara_malloc(size);
   // #ifndef IARA_COMPILER
   //     allocated_ptrs[allocated] = x++;
   //     fprintf(stderr, "allocating ptr %d\n", x - 1);

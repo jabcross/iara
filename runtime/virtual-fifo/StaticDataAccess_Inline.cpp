@@ -1,51 +1,45 @@
+// StaticDataAccess implementations now inline in StaticDataAccess.h.
+// This file exists only for out-of-line instantiation (rare, for debug builds).
 #include "IaraRuntime/virtual-fifo/StaticDataAccess.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Edge.h"
-#include "IaraRuntime/virtual-fifo/VirtualFIFO_Node.h"
 
 namespace iara::runtime::virtualfifo {
 
-VirtualFIFO_Node *getNode(u32 idx) { return &iara_runtime_nodes[idx]; }
+VirtualFIFO_Node *getNode(iara::int_node idx) { return &iara_runtime_nodes[idx]; }
 
-u32 getNodeIndex(const VirtualFIFO_Node *n) {
-  return static_cast<u32>(n - iara_runtime_nodes.data());
+iara::int_node getNodeIndex(const VirtualFIFO_Node *n) {
+  return static_cast<iara::int_node>(n - iara_runtime_nodes.data());
 }
 
-u32 getNumNodes() { return static_cast<u32>(iara_runtime_nodes.size()); }
+iara::int_node getNumNodes() { return static_cast<iara::int_node>(iara_runtime_nodes.size()); }
 
-VirtualFIFO_Edge *getEdge(u32 idx) { return &iara_runtime_edges[idx]; }
+VirtualFIFO_Edge *getEdge(iara::int_edge idx) { return &iara_runtime_edges[idx]; }
 
-u32 getEdgeIndex(const VirtualFIFO_Edge *e) {
-  return static_cast<u32>(e - iara_runtime_edges.data());
+iara::int_edge getEdgeIndex(const VirtualFIFO_Edge *e) {
+  return static_cast<iara::int_edge>(e - iara_runtime_edges.data());
 }
 
-u32 getNumEdges() { return static_cast<u32>(iara_runtime_edges.size()); }
+iara::int_edge getNumEdges() { return static_cast<iara::int_edge>(iara_runtime_edges.size()); }
 
 VirtualFIFO_Node *getProducer(const VirtualFIFO_Edge *e) {
-  return e->codegen_info.producer;
+  return &iara_runtime_nodes[e->codegen_info.producer_idx];
 }
 
 VirtualFIFO_Node *getConsumer(const VirtualFIFO_Edge *e) {
-  return e->codegen_info.consumer;
+  return &iara_runtime_nodes[e->codegen_info.consumer_idx];
 }
 
 VirtualFIFO_Node *getAllocNode(const VirtualFIFO_Edge *e) {
-  return e->codegen_info.alloc_node;
+  return &iara_runtime_nodes[e->codegen_info.alloc_node_idx];
 }
 
 VirtualFIFO_Edge *getNextInChain(const VirtualFIFO_Edge *e) {
-  return e->codegen_info.next_in_chain;
-}
-
-std::span<VirtualFIFO_Edge *> getInputFifos(const VirtualFIFO_Node *n) {
-  return n->codegen_info.input_fifos;
-}
-
-std::span<VirtualFIFO_Edge *> getOutputFifos(const VirtualFIFO_Node *n) {
-  return n->codegen_info.output_fifos;
+  return (e->runtime_info.cons_rate < 0)
+             ? nullptr
+             : const_cast<VirtualFIFO_Edge *>(e + 1);
 }
 
 void fireKernel(VirtualFIFO_Node *node, i64 seq, std::span<VirtualFIFO_Chunk> args) {
-  node->codegen_info.wrapper(seq, args);
+  iara_dispatch_kernel(node->codegen_info.kernel_id, seq, args);
 }
 
 } // namespace iara::runtime::virtualfifo

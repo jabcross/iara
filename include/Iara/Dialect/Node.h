@@ -168,8 +168,8 @@ public:
   void setNumArgs(i64 v)           { setI64("num_args", v); }
 
   // (logic_in_bytes removed: the join's logic-input tokens are summed at runtime
-  //  from the logic input edges the embed appends to the node's input slice --
-  //  see VirtualFIFO_Node::trueInputBytes. No precomputed field.)
+  // from the logic input edges the embed appends to the node's input slice --
+  //  see VirtualFIFO_Node::inputDependencyBytes. No precomputed field.)
 
   i64 rank() const                 { return getI64("rank"); }
   void setRank(i64 v)              { setI64("rank", v); }

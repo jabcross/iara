@@ -97,7 +97,7 @@ LogicalResult annotateNodeInfo(ActorOp actor, StaticAnalysisData &data) {
     // arg_bytes (the priming arrival threshold) but not num_args (no kernel-arg
     // slot). The data-triggered threshold no longer relies on a precomputed
     // logic-token field; it sums the logic input edges directly at runtime (see
-    // trueInputBytes), so nothing extra is stored here. A logic *output* has no
+    // inputDependencyBytes), so nothing extra is stored here. A logic *output* has no
     // buffer and nothing arrives for it, so it counts toward neither.
     for (auto pure_input : node.getIn()) {
       if (!Node::isLogicValue(pure_input)) {

@@ -34,6 +34,10 @@ static constexpr uint8_t IARA_NODE_NEEDS_PRIMING  = 1 << 1;
 // output (index 0) carries the owned buffer to the join.
 static constexpr uint8_t IARA_NODE_IS_BROADCAST   = 1 << 2;
 
+// Expected struct sizes (verified at startup).
+static constexpr size_t IARA_NODE_STRUCT_SIZE = 32;
+static constexpr size_t IARA_EDGE_STRUCT_SIZE = 112;
+
 extern "C" {
 
 struct VirtualFIFO_NormalSemaphore;
@@ -55,10 +59,10 @@ struct VirtualFIFO_Node_RuntimeInfo {
   uint8_t flags;                          // IARA_NODE_INPUTS_INLINE | IARA_NODE_NEEDS_PRIMING
   // Reserved pad byte (keeps the node at 32 bytes). Formerly logic_in_bytes: a
   // u8 sum of a join's logic-input tokens that overflowed past 255 at high
-  // parallelism. Removed -- trueInputBytes() now reconstructs that sum in i64 by
-  // walking the logic input edges the embed appends to this node's input-fifo
-  // slice (cons_arg_idx == -1). Single source of truth (edge cons_rate), no
-  // overflow, no struct growth.
+  // parallelism. Removed — inputDependencyBytes() now reconstructs that sum in
+  // i64 by walking the logic input edges the embed appends to this node's
+  // input-fifo slice (cons_arg_idx == -1). Single source of truth (edge
+  // cons_rate), no overflow, no struct growth.
   uint8_t reserved0_;
 
   bool isAlloc()   const { return arg_bytes == static_cast<i64>(NodeType::Alloc); }
@@ -124,11 +128,11 @@ struct VirtualFIFO_Node {
     return !runtime_info.isAlloc() && (runtime_info.flags & IARA_NODE_NEEDS_PRIMING);
   }
 
-  // Per-firing byte total of this node's TRUE inputs (edges whose producer is
-  // not an alloc node). Used by the data-triggered-alloc scheduling mode, where
-  // a node fires once its true inputs arrive and its own output buffers
-  // (alloc-fed inputs) are allocated inline by fire().
-  i64 trueInputBytes() const;
+  // Per-firing byte total of this node's dependency inputs (edges whose producer
+  // is not an alloc node). Used by the data-triggered-alloc scheduling mode,
+  // where a node fires once its dependency inputs arrive and its own output
+  // buffers (alloc-fed inputs) are allocated inline by fire().
+  i64 inputDependencyBytes() const;
 
   void consume(i64 seq, VirtualFIFO_Chunk chunk, i64 arg_idx, i64 offset_partial);
   // Deliver `tokens` control tokens for firing `seq` from a logic edge: bumps

@@ -49,14 +49,17 @@ void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
 }
 
 void VirtualFIFO_Edge::propagate_delays(VirtualFIFO_Chunk chunk) {
-  // In the embed strategy, delay bytes live in iara_runtime_edge_delays_flat.
-  // Access via codegen_info.delay_start + runtime_info.delay_size.
   if (runtime_info.delay_size > 0) {
+    auto this_delay = chunk.take_back(runtime_info.delay_size);
+#ifdef IARA_DELAYS_ZERO_INIT
+    // Codegen confirmed delay values are all-zero; memset is cheaper.
+    memset(this_delay.data, 0, runtime_info.delay_size);
+#else
     const unsigned char *delay_data =
         iara_runtime_edge_delays_flat + codegen_info.delay_start;
     assert((size_t)chunk.data_size >= (size_t)runtime_info.delay_size);
-    auto this_delay = chunk.take_back(runtime_info.delay_size);
     memcpy(this_delay.data, delay_data, runtime_info.delay_size);
+#endif
     push(this_delay);
   }
   auto *next = iara::runtime::virtualfifo::getNextInChain(this);

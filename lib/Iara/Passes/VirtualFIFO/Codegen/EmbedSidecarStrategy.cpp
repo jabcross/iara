@@ -321,7 +321,7 @@ struct EmbedSidecarEmitter {
       // No logic_in_bytes: the join's logic-input tokens are now summed at
       // runtime from the logic input edges appended to its input-fifo slice
       // (cons_arg_idx == -1), so nothing to emit and no u8 overflow at high
-      // parallelism. See NodeCodegenData::logic_inputs / trueInputBytes.
+      // parallelism. See NodeCodegenData::logic_inputs / inputDependencyBytes.
       dst.runtime_info.flags = node_fifo[i].flags;
       // sema_variant: zero-initialized (calloc semantics from memset above).
 
