@@ -2,6 +2,13 @@ application:
   name: "18-sift-photo"
   description: "SIFT on 4K photo (3840x2160) — IaRa vf-omp vs Preesm"
   app_type: experiment
+  preesm:
+    project_path: "${IARA_DIR}/../preesm-apps/SIFT"
+    project_name: "SIFTapp"
+    workflow: "Codegen.workflow"
+    pi_basename: "Hextract"
+    extra_setup:
+      - "ln -sfn data ${IARA_DIR}/applications/18-sift-photo/dat"
   build:
     extra_linker_args: ["-lm"]
     main_actor: "Hextract"

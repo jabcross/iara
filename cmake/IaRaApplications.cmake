@@ -890,8 +890,8 @@ function(iara_add_test_instance)
     # Parse arguments
     cmake_parse_arguments(TEST
         "IS_REGRESSION_TEST"  # Boolean options
-        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR"  # Single-value args
-        "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS"  # Multi-value args
+        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR;PREESM_PROJECT_PATH;PREESM_PROJECT_NAME;PREESM_WORKFLOW;PREESM_ECLIPSE_DIST;PREESM_PI_BASENAME"  # Single-value args
+        "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS;PREESM_EXTRA_SETUP"  # Multi-value args
         ${ARGN}
     )
     if(NOT TEST_MAIN_ACTOR)
@@ -1059,11 +1059,33 @@ message(STATUS \"Cleaned build artifacts for ${instance_name}\")
     endif()
 
     # --------------------------------------------------------------------------
-    # setup-* (only when codegen_script exists for this application)
+    # setup-* (codegen — Python module for Preesm, shell scripts for IaRa)
     # --------------------------------------------------------------------------
     set(_codegen_script "")
-    if("${TEST_SCHEDULER}" STREQUAL "preesm")
-        # Preesm uses its own codegen script
+    set(_preesm_codegen_args "")
+    if("${TEST_SCHEDULER}" STREQUAL "preesm" AND DEFINED TEST_PREESM_PROJECT_PATH)
+        # Python codegen module — no shell scripts
+        set(_preesm_codegen_args
+            "python3" "-m" "tools.experiment_framework.codegen"
+            "--mode" "preesm"
+            "--output-dir" "${TEST_BUILD_DIR}"
+            "--preesm-dist" "$ENV{PREESM_DIR}"
+            "--preesm-project" "${TEST_PREESM_PROJECT_PATH}"
+            "--preesm-name" "${TEST_PREESM_PROJECT_NAME}"
+            "--num-cores" "$ENV{NUM_CORES}"
+            "--timing-patch"
+        )
+        if(DEFINED TEST_PREESM_WORKFLOW AND NOT "${TEST_PREESM_WORKFLOW}" STREQUAL "")
+            list(APPEND _preesm_codegen_args "--workflow" "${TEST_PREESM_WORKFLOW}")
+        endif()
+        if(DEFINED TEST_PREESM_PI_BASENAME AND NOT "${TEST_PREESM_PI_BASENAME}" STREQUAL "")
+            list(APPEND _preesm_codegen_args "--pi-basename" "${TEST_PREESM_PI_BASENAME}")
+        endif()
+        foreach(_cmd ${TEST_PREESM_EXTRA_SETUP})
+            list(APPEND _preesm_codegen_args "--extra-setup" "${_cmd}")
+        endforeach()
+    elseif("${TEST_SCHEDULER}" STREQUAL "preesm")
+        # Legacy fallback: per-app preesm-codegen.sh (if still present)
         foreach(_cs "${CMAKE_SOURCE_DIR}/${TEST_APPLICATION_DIR}/preesm-codegen.sh")
             if(EXISTS "${_cs}")
                 set(_codegen_script "${_cs}")
@@ -1082,7 +1104,18 @@ message(STATUS \"Cleaned build artifacts for ${instance_name}\")
         endforeach()
     endif()
 
-    if(_codegen_script)
+    if(_preesm_codegen_args)
+        # Python codegen module — call directly, no shell wrapper
+        add_test(NAME "setup-${instance_name}"
+            COMMAND ${_preesm_codegen_args}
+            WORKING_DIRECTORY "${TEST_BUILD_DIR}")
+        set_tests_properties("setup-${instance_name}" PROPERTIES
+            TIMEOUT 600
+            LABELS "${_test_label}"
+            DEPENDS "${_after_clean_dep}")
+        set(_after_clean_dep "setup-${instance_name}")
+        set(_have_setup TRUE)
+    elseif(_codegen_script)
         set(_setup_cmake "${TEST_BUILD_DIR}/setup-${instance_name}.cmake")
         # Build the env var list for codegen (mirrors iara_add_application)
         set(_codegen_env_str

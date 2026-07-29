@@ -284,6 +284,32 @@ def generate_cmake_instance(
         f'    MAIN_ACTOR "{main_actor}"',
     ] + (["    IS_REGRESSION_TEST"] if is_regression else [])
 
+    # Preesm configuration: forward application.preesm fields to CMake so
+    # IaRaApplications.cmake can call the Python codegen module.
+    if scheduler == "preesm":
+        preesm = config.get("application", {}).get("preesm", {})
+        if not preesm:
+            raise ConfigError(
+                "application.preesm section is required when scheduler=preesm. "
+                "Add preesm.project_path, preesm.project_name to experiments.yaml."
+            )
+        # Resolve ${IARA_DIR} references in paths
+        import os as _os
+        _iara_dir = _os.environ.get("IARA_DIR", "")
+        def _resolve_env(val):
+            if _iara_dir and "${IARA_DIR}" in val:
+                val = val.replace("${IARA_DIR}", _iara_dir)
+            return val
+        lines.append(f'    PREESM_PROJECT_PATH "{_resolve_env(preesm["project_path"])}"')
+        lines.append(f'    PREESM_PROJECT_NAME "{preesm["project_name"]}"')
+        if preesm.get("workflow"):
+            lines.append(f'    PREESM_WORKFLOW "{preesm["workflow"]}"')
+        if preesm.get("pi_basename"):
+            lines.append(f'    PREESM_PI_BASENAME "{preesm["pi_basename"]}"')
+        if preesm.get("extra_setup"):
+            for cmd in preesm["extra_setup"]:
+                lines.append(f'    PREESM_EXTRA_SETUP "{_resolve_env(cmd)}"')
+
     # Add PARAMETERS if present
     if parameters_list:
         lines.append(f"    PARAMETERS {' '.join(parameters_list)}")
