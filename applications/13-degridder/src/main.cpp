@@ -52,7 +52,7 @@ void broadcast_config_parallel(Config in[1], Config out[num_chunk]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
 
   iara_runtime_run_iteration(0, 0);
 }

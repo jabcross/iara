@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_startup();
 extern "C" void iara_runtime_run_iteration(int64_t graph_iteration,
                                            int wait_for_tasks);
 
@@ -45,7 +45,7 @@ extern "C" void sink(const float in[96]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 0);
 }
 

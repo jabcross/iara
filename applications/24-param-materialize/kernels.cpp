@@ -13,7 +13,7 @@ void produce(long n, int out[1]) { out[0] = (int)n; }
 void check(int in[1]) { g_observed = in[0]; }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 0);
 }
 }

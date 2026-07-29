@@ -8,7 +8,7 @@ static int iteration_count = 0;
 static float expected_iteration_0[] = {0, 1, 3, 3, 3, 3, 3, 3, 3};
 static float expected_iteration_1[] = {3, 3, 3, 3, 3, 3, 3, 3, 3};
 
-extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_startup();
 extern "C" void iara_runtime_run_iteration(int64_t graph_iteration,
                                            int wait_for_tasks);
 
@@ -53,7 +53,7 @@ extern "C" void c(const float in[9]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
 
   iara_runtime_run_iteration(0, 0);
   iara_runtime_run_iteration(1, 0);

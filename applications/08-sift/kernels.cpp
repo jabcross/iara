@@ -9,7 +9,7 @@
 
 // #ifdef SCHEDULER_IARA
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 0);
 }
 // #endif

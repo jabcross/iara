@@ -7,7 +7,7 @@
 static std::mutex m;
 static int iteration_count = 0;
 
-extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_startup();
 extern "C" void iara_runtime_run_iteration(int64_t, int);
 
 extern "C" void a(int32_t out[9]) {
@@ -56,7 +56,7 @@ extern "C" void c(const int32_t in[9]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
 
   iara_runtime_run_iteration(0, 1);
   iara_runtime_run_iteration(1, 1);

@@ -82,7 +82,7 @@ extern "C" void iara_runtime_exec(void (*exec)()) {
   }
 }
 
-extern "C" void iara_runtime_init() {
+extern "C" void iara_runtime_startup() {
 
   auto threadnum = std::thread::hardware_concurrency();
 

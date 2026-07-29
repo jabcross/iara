@@ -18,7 +18,7 @@ void check(int x[1], int y[1]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 0);
 }
 }

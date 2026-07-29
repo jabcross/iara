@@ -401,7 +401,7 @@ void kernel_join(double *i0, double *i1, double *i2, double *i3, double *i4, dou
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 1);
   if (errors != 0) {
     fprintf(stderr, "ERROR: %d join inputs did not receive the broadcast value\n", errors);

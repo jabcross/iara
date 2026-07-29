@@ -39,7 +39,7 @@ extern "C" void c(const int32_t in[9]) {
 }
 
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 1);
   printf("\n");
   iara_runtime_run_iteration(1, 1);

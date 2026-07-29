@@ -51,7 +51,7 @@ void c(int val[1]) {
 
 void exec() {
 
-  iara_runtime_init();
+  iara_runtime_startup();
   printf("[exec] About to run iteration\n");
   iara_runtime_run_iteration(0, 1);
   printf("[exec] Iteration done, success_count=%d\n", success_count.load());

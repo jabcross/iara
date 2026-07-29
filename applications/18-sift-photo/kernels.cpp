@@ -9,7 +9,7 @@
 
 // #ifdef SCHEDULER_IARA
 void exec() {
-  iara_runtime_init();
+  iara_runtime_startup();
   iara_runtime_run_iteration(0, 0);
 }
 // #endif
@@ -47,7 +47,7 @@ int main() {
 
   // Init runtime once (cold allocation on first init)
   // #ifdef SCHEDULER_IARA
-  iara_runtime_init();
+  iara_runtime_startup();
   // #endif
 
   for (int f = 0; f < VIDEO_FRAMES; f++) {

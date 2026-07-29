@@ -9,7 +9,7 @@ struct VirtualFIFO_RuntimeData {
 };
 
 // Create all data structures
-extern "C" void iara_runtime_init();
+extern "C" void iara_runtime_startup();
 
 // run single iteration
 extern "C" void iara_runtime_run_iteration(i64 graph_iteration);
