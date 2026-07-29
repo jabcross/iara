@@ -72,8 +72,11 @@ int main() {
 
   // Correctness (every mode): the read value is always right → 0 mistakes.
   // Reuse count keys on the compiler's effective borrow decision: borrow ON →
-  // N reuses (zero-copy); borrow OFF (priming / copy-all-but-one) → copy path
-  // → 1 reuse. Assert against IARA_BROADCAST_BORROW from iara_runtime_config.h.
+  // N reuses (zero-copy). borrow OFF (priming / copy-all-but-one) → copy path.
+  // Unlike the single-rate case (22, where the first output aliases the producer
+  // buffer → 1 reuse), the multi-rate broadcast slices a wider buffer per reader,
+  // so no reader sees the producer's original address → 0 reuses (all copies).
+  // Assert against IARA_BROADCAST_BORROW from iara_runtime_config.h.
   if (num_mistakes != 0) {
     fprintf(stderr, "ERROR: expected 0 mistakes, got %d\n", num_mistakes);
     return 1;
@@ -81,7 +84,7 @@ int main() {
 #ifdef IARA_BROADCAST_BORROW
   const int expected_reuses = N;
 #else
-  const int expected_reuses = 1;
+  const int expected_reuses = 0;
 #endif
   if (num_reuses != expected_reuses) {
     fprintf(stderr, "ERROR: expected %d reuse%s, got %d\n", expected_reuses,
