@@ -1,0 +1,49 @@
+application:
+  name: 25-param-computed
+  description: "Computed compile-time parameter via arith + SCCP folding (F2)"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "25-param-computed-{scheduler}"
+  description: "Param-computed test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "All VirtualFIFO schedulers; (rows+1)*cols must fold to 42 at the kernel."
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

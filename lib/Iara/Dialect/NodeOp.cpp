@@ -196,6 +196,9 @@ NodeOp getConsumerNode(EdgeOp edge) {
   (void)inoutOperandsLoc;
   ::llvm::SmallVector<::mlir::Type, 1> inoutTypes;
   ::llvm::SmallVector<::mlir::Type, 1> outTypes;
+  ::llvm::SmallVector<::mlir::OpAsmParser::UnresolvedOperand, 4> outSizesOperands;
+  ::llvm::SMLoc outSizesOperandsLoc;
+  (void)outSizesOperandsLoc;
 
   auto parseTypedOperandList =
       [&](::llvm::SmallVector<::mlir::OpAsmParser::UnresolvedOperand, 4>

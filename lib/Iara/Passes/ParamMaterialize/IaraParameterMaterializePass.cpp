@@ -168,27 +168,22 @@ public:
   void runOnOperation() final {
     auto module = getOperation();
 
-    // No-op fast path: if no actor carries block-arg params and no port has
-    // dyn_sizes, there is nothing to materialize. Skip Phase 2's SCCP entirely
-    // so param-less graphs (incl. delay-feedback cycles) are left untouched.
-    bool hasWork = false;
-    module.walk([&](mlir::Operation *op) {
-      if (auto a = llvm::dyn_cast<ActorOp>(op))
-        hasWork |= a.getBody().front().getNumArguments() > 0;
-      else if (auto in = llvm::dyn_cast<InPortOp>(op))
-        hasWork |= !in.getDynSizes().empty();
-      else if (auto out = llvm::dyn_cast<OutPortOp>(op))
-        hasWork |= !out.getDynSizes().empty();
-    });
-    if (!hasWork)
+    // A `default_params` attr marks a top-level actor whose block-arg parameters
+    // must be materialized. Sub-graph templates left behind by --flatten keep
+    // their block args (their params arrive via caller substitution) but carry
+    // no default_params, so they are skipped. Capture the roots up front —
+    // Phase 1 strips the attr. If there are none, do nothing (in particular skip
+    // Phase 2's SCCP) so param-less graphs, incl. delay cycles, are untouched.
+    llvm::SmallVector<ActorOp> roots;
+    for (auto actor : module.getOps<ActorOp>())
+      if (actor->hasAttr("default_params"))
+        roots.push_back(actor);
+    if (roots.empty())
       return;
 
     // Phase 1.
-    for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
-      if (actor.isKernelDeclaration())
-        continue;
+    for (auto actor : roots)
       materializeParams(actor);
-    }
     if (m_failed)
       return;
 
@@ -199,11 +194,8 @@ public:
       return signalPassFailure();
 
     // Phase 3.
-    for (auto actor : module.getOps<ActorOp>() | IntoVector()) {
-      if (actor.isKernelDeclaration())
-        continue;
+    for (auto actor : roots)
       resolveTypes(actor);
-    }
   }
 };
 

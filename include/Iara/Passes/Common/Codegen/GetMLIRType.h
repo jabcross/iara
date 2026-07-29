@@ -4,7 +4,6 @@
 
 #include "Iara/Util/CommonTypes.h"
 #include "Iara/Util/CompilerTypes.h"
-#include "Iara/Util/ForEachType.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
 #include <boost/pfr/core.hpp>
@@ -111,10 +110,10 @@ LLVM::LLVMStructType getIdentifiedLLVMStructTypeFromTupleLike(MLIRContext *ctx,
   using tuple_type = TupleType<T>::type;
 
   std::vector<Type> types =
-      [&]<typename... E>(util::foreachtype::TypeWrapper<std::tuple<E...>>)
+      [&]<typename... E>(std::type_identity<std::tuple<E...>>)
       -> std::vector<Type> {
     return {getMLIRType<E>(ctx)...};
-  }(util::foreachtype::TypeWrapper<tuple_type>{});
+  }(std::type_identity<tuple_type>{});
 
   auto res = rv.setBody(types, false);
   assert(res.succeeded());
@@ -135,16 +134,6 @@ struct GetMLIRType<T> {
   }
 };
 
-template <class T>
-void fillWithTypesFromTuple(iara::util::foreachtype::TypeWrapper<T> wrapper,
-                            MLIRContext *context,
-                            Vec<Type> &vec) {
-  using namespace iara::util::foreachtype;
-  for_each_tuple_type(wrapper, [&](auto type, auto i) {
-    using ElemType = decltype(type)::type;
-    vec.push_back(getMLIRType<ElemType>(context));
-  });
-}
 
 template <class T> auto asAttr(MLIRContext *context, T t);
 

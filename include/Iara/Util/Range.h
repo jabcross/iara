@@ -12,13 +12,7 @@
 #include <llvm/ADT/SmallVectorExtras.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/Support/Casting.h>
-// #include <mlir/Dialect/Func/IR/FuncOps.h>
-// #include <mlir/IR/Attributes.h>
-// #include <mlir/IR/Builders.h>
-// #include <mlir/IR/BuiltinAttributes.h>
-// #include <mlir/IR/Dialect.h>
-// #include <mlir/IR/Location.h>
-// #include <mlir/IR/Operation.h>
+
 #include <numeric>
 #include <optional>
 #include <tuple>
@@ -28,39 +22,13 @@
 namespace iara::util::range {
 using namespace std::placeholders;
 
-// template <class A, class B, class R = void> struct Piper {};
 
-// template <class A, class B>
-// struct Piper<A, B,
-//              std::void_t<decltype(std::bind(std::declval<B>(),
-//                                             std::declval<A>(), _1))>> {
-// public:
-//   static constexpr auto apply(A a, B b) { return std::bind(b, a, _1); }
-// };
-
-// template <class A, class B> auto constexpr apply(A a, B b) {
-//   return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
-// }
-
-// template <class A, class B> auto constexpr pipe(A a, B b) {
-//   return Piper<A, B>::apply(std::forward<A>(a), std::forward<B>(b));
-// }
 
 template <class R> struct OwnedElementType {
   using type = decltype(*std::begin(std::declval<R>()));
 };
 
-// template <class T, typename Enable = void> struct NullTypeOf {
-//   using type = std::optional<T>;
-//   static constexpr std::optional<T> value() { return std::nullopt; };
-// };
 
-// template <class T>
-// struct NullTypeOf<T, typename std::enable_if<std::is_convertible<
-//                          T, mlir::Operation *>::value>::type> {
-//   using type = T;
-//   static constexpr T value() { return nullptr; };
-// };
 
 template <class F> struct Filter {
   using type = F;
@@ -206,22 +174,7 @@ auto pipe(std::optional<R> &&range, S &&stage)
   return llvm::make_range(begin, end) | std::forward<S>(stage);
 }
 
-// template <class F> struct Find {
-//   using type = F;
-//   F f;
-//   Find(F &&f) : f(f){};
-// };
 
-// template <typename F> Find(F) -> Find<F>;
-// template <class R, class F>
-// auto pipe(R &&range, Find<F> &&find)
-//     -> NullTypeOf<decltype(*std::begin(range))>::type {
-//   for (auto i : range) {
-//     if (find.f(i))
-//       return {i};
-//   }
-//   return NullTypeOf<decltype(*std::begin(range))>::value();
-// }
 
 struct Count {};
 

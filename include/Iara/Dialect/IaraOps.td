@@ -82,7 +82,11 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
   let arguments = (ins FlatSymbolRefAttr:$impl,
                        Variadic<AnyType>:$params,
                        Variadic<AnyType>:$in,
-                       Variadic<AnyType>:$inout);
+                       Variadic<AnyType>:$inout,
+                       // Dynamic dimensions of the `out` result tensors, in
+                       // result-then-dim order. Carries param-driven output
+                       // sizes; resolved to static types by --iara-param-materialize.
+                       Variadic<Index>:$out_sizes);
     let results = (outs Variadic<AnyType>:$out);
 
     // let assemblyFormat = [{

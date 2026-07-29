@@ -3,7 +3,7 @@
 
 #include "Iara/Passes/Common/Codegen/GetMLIRType.h"
 #include "Iara/Util/CompilerTypes.h"
-#include "Iara/Util/ForEachType.h"
+
 #include "Iara/Util/OpCreateHelper.h"
 #include "Iara/Util/Range.h"
 #include <mlir/Dialect/Arith/IR/Arith.h>
