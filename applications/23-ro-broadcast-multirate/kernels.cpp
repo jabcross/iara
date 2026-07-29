@@ -1,4 +1,5 @@
 #include <IaraRuntime/common/Scheduler.h>
+#include <iara_runtime_config.h>
 #include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,14 +70,22 @@ int main() {
          N - num_reuses, (N - num_reuses == 1) ? "" : "s", num_reuses,
          (num_reuses == 1) ? "" : "s");
 
-  // Target: multi-rate all-read-only borrow => 0 copies, N reuses, 0 mistakes.
+  // Correctness (every mode): the read value is always right → 0 mistakes.
+  // Reuse count keys on the compiler's effective borrow decision: borrow ON →
+  // N reuses (zero-copy); borrow OFF (priming / copy-all-but-one) → copy path
+  // → 1 reuse. Assert against IARA_BROADCAST_BORROW from iara_runtime_config.h.
   if (num_mistakes != 0) {
     fprintf(stderr, "ERROR: expected 0 mistakes, got %d\n", num_mistakes);
     return 1;
   }
-  if (num_reuses != N) {
-    fprintf(stderr, "ERROR: expected %d reuses (zero-copy), got %d\n", N,
-            num_reuses);
+#ifdef IARA_BROADCAST_BORROW
+  const int expected_reuses = N;
+#else
+  const int expected_reuses = 1;
+#endif
+  if (num_reuses != expected_reuses) {
+    fprintf(stderr, "ERROR: expected %d reuse%s, got %d\n", expected_reuses,
+            expected_reuses == 1 ? "" : "s", num_reuses);
     return 1;
   }
   printf("Test passed\n");

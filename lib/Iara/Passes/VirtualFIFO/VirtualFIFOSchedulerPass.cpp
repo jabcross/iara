@@ -576,9 +576,9 @@ struct VirtualFIFOSchedulerPass::Impl {
         "IARA_ALLOC_MODE", "data-triggered");
     std::string alloc_define;
     if (alloc == "data-triggered")
-      alloc_define = "#define IARA_DATA_TRIGGERED_ALLOC 1\n";
+      alloc_define = "// alloc_mode = data-triggered (default)\n";
     else if (alloc == "priming") {
-      alloc_define = "#undef IARA_DATA_TRIGGERED_ALLOC\n";
+      alloc_define = "#define IARA_PRIMING_ALLOC 1\n";
       llvm::errs() << "warning: alloc mode 'priming' is DEPRECATED; "
                       "data-triggered is the default. Zero-copy borrow and "
                       "delay-borrow are disabled under priming.\n";
