@@ -1,5 +1,6 @@
 export IARA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PROJECTS_DIR="$(dirname "$IARA_DIR")"
+export SACI_PROJECT_ROOT="$IARA_DIR"
 
 echo -n 'Loading modules... '
 # Pin cmake to the spack module 3.31.4, NOT bare `cmake`. Bare `module load cmake`

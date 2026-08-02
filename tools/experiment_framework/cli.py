@@ -1512,6 +1512,15 @@ def main() -> int:
     if log_file_path != Path("/dev/null"):
         print(f"Log file: {log_file_path}", file=sys.stderr)
 
+    # All paths (applications/, build_experiments/) are resolved relative to the
+    # project root. Framework only works from there; CD to it if SACI_PROJECT_ROOT
+    # is set so it runs from any subdir (e.g. an app's results/ dir).
+    import os
+    project_root = os.environ.get("SACI_PROJECT_ROOT")
+    if project_root:
+        os.chdir(project_root)
+        logger.info(f"Changed to SACI_PROJECT_ROOT: {project_root}")
+
     # Install graceful-shutdown handlers
     _signal.signal(_signal.SIGTERM, _signal_handler)
     _signal.signal(_signal.SIGINT, _signal_handler)
