@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 import sys
 import argparse
 import json
+import re
 from pathlib import Path
 from collections import deque
 
@@ -98,14 +99,74 @@ def get_ports(node, kind: str, nt) -> list[dict]:
     ]
 
 
+# ── Memory scripts (buffer pairing) ───────────────────────────────────────────
+
+# Preesm pairs an actor's input/output buffers via per-actor "memory scripts"
+# (BeanShell files attached with <data key="memoryScript">, e.g.
+# Code/mem_scripts/extract.bsh).  Each `o_<out>.matchWith(off, i_<in>, off,
+# size)` call aliases an output byte-range with an input byte-range.  See
+# Karol Desnos, "Memory Study and Dataflow Representations for Rapid
+# Prototyping of Signal Processing Applications on MPSoCs" (PhD, INSA Rennes,
+# 2014), ch. 5.  The p2iaw wrapper collapses such a pair into a single inout
+# argument (kernel written in-place-safe); the port annotations
+# (READ_ONLY/WRITE_ONLY/default) are the safety contract, not the pairing rule.
+#
+# Only clean whole-buffer pairs are collapsed: a '<base>_in'/'<base>_out' port
+# pair (the Preesm two-port-buffer convention) matched at offset 0 on both
+# sides.  Sub-range/overlapping matches (e.g. the Split special-node
+# split.bsh) are NOT inout pairs — the wrapper keeps those buffers separate.
+_MEM_SCRIPT_MATCH_RE = re.compile(
+    r"o_(\w+)\.matchWith\(\s*([^,]+?)\s*,\s*i_(\w+)\s*,\s*([^,]+?)\s*,\s*[^)]+\)"
+)
+
+
+def parse_memory_script(script_text: str) -> list[tuple[str, str]]:
+    """Return [(in_port, out_port), …] whole-buffer inout pairs from a script.
+
+    A pair qualifies iff it follows the '<base>_in'/'<base>_out' convention,
+    the base matches, and both match offsets are literal zero (whole-buffer
+    alias at the same base pointer, as the IaRa runtime inout assumes).
+    """
+    pairs: list[tuple[str, str]] = []
+    for out_port, src_off, in_port, dst_off in _MEM_SCRIPT_MATCH_RE.findall(script_text):
+        src_off = src_off.strip()
+        dst_off = dst_off.strip()
+        if src_off != "0" or dst_off != "0":
+            continue
+        if not (in_port.endswith("_in") and out_port.endswith("_out")):
+            continue
+        if in_port[:-3] != out_port[:-4]:
+            continue
+        pairs.append((in_port, out_port))
+    return pairs
+
+
+def resolve_file_up(rel: str, start: Path) -> Path | None:
+    """Resolve *rel* by walking up from *start*.parent like Preesm's project
+    root-relative graph_desc paths (Algo/ and Code/ are siblings)."""
+    parent = start.parent
+    while True:
+        candidate = (parent / rel).resolve()
+        if candidate.exists():
+            return candidate
+        if parent == parent.parent:
+            return None
+        parent = parent.parent
+
+
 # ── Core conversion ───────────────────────────────────────────────────────────
 
-def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
+def convert_pi(pi_path: Path, type_map: dict, p2iaw: bool = True) -> tuple[str, str, dict]:
     """
     Convert a single .pi file to .mlir.template content.
 
     Returns:
         (mlir_text, graph_name, {actor_id: subgraph_pi_path})
+
+    p2iaw: when True (default), leaf actor names get the 'p2iaw_' wrapper
+    prefix and the actor's memory-script-matched '<base>_in'/'<base>_out'
+    whole-buffer pairs are merged into a single 'inout' port, matching the
+    preesm2iara.c wrappers' calling convention (Preesm-faithful).
     """
     ns, graph, nt = parse_graphml(pi_path)
     graph_name = get_data(graph, "name", nt) or pi_path.stem
@@ -168,15 +229,48 @@ def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
 
                 in_ports  = in_ports_ordered
                 out_ports = out_ports_ordered
+                inout_ports: list[dict] = []
+                if p2iaw:
+                    # Preesm-faithful inout collapse: driven by the actor's
+                    # memory script, not by port annotations or a name allowlist.
+                    mem_script = get_data(node, "memoryScript", nt)
+                    if mem_script:
+                        script_path = resolve_file_up(mem_script, pi_path)
+                        if script_path is None:
+                            print(
+                                f"Warning: cannot resolve memory script "
+                                f"{mem_script!r} for {loop_name!r}",
+                                file=sys.stderr,
+                            )
+                        else:
+                            out_names = {p["name"] for p in out_ports}
+                            in_by_name = {p["name"]: p for p in in_ports}
+                            collapsed_in: set[str] = set()
+                            for in_port, out_port in parse_memory_script(
+                                script_path.read_text(encoding="utf-8")
+                            ):
+                                if in_port in in_by_name and out_port in out_names:
+                                    inout_ports.append(
+                                        {"name": in_port[:-3], "expr": in_by_name[in_port]["expr"]}
+                                    )
+                                    collapsed_in.add(in_port)
+                            if collapsed_in:
+                                in_ports = [
+                                    p for p in in_ports if p["name"] not in collapsed_in
+                                ]
             else:
                 # Subgraph actor (no <loop>): use <port> element order.
                 in_ports  = get_ports(node, "input",  nt)
                 out_ports = get_ports(node, "output", nt)
+                inout_ports = []
 
             actor_nodes[nid] = {
-                "loop_name":  loop_name,
+                "loop_name":  ("p2iaw_" + loop_name)
+                              if (p2iaw and loop_el is not None and not is_subgraph)
+                              else loop_name,
                 "graph_desc": gd,
                 "in_ports":   in_ports,
+                "inout_ports": inout_ports,
                 "out_ports":  out_ports,
             }
 
@@ -263,6 +357,10 @@ def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
             if nid in pool:
                 for p in pool[nid]["in_ports"]:
                     if p["name"] == pname:
+                        return p["expr"]
+                # Merged inout ports keep their '<base>_in' name on the edge.
+                for p in pool[nid].get("inout_ports", []):
+                    if f"{p['name']}_in" == pname:
                         return p["expr"]
         return "1"
 
@@ -372,10 +470,12 @@ def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
             info      = actor_nodes[nid]
             loop_name = info["loop_name"]
             in_ports  = info["in_ports"]
+            inout_ports = info["inout_ports"]
             out_ports = info["out_ports"]
         else:
             loop_name = "iara_broadcast"
             in_ports  = broadcast_nodes[nid]["in_ports"]
+            inout_ports = []
             out_ports = broadcast_nodes[nid]["out_ports"]
 
         # Build in ( %drain:type, … ) — in loop/port order
@@ -387,6 +487,16 @@ def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
             t     = make_tensor_type(p["expr"], fe["type"], type_map)
             d_ssa = drain_ssa(fe)
             in_parts.append(f"{d_ssa}:{t}")
+
+        # Build inout ( %drain:type, … ) — merged <base>_in/<base>_out pairs
+        inout_parts: list[str] = []
+        for p in inout_ports:
+            fe = in_edge.get((nid, f"{p['name']}_in"))
+            if fe is None:
+                continue
+            t     = make_tensor_type(p["expr"], fe["type"], type_map)
+            d_ssa = drain_ssa(fe)
+            inout_parts.append(f"{d_ssa}:{t}")
 
         # Build out ( type, … ) + output SSA names — in loop/port order
         out_types: list[str] = []
@@ -401,8 +511,9 @@ def convert_pi(pi_path: Path, type_map: dict) -> tuple[str, str, dict]:
 
         lhs     = ", ".join(out_ssas) + " = " if out_ssas else ""
         in_str  = f"in ( {', '.join(in_parts)} )" if in_parts  else ""
+        inout_str = f"inout ( {', '.join(inout_parts)} )" if inout_parts else ""
         out_str = f"out ( {', '.join(out_types)} )" if out_types else ""
-        clauses = " ".join(s for s in [in_str, out_str] if s)
+        clauses = " ".join(s for s in [in_str, inout_str, out_str] if s)
         L.append(f"  {lhs}iara.node @{loop_name} {clauses}")
 
         # iara.edge for each fifo leaving this node's output ports
@@ -451,11 +562,16 @@ def main() -> None:
                              "(default: same directory as each .pi file)")
     parser.add_argument("--types", type=str, default=None,
                         help="JSON dict to extend/override the default type map")
+    parser.add_argument("--no-p2iaw", action="store_true",
+                        help="Emit bare kernel names and separate in/out ports "
+                             "(disable the p2iaw_ wrapper prefix and the "
+                             "<base>_in/<base>_out inout merge)")
     args = parser.parse_args()
 
     type_map = dict(DEFAULT_TYPE_MAP)
     if args.types:
         type_map.update(json.loads(args.types))
+    p2iaw = not args.no_p2iaw
 
     root_pi = args.input_pi.resolve()
     if not root_pi.exists():
@@ -473,7 +589,7 @@ def main() -> None:
 
         print(f"Processing: {pi_path}", file=sys.stderr)
         try:
-            mlir_text, graph_name, subgraph_paths = convert_pi(pi_path, type_map)
+            mlir_text, graph_name, subgraph_paths = convert_pi(pi_path, type_map, p2iaw)
         except NotImplementedError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)

@@ -6,9 +6,12 @@
  *   - Calls the original Preesm C function with config params baked as template markers
  *   - Config params are resolved by instantiate-mlir-template.py at instantiation time
  *
- * Inout pairs (single buffer passed for both Preesm in+out arguments):
+ * Inout pairs (single buffer passed for both Preesm in+out arguments),
+ * from the actor's memory script (Code/mem_scripts/extract.bsh):
  *   - extract_descriptor: keypoints (pass NULL for keypoints_out to skip self-copy)
- *   - BarrierCounterGpyr: iters (pure memcpy identity)
+ *
+ * BarrierCounterGpyr is deliberately NOT an inout pair (Preesm keeps iters_in/
+ * iters_out separate; a future iara-opt pass may re-fold the identity kernel).
  */
 
 #include <stddef.h>
@@ -142,8 +145,8 @@ void p2iaw_seq_blurN(int *octaveLevel, float *gaussian_coefs, int *column_sizes,
 
 /* -- INOUT: BarrierCounterGpyr ------------------------------------------- */
 
-void p2iaw_BarrierCounterGpyr(int *iters) {
-    BarrierCounterGpyr(«nGpyrLayers», iters, iters);
+void p2iaw_BarrierCounterGpyr(int *iters_in, int *iters_out) {
+    BarrierCounterGpyr(«nGpyrLayers», iters_in, iters_out);
 }
 
 /* -- Merge / pyramid construction ---------------------------------------- */

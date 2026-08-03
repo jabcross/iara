@@ -103,7 +103,7 @@ iara.actor @Htop_sift {
   %e56_d = iara.edge %e56_s : tensor<1xi32> -> tensor<1xi32>
   %e57_d = iara.edge %e57_s : tensor<«nGpyrLayers»xi32> -> tensor<1xi32>
 
-  %e67_s = iara.node @p2iaw_BarrierCounterGpyr inout ( %e66_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers»xi32> )
+  %e67_s = iara.node @p2iaw_BarrierCounterGpyr in ( %e66_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers»xi32> )
   %e67_d = iara.edge %e67_s : tensor<«nGpyrLayers»xi32> -> tensor<«nGpyrLayers»xi32>
 
   %e61_s = iara.node @iara_broadcast in ( %e67_d:tensor<«nGpyrLayers»xi32> ) out ( tensor<«nGpyrLayers*nOctavesDownN»xi32> )
