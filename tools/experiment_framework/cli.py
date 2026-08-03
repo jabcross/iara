@@ -266,9 +266,12 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
         instances = []
         with open(cmake_path, 'r') as f:
             content = f.read()
-            # Match NAME "instance_name" from iara_add_test_instance calls
-            pattern = r'NAME\s+"([^"]+)"'
-            instances = re.findall(pattern, content)
+            # Match NAME "instance_name" from iara_add_test_instance calls.
+            # Anchored to the line start so PREESM_PROJECT_NAME /
+            # PREESM_PI_BASENAME values (which end in _NAME) are not mistaken
+            # for instance names.
+            pattern = r'^\s*NAME\s+"([^"]+)"'
+            instances = re.findall(pattern, content, re.MULTILINE)
 
         if not instances:
             print("ERROR: No instances found in CMakeLists.txt", file=sys.stderr)

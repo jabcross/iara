@@ -17,6 +17,17 @@ application:
     project_name: "degridder"
     workflow: "Codegen.workflow"
     pi_basename: "top_parallel_degridder"
+    # Config is a 360-byte C struct; stock Preesm sizes unknown FIFO types as
+    # 8 bits, under-allocating every config buffer 360x (config->input is NULL
+    # downstream, "Unable to open file (null)"). Same fix as SIFT's SiftKpt.
+    data_type_sizes:
+      Config: 2880
+    # Preesm's degridder top.c reads/writes ../data and ../output relative to
+    # the instance build dir (the preesm-codegen.sh symlink mechanism). The
+    # codegen runs with cwd = build_experiments/<app>/, so create them there.
+    extra_setup:
+      - "ln -sfn ${IARA_DIR}/applications/13-degridder/data data"
+      - "mkdir -p output"
   build:
     # Linker args: casacore libraries from pkg-config, math library, FFTW
     extra_linker_args: ["-lm", "-lcasa_casa", "-lcasa_tables", "-lcasa_scimath",

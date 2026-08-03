@@ -186,7 +186,7 @@ def generate_scenario(
             <dataType name="PRECISION" size="64"/>
             <dataType name="int2" size="64"/>
             <dataType name="PRECISION3" size="192"/>
-            <dataType name="Config" size="2432"/>
+            <dataType name="Config" size="2880"/> <!-- sizeof(Config)=360 bytes in Code/include/common.h -->
             <dataType name="double" size="64"/>
             <dataType name="int" size="32"/>
             <dataType name="float2" size="64"/>
