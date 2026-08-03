@@ -21,7 +21,17 @@
 // every >1MB buffer is pure pixel data safe to alias.)
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+
+// A failed allocation surfaces today as an opaque NULL-deref segfault deep in a
+// kernel (e.g. P* physical broadcast copies at high parallelism). Die here
+// with the requested size instead.
+inline void iara_alloc_failed(int64_t size) {
+  fprintf(stderr, "FATAL: iara_malloc(%ld) returned NULL (out of memory)\n",
+          (long)size);
+  abort();
+}
 
 #ifdef IARA_MOCK_ALLOC
 
@@ -68,12 +78,20 @@ inline void iara_mock_free(void *p) {
     free(p);
 }
 
-inline void *iara_malloc(int64_t size) { return iara_mock_alloc(size); }
+inline void *iara_malloc(int64_t size) {
+  void *p = iara_mock_alloc(size);
+  if (!p) iara_alloc_failed(size);
+  return p;
+}
 inline void iara_runtime_free(void *p) { iara_mock_free(p); }
 
 #else // !IARA_MOCK_ALLOC
 
-inline void *iara_malloc(int64_t size) { return malloc((size_t)size); }
+inline void *iara_malloc(int64_t size) {
+  void *p = malloc((size_t)size);
+  if (!p) iara_alloc_failed(size);
+  return p;
+}
 inline void iara_runtime_free(void *p) { free(p); }
 
 #endif // IARA_MOCK_ALLOC
