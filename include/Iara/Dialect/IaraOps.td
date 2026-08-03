@@ -84,21 +84,26 @@ def NodeOp : IaraOp<"node", [IsolatedFromAbove, AttrSizedOperandSegments,Declare
                        Variadic<AnyType>:$in,
                        Variadic<AnyType>:$inout,
                        // Dynamic dimensions of the `out` result tensors, in
-                       // result-then-dim order. Carries param-driven output
-                       // sizes; resolved to static types by --iara-param-materialize.
-                       Variadic<Index>:$out_sizes);
+                       // result-then-dim order, paired with a static-shape
+                       // attr (`mlir::ShapedType::kDynamic` sentinel marks a
+                       // dynamic slot) — mirrors `memref.subview`'s mixed
+                       // static/dynamic size convention. Resolved to static
+                       // result types by --iara-param-materialize.
+                       Variadic<Index>:$out_dynamic_sizes,
+                       DefaultValuedAttr<DenseI64ArrayAttr, "{}">:$out_static_sizes);
     let results = (outs Variadic<AnyType>:$out);
 
     // Convenience builder preserving the pre-out_sizes signature: every existing
     // NodeOp construction site (Join, Broadcast, GMMN, canonicalize) builds with
-    // no dynamic output sizes, so default out_sizes to empty and leave them
-    // unchanged. Only the parser and --iara-param-materialize populate out_sizes.
+    // no dynamic output sizes, so default them to empty and leave results
+    // unchanged. Only the parser and --iara-param-materialize populate them.
     let builders = [
       OpBuilder<(ins "::mlir::TypeRange":$out, "::llvm::StringRef":$impl,
                      "::mlir::ValueRange":$params, "::mlir::ValueRange":$in,
                      "::mlir::ValueRange":$inout), [{
         build($_builder, $_state, out, impl, params, in, inout,
-              /*out_sizes=*/::mlir::ValueRange{});
+              /*out_dynamic_sizes=*/::mlir::ValueRange{},
+              /*out_static_sizes=*/::llvm::ArrayRef<int64_t>{});
       }]>
     ];
 
@@ -144,16 +149,39 @@ def EdgeOp : IaraOp<"edge", []> {
         The `iara.edge` operation is used for non-syncrhonous dataflow edges,
         when the tensor types do not match.
 
+        `out`'s dynamic tensor dims (a genuine multi-rate edge whose size
+        depends on a compile-time parameter, e.g. degridder's NUM_CHUNK) are
+        described by `out_static_sizes` (length = rank of `out`, using
+        `mlir::ShapedType::kDynamic` for dynamic slots) paired with
+        `out_dynamic_sizes` (the actual SSA values, matched positionally to
+        the dynamic slots) — mirrors `memref.subview`/`tensor.extract_slice`'s
+        mixed static/dynamic size convention. `in`'s type never needs this:
+        it is always already resolved by its producer (an InPortOp or NodeOp)
+        before `--iara-param-materialize` reaches an edge.
+
         Example:
 
         ```mlir
         TODO
         ```
     }];
-    let arguments = (ins AnyType:$in);
+    let arguments = (ins AnyType:$in,
+                         Variadic<Index>:$out_dynamic_sizes,
+                         DefaultValuedAttr<DenseI64ArrayAttr, "{}">:$out_static_sizes);
     let results = (outs AnyType:$out);
+
+    // Compat builder preserving the pre-out_sizes 2-arg signature (used by
+    // e.g. Canonicalize's expandImplicitEdge): no dynamic output dims.
+    let builders = [
+      OpBuilder<(ins "::mlir::Type":$out, "::mlir::Value":$in), [{
+        build($_builder, $_state, out, in, /*out_dynamic_sizes=*/::mlir::ValueRange{},
+              /*out_static_sizes=*/::llvm::ArrayRef<int64_t>{});
+      }]>
+    ];
+
     let assemblyFormat = [{
       $in `:` type($in) `->` type($out)
+      (`sizes` custom<DynamicIndexList>($out_dynamic_sizes, $out_static_sizes)^)?
       attr-dict
   }];
 }

@@ -237,12 +237,14 @@ public:
       inner_output_port.erase();
     }
 
-    for (auto node : new_actor.getOps<NodeOp>() | Into<SmallVector<NodeOp>>()) {
-      node->moveBefore(next_op);
-    }
-    for (auto edge : new_actor.getOps<EdgeOp>() | Into<SmallVector<EdgeOp>>()) {
-      edge->moveBefore(next_op);
-    }
+    // Move every remaining op of the cloned actor out into the caller, in
+    // program order: nodes, edges, and the arith param/size computation chains
+    // (block-arg params were substituted with the caller's operands above, so
+    // a sub-actor's `sizes`/dyn_sizes chains must survive with the nodes and
+    // edges that reference them — see the param-propagation mechanism). The
+    // interface ops (InPortOp/OutPortOp) are already erased above.
+    for (auto &op : llvm::make_early_inc_range(new_actor.getBody().front()))
+      op.moveBefore(next_op);
 
     new_actor.erase();
     node.erase();

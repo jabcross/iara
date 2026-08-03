@@ -13,6 +13,7 @@ application:
     project_name: "SIFTapp"
     workflow: "Codegen.workflow"
     pi_basename: "Hextract"
+    parallelism_level_param: "parallelismLevel"
     # SiftKpt is a 556-byte C struct; stock Preesm sizes unknown FIFO types as
     # 8 bits, under-allocating every keypoint buffer 556x (MERGE segfault).
     data_type_sizes:

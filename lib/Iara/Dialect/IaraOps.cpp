@@ -34,7 +34,15 @@
 #include <mlir/IR/Value.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <mlir/Interfaces/ViewLikeInterface.h>
 #include <mlir/Support/LLVM.h>
+
+// The generated op classes below live in `namespace iara` (not nested inside
+// `mlir`), so the `custom<DynamicIndexList>` assemblyFormat directive's
+// unqualified calls to parse/printDynamicIndexList need these brought into
+// the global namespace to be found by enclosing-scope lookup.
+using mlir::parseDynamicIndexList;
+using mlir::printDynamicIndexList;
 
 #define GET_OP_CLASSES
 #include "Iara/Dialect/IaraOps.cpp.inc"

@@ -135,7 +135,7 @@ def _patch_scenario(scenario_path, overrides, parent, data_type_sizes=None):
 def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
                    workflow, num_cores, timing_patch, pi_basename=None,
                    extra_setup=None, param_overrides=None,
-                   data_type_sizes=None):
+                   data_type_sizes=None, parallelism_level_param=None):
     """Generate architecture + scenarios, run Preesm workflow, copy output."""
     eclipsec = Path(preesm_dist) / "eclipse"
     if not eclipsec.exists():
@@ -182,7 +182,9 @@ def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
         logger.info("Scenario: %s", scenario_name)
 
         # 3b. Inject parameter overrides before the workflow parses the scenario
-        overrides = {"parallelismLevel": str(num_cores)}
+        overrides = {}
+        if parallelism_level_param:
+            overrides[parallelism_level_param] = str(num_cores)
         if param_overrides:
             overrides.update(param_overrides)
         _patch_scenario(Path(preesm_project) / "Scenarios" / scenario_name,
@@ -244,8 +246,11 @@ def main():
                         help="Extra shell commands to run after codegen")
     parser.add_argument("--param", action="append", default=[],
                         help="Algorithm parameter override NAME=VALUE injected into the "
-                             "generated scenario's <parameterValues> (repeatable). "
-                             "parallelismLevel is always injected from --num-cores.")
+                             "generated scenario's <parameterValues> (repeatable).")
+    parser.add_argument("--parallelism-level-param",
+                        help="Name of a .pi scenario parameter to set to --num-cores "
+                             "(e.g. parallelismLevel). Omit for apps with no such "
+                             "per-core graph parameter.")
     parser.add_argument("--data-type", action="append", default=[],
                         help="FIFO dataType size override NAME=BITS injected into the "
                              "generated scenario's <dataTypes> (repeatable). Stock Preesm "
@@ -273,6 +278,7 @@ def main():
             extra_setup=args.extra_setup or None,
             param_overrides=dict(p.split("=", 1) for p in args.param),
             data_type_sizes=dict(d.split("=", 1) for d in args.data_type),
+            parallelism_level_param=args.parallelism_level_param,
         )
 
     return 0

@@ -7,6 +7,16 @@ application:
   name: 13-degridder
   description: "Radio Astronomy Degridding using IaRa dataflow"
   app_type: experiment
+  # Preesm baseline config. The generator requires this section for
+  # scheduler=preesm instances; the actual degridder preesm codegen runs
+  # preesm-codegen.sh (which resolves the repo from PREESM_DEGRIDDER_REPO,
+  # default ${IARA_DIR}/../degridder), so these values are the parity/fallback
+  # for the framework validation.
+  preesm:
+    project_path: "${IARA_DIR}/../degridder"
+    project_name: "degridder"
+    workflow: "Codegen.workflow"
+    pi_basename: "top_parallel_degridder"
   build:
     # Linker args: casacore libraries from pkg-config, math library, FFTW
     extra_linker_args: ["-lm", "-lcasa_casa", "-lcasa_tables", "-lcasa_scimath",

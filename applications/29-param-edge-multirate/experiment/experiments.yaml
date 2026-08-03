@@ -1,0 +1,49 @@
+application:
+  name: 29-param-edge-multirate
+  description: "Param-driven multi-rate iara.edge (EdgeOp out_static_sizes/out_dynamic_sizes)"
+  app_type: regression_test
+
+  sources:
+    - kernels.cpp
+
+  build:
+    extra_linker_args: []
+    defines: []
+
+
+test_naming:
+  template: "29-param-edge-multirate-{scheduler}"
+  description: "Param-edge-multirate test naming pattern"
+
+parameters:
+  - name: scheduler
+    type: str
+    label: "Scheduler"
+    description: "Task scheduling strategy"
+    choices:
+      - vf-sequential
+      - vf-omp
+      - vf-enkits
+
+constraints: []
+
+
+experiment_sets:
+
+  - name: tests
+    description: "All VirtualFIFO schedulers; k=3 sizes the multi-rate edge, 3 replications of [10,20] must read back."
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+
+execution:
+  repetitions: 1
+  timeout: 60
+  description: "Single run, 60 second timeout per test"
+
+csv_output:
+  columns:
+    - scheduler
+  description: "Scheduler used"

@@ -361,6 +361,9 @@ function(iara_add_application)
         if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{PREESM_SIFT_REPO}
                 AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
             set(_preesm_code_src "$ENV{PREESM_SIFT_REPO}/Code/src")
+        elseif(APP_ENTRY MATCHES "stereo" AND DEFINED ENV{PREESM_STEREO_REPO}
+                AND NOT "$ENV{PREESM_STEREO_REPO}" STREQUAL "")
+            set(_preesm_code_src "$ENV{PREESM_STEREO_REPO}/Code/src")
         elseif(DEFINED ENV{PREESM_DEGRIDDER_REPO}
                 AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
             set(_preesm_code_src "$ENV{PREESM_DEGRIDDER_REPO}/Code/src")
@@ -388,13 +391,17 @@ function(iara_add_application)
         list(APPEND c_sources ${preesm_generated_c})
     endif()
 
-    # IaRa scheduler for SIFT: use Preesm upstream sources + generated p2iaw wrappers.
+    # IaRa scheduler for SIFT/stereo: use Preesm upstream sources + generated p2iaw wrappers.
     # The wrappers bridge IaRa's calling convention (data-only, in/inout/out order)
     # to Preesm's original function signatures (config params + data params).
-    if(NOT "${scheduler}" STREQUAL "preesm" AND APP_ENTRY MATCHES "sift")
+    if(NOT "${scheduler}" STREQUAL "preesm" AND (APP_ENTRY MATCHES "sift" OR APP_ENTRY MATCHES "stereo"))
         set(_sift_preesm_src "")
-        if(DEFINED ENV{PREESM_SIFT_REPO} AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
+        if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{PREESM_SIFT_REPO}
+                AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
             set(_sift_preesm_src "$ENV{PREESM_SIFT_REPO}/Code/src")
+        elseif(APP_ENTRY MATCHES "stereo" AND DEFINED ENV{PREESM_STEREO_REPO}
+                AND NOT "$ENV{PREESM_STEREO_REPO}" STREQUAL "")
+            set(_sift_preesm_src "$ENV{PREESM_STEREO_REPO}/Code/src")
         endif()
         if(_sift_preesm_src AND EXISTS "${_sift_preesm_src}")
             file(GLOB_RECURSE _sift_c_src CONFIGURE_DEPENDS "${_sift_preesm_src}/*.c")
@@ -775,11 +782,14 @@ function(iara_add_application)
         list(APPEND test_include_dirs "${build_subdir}/generated")
     endif()
 
-    # SIFT uses Preesm upstream sources for both IaRa and Preesm schedulers,
+    # SIFT/stereo use Preesm upstream sources for both IaRa and Preesm schedulers,
     # so both need the upstream Code/include headers.
     if(APP_ENTRY MATCHES "sift" AND DEFINED ENV{PREESM_SIFT_REPO}
             AND NOT "$ENV{PREESM_SIFT_REPO}" STREQUAL "")
         list(APPEND test_include_dirs "$ENV{PREESM_SIFT_REPO}/Code/include")
+    elseif(APP_ENTRY MATCHES "stereo" AND DEFINED ENV{PREESM_STEREO_REPO}
+            AND NOT "$ENV{PREESM_STEREO_REPO}" STREQUAL "")
+        list(APPEND test_include_dirs "$ENV{PREESM_STEREO_REPO}/Code/include")
     elseif("${scheduler}" STREQUAL "preesm")
         if(DEFINED ENV{PREESM_DEGRIDDER_REPO}
                 AND NOT "$ENV{PREESM_DEGRIDDER_REPO}" STREQUAL "")
@@ -890,7 +900,7 @@ function(iara_add_test_instance)
     # Parse arguments
     cmake_parse_arguments(TEST
         "IS_REGRESSION_TEST"  # Boolean options
-        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR;PREESM_PROJECT_PATH;PREESM_PROJECT_NAME;PREESM_WORKFLOW;PREESM_ECLIPSE_DIST;PREESM_PI_BASENAME"  # Single-value args
+        "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR;PREESM_PROJECT_PATH;PREESM_PROJECT_NAME;PREESM_WORKFLOW;PREESM_ECLIPSE_DIST;PREESM_PI_BASENAME;PREESM_PARALLELISM_LEVEL_PARAM"  # Single-value args
         "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS;PREESM_EXTRA_SETUP;PREESM_PARAMETER;PREESM_DATA_TYPE"  # Multi-value args
         ${ARGN}
     )
@@ -1080,6 +1090,9 @@ message(STATUS \"Cleaned build artifacts for ${instance_name}\")
         endif()
         if(DEFINED TEST_PREESM_PI_BASENAME AND NOT "${TEST_PREESM_PI_BASENAME}" STREQUAL "")
             list(APPEND _preesm_codegen_args "--pi-basename" "${TEST_PREESM_PI_BASENAME}")
+        endif()
+        if(DEFINED TEST_PREESM_PARALLELISM_LEVEL_PARAM AND NOT "${TEST_PREESM_PARALLELISM_LEVEL_PARAM}" STREQUAL "")
+            list(APPEND _preesm_codegen_args "--parallelism-level-param" "${TEST_PREESM_PARALLELISM_LEVEL_PARAM}")
         endif()
         foreach(_cmd ${TEST_PREESM_EXTRA_SETUP})
             list(APPEND _preesm_codegen_args "--extra-setup" "${_cmd}")

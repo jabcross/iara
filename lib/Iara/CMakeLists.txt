@@ -51,4 +51,5 @@ add_mlir_dialect_library(MLIRIara
         MLIRIR
         MLIRInferTypeOpInterface
         MLIRFuncDialect
+        MLIRViewLikeInterface
 )

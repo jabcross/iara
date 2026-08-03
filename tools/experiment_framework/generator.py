@@ -306,6 +306,8 @@ def generate_cmake_instance(
             lines.append(f'    PREESM_WORKFLOW "{preesm["workflow"]}"')
         if preesm.get("pi_basename"):
             lines.append(f'    PREESM_PI_BASENAME "{preesm["pi_basename"]}"')
+        if preesm.get("parallelism_level_param"):
+            lines.append(f'    PREESM_PARALLELISM_LEVEL_PARAM "{preesm["parallelism_level_param"]}"')
         if preesm.get("extra_setup"):
             for cmd in preesm["extra_setup"]:
                 lines.append(f'    PREESM_EXTRA_SETUP "{_resolve_env(cmd)}"')

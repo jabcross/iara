@@ -10,6 +10,7 @@
 #include <mlir/IR/OpImplementation.h>
 #include <mlir/IR/OperationSupport.h>
 #include <mlir/IR/Value.h>
+#include <mlir/Interfaces/ViewLikeInterface.h>
 #include <mlir/Support/LLVM.h>
 #include <optional>
 
@@ -264,20 +265,16 @@ NodeOp getConsumerNode(EdgeOp edge) {
     if (parseTypeList(outTypes))
       return ::mlir::failure();
   }
+  ::mlir::DenseI64ArrayAttr outStaticSizesAttr;
   if (::mlir::succeeded(parser.parseOptionalKeyword("sizes"))) {
     outSizesOperandsLoc = parser.getCurrentLocation();
-    bool using_paren = parser.parseOptionalLParen().succeeded();
-    if (parser.parseCommaSeparatedList([&]() -> ParseResult {
-          OpAsmParser::UnresolvedOperand unresolved;
-          if (parser.parseOperand(unresolved))
-            return failure();
-          outSizesOperands.push_back(unresolved);
-          return success();
-        }))
-      return ::mlir::failure();
-    if (using_paren && parser.parseRParen())
+    if (::mlir::parseDynamicIndexList(parser, outSizesOperands,
+                                      outStaticSizesAttr))
       return ::mlir::failure();
   }
+  if (outStaticSizesAttr)
+    result.getOrAddProperties<NodeOp::Properties>().out_static_sizes =
+        outStaticSizesAttr;
   {
     auto loc = parser.getCurrentLocation();
     (void)loc;
@@ -348,13 +345,15 @@ void NodeOp::print(::mlir::OpAsmPrinter &_odsPrinter) {
   printList("in", zip(getIn(), getIn().getTypes()));
   printList("inout", zip(getInout(), getInout().getTypes()));
   printList("out", getOut().getTypes());
-  if (!getOutSizes().empty()) {
+  if (!getOutDynamicSizes().empty() || !getOutStaticSizes().empty()) {
     _odsPrinter << " sizes ";
-    _odsPrinter.printOperands(getOutSizes());
+    ::mlir::printDynamicIndexList(_odsPrinter, *this, getOutDynamicSizes(),
+                                  getOutStaticSizes());
   }
-  ::llvm::SmallVector<::llvm::StringRef, 2> elidedAttrs;
+  ::llvm::SmallVector<::llvm::StringRef, 3> elidedAttrs;
   elidedAttrs.push_back("operandSegmentSizes");
   elidedAttrs.push_back("impl");
+  elidedAttrs.push_back("out_static_sizes");
   _odsPrinter.printOptionalAttrDict((*this)->getAttrs(), elidedAttrs);
 }
 

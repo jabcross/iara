@@ -28,6 +28,20 @@ std::string getBroadcastName(Type input_type,
                              llvm::SmallVector<Type> output_types,
                              DataLayout data_layout,
                              bool force_copy) {
+  // A param-dependent (dynamic) shape can't be sized yet: canonicalize runs
+  // before --iara-param-materialize. Fan-out copies are 1:1, so a placeholder
+  // name is enough — the impl is deferred (getOrCodegenBroadcastImpl refuses
+  // dynamic types) and materialize renames/codegens it once the type is
+  // static.
+  auto isDynamic = [](Type t) {
+    if (auto rt = llvm::dyn_cast<RankedTensorType>(t))
+      return !rt.hasStaticShape();
+    return false;
+  };
+  if (isDynamic(input_type) || llvm::any_of(output_types, isDynamic))
+    return llvm::formatv("iara_broadcast_dyn_{0}", stringifyType(input_type))
+        .str();
+
   std::string name =
       llvm::formatv("iara_broadcast_{0}", stringifyType(input_type));
 
@@ -55,6 +69,14 @@ LLVM::LLVMFuncOp getOrCodegenBroadcastImpl(NodeOp broadcast) {
   assert(llvm::isa<RankedTensorType>(input.getType()));
 
   auto outputs = broadcast.getAllOutputs();
+
+  auto input_ty = llvm::cast<RankedTensorType>(input.getType());
+  if (!input_ty.hasStaticShape())
+    return nullptr; // param-dependent shape — materialize staticizes + renames
+  for (auto output : outputs)
+    if (auto t = llvm::dyn_cast<RankedTensorType>(output.getType()))
+      if (!t.hasStaticShape())
+        return nullptr;
 
   for (auto output : outputs) {
     assert(getTypeSize(output) % getTypeSize(input) == 0);
@@ -216,6 +238,9 @@ bool usesAllReadOnly(Value value) {
     NodeOp consumer;
     Value consumed;
     if (auto edge = llvm::dyn_cast<EdgeOp>(owner)) {
+      if (auto t = llvm::dyn_cast<RankedTensorType>(edge.getOut().getType()))
+        if (!t.hasStaticShape())
+          return false; // dynamic until materialize — can't classify borrow yet
       if (getTypeSize(edge.getOut()) != getTypeSize(edge.getIn()))
         return false; // multi-rate — needs the toroidal map (not yet wired)
       auto users = edge.getOut().getUsers();
