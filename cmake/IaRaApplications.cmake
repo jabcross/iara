@@ -891,7 +891,7 @@ function(iara_add_test_instance)
     cmake_parse_arguments(TEST
         "IS_REGRESSION_TEST"  # Boolean options
         "NAME;EXPERIMENT_SET;APPLICATION_DIR;ENTRY;SCHEDULER;BUILD_DIR;MAIN_ACTOR;PREESM_PROJECT_PATH;PREESM_PROJECT_NAME;PREESM_WORKFLOW;PREESM_ECLIPSE_DIST;PREESM_PI_BASENAME"  # Single-value args
-        "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS;PREESM_EXTRA_SETUP"  # Multi-value args
+        "PARAMETERS;DEFINES;LINKER_ARGS;CODEGEN_OPTIONS;PREESM_EXTRA_SETUP;PREESM_PARAMETER;PREESM_DATA_TYPE"  # Multi-value args
         ${ARGN}
     )
     if(NOT TEST_MAIN_ACTOR)
@@ -1083,6 +1083,12 @@ message(STATUS \"Cleaned build artifacts for ${instance_name}\")
         endif()
         foreach(_cmd ${TEST_PREESM_EXTRA_SETUP})
             list(APPEND _preesm_codegen_args "--extra-setup" "${_cmd}")
+        endforeach()
+        foreach(_pv ${TEST_PREESM_PARAMETER})
+            list(APPEND _preesm_codegen_args "--param" "${_pv}")
+        endforeach()
+        foreach(_dt ${TEST_PREESM_DATA_TYPE})
+            list(APPEND _preesm_codegen_args "--data-type" "${_dt}")
         endforeach()
     elseif("${TEST_SCHEDULER}" STREQUAL "preesm")
         # Legacy fallback: per-app preesm-codegen.sh (if still present)

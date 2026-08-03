@@ -373,9 +373,21 @@ def get_parameter_combinations(
     # Step 3: Get parameter values for this experiment set.
     # ``matrix`` is the preferred key (GitHub Actions naming); ``parameters``
     # is accepted as a back-compat alias when ``matrix`` is absent.
-    param_values = exp_set.get('matrix') or exp_set.get('parameters', {})
+    # ``matrix.include`` (GitHub Actions) declares DISJOINT sub-matrices:
+    # each entry is its own mini cartesian product (list values expand) and is
+    # appended on top of the base matrix, so a set can express heterogeneous
+    # configs with different value ranges (e.g. one scheduler sweeping 1-32
+    # cores, another only 1-7). It may appear inside ``matrix`` (GHA syntax)
+    # or as a sibling ``include`` key (back-compat); both are collected.
+    matrix_conf = exp_set.get('matrix') or {}
+    if isinstance(matrix_conf, dict):
+        gha_include = matrix_conf.get('include', [])
+        base_matrix = {k: v for k, v in matrix_conf.items() if k != 'include'}
+    else:
+        gha_include, base_matrix = [], {}
+    param_values = base_matrix or exp_set.get('parameters', {})
 
-    include_entries = exp_set.get('include', [])
+    include_entries = list(gha_include) + list(exp_set.get('include', []))
     if not param_values and not include_entries:
         logger.warning(f"Experiment set '{experiment_set}' has no parameters")
         return []
@@ -417,14 +429,27 @@ def get_parameter_combinations(
         logger.debug(f"Exclude removed {before_exclude - len(combinations)} combinations; "
                      f"{len(combinations)} remain")
 
-    # include: append each entry as an additional raw combination.
-    #   Partial dicts are allowed; missing dims are filled by computed-param
-    #   and constraint steps below.  Exact-duplicate dicts are skipped.
+    # include: GitHub Actions ``include`` semantics — DISJOINT sub-matrices
+    # appended on top of the base cartesian product. Each entry is expanded by
+    # its own cartesian product over list-valued parameters (e.g.
+    # NUM_CORES: [1..32]); scalar-only entries add exactly one row. Partial
+    # dicts are allowed; missing dims are filled by computed-param and
+    # constraint steps below. Exact-duplicate rows are skipped.
     if include_entries:
         for entry in include_entries:
-            entry_copy = dict(entry)
-            if entry_copy not in combinations:
-                combinations.append(entry_copy)
+            if not isinstance(entry, dict):
+                logger.warning(f"Ignoring non-dict include entry: {entry!r}")
+                continue
+            list_keys = [k for k, v in entry.items() if isinstance(v, list)]
+            if list_keys:
+                for values in product(*(entry[k] for k in list_keys)):
+                    row = {k: v for k, v in entry.items() if k not in list_keys}
+                    row.update(zip(list_keys, values))
+                    if row not in combinations:
+                        combinations.append(row)
+            else:
+                if entry not in combinations:
+                    combinations.append(dict(entry))
         logger.debug(f"After include: {len(combinations)} combinations")
 
     # Step 4c: when BOTH `matrix` and `parameters` are present, treat

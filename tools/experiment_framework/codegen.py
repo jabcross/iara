@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,58 @@ def _inject_timing(main_c_path):
     logger.info("Timing injected into %s", main_c_path)
 
 
+def _patch_scenario(scenario_path, overrides, parent, data_type_sizes=None):
+    """Inject <parameterValues> and fix <dataTypes> in a .scenario.
+
+    Preesm's ScenariosGenerator (a stock GUI feature; our GeneratorCli exposes
+    it headlessly) writes an EMPTY <parameterValues/> and sizes every FIFO type
+    from a stock DefaultTypeSizes registry (unknown types default to 8 BITS).
+    Two consequences, both silently wrong:
+      * .pi defaults rule: SIFT's parallelismLevel=4 and 800x640 constants are
+        baked into Hextract.pi, so every core count schedules the SAME P=4
+        algorithm (hang/segfault on N != 4 threads) and a 4K image mismatches
+        (expected 800x640).
+      * SiftKpt is a 556-byte C struct, but the generated scenario declares it
+        8 bits => Preesm allocates every keypoint buffer 556x too small, the
+        kernels overflow, and MERGE_keypoints reads garbage counts.
+    The workflow re-parses this file, so fixing it here — before workflowCli —
+    is sufficient. Parameter lookup is by (name, containing graph name), so
+    `parent` must be the root PiGraph name (pi_basename).
+    """
+    tree = ET.parse(scenario_path)
+    root = tree.getroot()
+
+    pv = root.find("parameterValues")
+    if pv is None:
+        logger.warning("No <parameterValues> in %s; skipping parameter injection", scenario_path)
+    else:
+        for name, value in overrides.items():
+            elt = ET.SubElement(pv, "parameter")
+            elt.set("parent", parent)
+            elt.set("name", name)
+            elt.set("value", str(value))
+            elt.set("type", "PARAMETER")
+            logger.info("Scenario override: %s.%s = %s", parent, name, value)
+
+    if data_type_sizes:
+        dts = root.find(".//dataTypes")
+        if dts is None:
+            logger.warning("No <dataTypes> in %s; skipping dataType sizes", scenario_path)
+        else:
+            for dt in dts.findall("dataType"):
+                if dt.get("name") in data_type_sizes:
+                    old = dt.get("size")
+                    dt.set("size", str(data_type_sizes[dt.get("name")]))
+                    logger.info("Scenario dataType %s size: %s -> %s bits",
+                                dt.get("name"), old, dt.get("size"))
+
+    tree.write(scenario_path, xml_declaration=True, encoding="UTF-8")
+
+
 def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
                    workflow, num_cores, timing_patch, pi_basename=None,
-                   extra_setup=None):
+                   extra_setup=None, param_overrides=None,
+                   data_type_sizes=None):
     """Generate architecture + scenarios, run Preesm workflow, copy output."""
     eclipsec = Path(preesm_dist) / "eclipse"
     if not eclipsec.exists():
@@ -130,6 +180,14 @@ def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
             pi_name = pi_files[0].stem
         scenario_name = f"{pi_name}_{archi_name}.scenario"
         logger.info("Scenario: %s", scenario_name)
+
+        # 3b. Inject parameter overrides before the workflow parses the scenario
+        overrides = {"parallelismLevel": str(num_cores)}
+        if param_overrides:
+            overrides.update(param_overrides)
+        _patch_scenario(Path(preesm_project) / "Scenarios" / scenario_name,
+                        overrides, parent=pi_name,
+                        data_type_sizes=data_type_sizes)
 
         # 4. Run Preesm workflow
         _run_eclipse(
@@ -184,6 +242,15 @@ def main():
                              "If omitted, uses first .pi found in Algo/.")
     parser.add_argument("--extra-setup", action="append", default=[],
                         help="Extra shell commands to run after codegen")
+    parser.add_argument("--param", action="append", default=[],
+                        help="Algorithm parameter override NAME=VALUE injected into the "
+                             "generated scenario's <parameterValues> (repeatable). "
+                             "parallelismLevel is always injected from --num-cores.")
+    parser.add_argument("--data-type", action="append", default=[],
+                        help="FIFO dataType size override NAME=BITS injected into the "
+                             "generated scenario's <dataTypes> (repeatable). Stock Preesm "
+                             "sizes unknown types as 8 bits; e.g. the 556-byte SiftKpt "
+                             "struct needs SiftKpt=4448.")
 
     args = parser.parse_args()
 
@@ -204,6 +271,8 @@ def main():
             timing_patch=args.timing_patch,
             pi_basename=args.pi_basename,
             extra_setup=args.extra_setup or None,
+            param_overrides=dict(p.split("=", 1) for p in args.param),
+            data_type_sizes=dict(d.split("=", 1) for d in args.data_type),
         )
 
     return 0

@@ -309,6 +309,12 @@ def generate_cmake_instance(
         if preesm.get("extra_setup"):
             for cmd in preesm["extra_setup"]:
                 lines.append(f'    PREESM_EXTRA_SETUP "{_resolve_env(cmd)}"')
+        if preesm.get("parameter_values"):
+            for k, v in preesm["parameter_values"].items():
+                lines.append(f'    PREESM_PARAMETER "{k}={v}"')
+        if preesm.get("data_type_sizes"):
+            for k, v in preesm["data_type_sizes"].items():
+                lines.append(f'    PREESM_DATA_TYPE "{k}={v}"')
 
     # Add PARAMETERS if present
     if parameters_list:
