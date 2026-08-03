@@ -8,6 +8,17 @@ application:
   name: 08-sift
   description: "SIFT feature detection using IaRa dataflow"
   app_type: experiment
+  preesm:
+    project_path: "${IARA_DIR}/../preesm-apps/SIFT"
+    project_name: "SIFTapp"
+    workflow: "Codegen.workflow"
+    pi_basename: "Hextract"
+    # SiftKpt is a 556-byte C struct; stock Preesm sizes unknown FIFO types as
+    # 8 bits, under-allocating every keypoint buffer 556x (MERGE segfault).
+    data_type_sizes:
+      SiftKpt: 4448
+    extra_setup:
+      - "ln -sfn data ${IARA_DIR}/applications/08-sift/dat"
   build:
     extra_linker_args: ["-lm"]
     main_actor: "Hextract"
@@ -153,11 +164,30 @@ experiment_sets:
       - {scheduler: preesm, NUM_CORES: 1}
       - {scheduler: preesm, NUM_CORES: 4}
 
+  # ---- Core sweep, valid admissibility counts only ----
+  # SDF graph admissibility restricts PARALLELISM_LEVEL to divisors of 100 for
+  # 800x640 => {1,2,4,5,10,20,25}; all other core counts fail iara-opt build.
+  # vf-enkits, zero-copy RO borrow (join-owns-buffer), 3 measured runs each.
+  # ---- Core sweep, valid admissibility counts only ----
+  # SDF graph admissibility restricts PARALLELISM_LEVEL to divisors of the
+  # smallest-octave grd/rot size (= tot_image_size*4^(2-nOctaves) = 500 for
+  # 800x640) => {1,2,4,5,10,20,25}; all other core counts fail at build.
+  # vf-enkits (zero-copy RO borrow) + Preesm, 3 measured runs each.
+  - name: sweep
+    description: "Core sweep (valid counts): vf-enkits + Preesm, 3 runs"
+    matrix:
+      include:
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          NUM_CORES: [1, 2, 4, 5, 10, 20, 25]
+        - scheduler: preesm
+          NUM_CORES: [1, 2, 4, 5, 10, 20, 25]
+
 # Execution configuration
 execution:
   build_retries: 0
   repetitions: 3
-  warmup: 1
+  warmup: 0
   timeout: 600
   environment:
     # {NUM_CORES} is substituted per-instance by the experiment framework.

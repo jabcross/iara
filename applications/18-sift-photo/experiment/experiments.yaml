@@ -7,6 +7,16 @@ application:
     project_name: "SIFTapp"
     workflow: "Codegen.workflow"
     pi_basename: "Hextract"
+    # 4K image: override the .pi's 800x640 + nKeypointsMaxUser=1400 defaults
+    # (injected into the generated scenario's <parameterValues>).
+    parameter_values:
+      image_width: 3840
+      image_height: 2160
+      nKeypointsMaxUser: 22680
+    # SiftKpt is a 556-byte C struct; stock Preesm sizes unknown FIFO types as
+    # 8 bits, under-allocating every keypoint buffer 556x (MERGE segfault).
+    data_type_sizes:
+      SiftKpt: 4448
     extra_setup:
       - "ln -sfn data ${IARA_DIR}/applications/18-sift-photo/dat"
   build:
@@ -153,6 +163,23 @@ experiment_sets:
       VIDEO_FRAMES: [1]
       broadcast_ownership: [join-owns-buffer]
 
+  # ---- Core sweep, valid admissibility counts only ----
+  # SDF graph admissibility restricts PARALLELISM_LEVEL to divisors of the
+  # smallest-octave grd/rot size (= tot_image_size*4^(2-nOctaves) = 32400 for
+  # 4K); all other core counts fail at build.
+  # vf-enkits (zero-copy RO borrow) + Preesm, 3 measured runs each.
+  - name: sweep
+    description: "Core sweep (valid counts): vf-enkits + Preesm, 3 runs"
+    matrix:
+      include:
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          VIDEO_FRAMES: 1
+          NUM_CORES: [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30]
+        - scheduler: preesm
+          VIDEO_FRAMES: 1
+          NUM_CORES: [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30]
+
   # ---- BATTERY: comprehensive backend/baseline comparison (4K, 1 frame) ----
   # IaRa vf-omp + vf-enkits (join-owns-buffer borrow, data-triggered, atomic-ring)
   # vs Preesm, across cores. All IaRa runs use the new zero-copy RO-broadcast
@@ -199,7 +226,7 @@ measurements:
 
 execution:
   repetitions: 3
-  warmup: 1
+  warmup: 0
   timeout: 3600
   environment:
     OMP_NUM_THREADS: "{NUM_CORES}"

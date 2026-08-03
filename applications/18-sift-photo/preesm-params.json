@@ -7,7 +7,7 @@
     "image_height":      2160,
     "descrWidth":        4,
     "descrHistBins":     8,
-    "nKeypointsMaxUser": 1400,
+    "nKeypointsMaxUser": 22680,
     "DumpDescriptor":    0
   },
   "computed_parameters": [
