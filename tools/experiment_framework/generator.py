@@ -312,7 +312,12 @@ def generate_cmake_instance(
             for cmd in preesm["extra_setup"]:
                 lines.append(f'    PREESM_EXTRA_SETUP "{_resolve_env(cmd)}"')
         if preesm.get("parameter_values"):
+            # Values may reference instance parameters via ${PARAM} (direct or
+            # computed, e.g. ${NUM_CHUNK}, ${GRID_SIZE}) so each instance's
+            # scenario gets its own size parameters.
             for k, v in preesm["parameter_values"].items():
+                for pname, pval in params.items():
+                    v = v.replace(f"${{{pname}}}", str(pval))
                 lines.append(f'    PREESM_PARAMETER "{k}={v}"')
         if preesm.get("data_type_sizes"):
             for k, v in preesm["data_type_sizes"].items():

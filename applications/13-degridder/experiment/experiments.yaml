@@ -17,11 +17,29 @@ application:
     project_name: "degridder"
     workflow: "Codegen.workflow"
     pi_basename: "top_parallel_degridder"
+    # Per-instance degridder parameters must reach the preesm scenario. The
+    # framework's codegen.py path injects none by default (→ the .pi defaults,
+    # NUM_CHUNK=32 / NUM_KERNEL_SUPPORT=16, which are wrong and make the graph
+    # loop). Prefix the key with the containing graph ("top_degridder" root,
+    # "degridder_parallel" subgraph) and reference the instance params via
+    # ${PARAM} (direct or computed) so each instance sizes its own scenario.
+    parameter_values:
+      top_degridder.GRID_SIZE: ${GRID_SIZE}
+      top_degridder.NUM_VISIBILITIES: ${NUM_VISIBILITIES}
+      top_degridder.NUM_SCENARIO: ${NUM_SCENARIO}
+      top_degridder.NUM_KERNEL_SUPPORT: ${NUM_KERNEL_SUPPORT}
+      degridder_parallel.NUM_CHUNK: ${NUM_CHUNK}
     # Config is a 360-byte C struct; stock Preesm sizes unknown FIFO types as
     # 8 bits, under-allocating every config buffer 360x (config->input is NULL
     # downstream, "Unable to open file (null)"). Same fix as SIFT's SiftKpt.
+    # float2/int2/float3 are C structs too — Preesm's ScenariosGenerator
+    # sizes them 8 bits, collapsing the FIFO layout (kernels overlap
+    # kernel_supports) and crashing generate_kernel.
     data_type_sizes:
       Config: 2880
+      float2: 64
+      int2: 64
+      float3: 96
     # Preesm's degridder top.c reads/writes ../data and ../output relative to
     # the instance build dir (the preesm-codegen.sh symlink mechanism). The
     # codegen runs with cwd = build_experiments/<app>/, so create them there.

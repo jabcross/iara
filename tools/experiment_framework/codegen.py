@@ -109,13 +109,21 @@ def _patch_scenario(scenario_path, overrides, parent, data_type_sizes=None):
     if pv is None:
         logger.warning("No <parameterValues> in %s; skipping parameter injection", scenario_path)
     else:
-        for name, value in overrides.items():
+        for key, value in overrides.items():
+            # A parameter may name its containing graph explicitly as
+            # "parent.name" (e.g. degridder's NUM_CHUNK lives in the
+            # degridder_parallel subgraph, not the root). Plain names fall back
+            # to the pi_basename root graph (SIFT's parallelismLevel).
+            if "." in key:
+                pgraph, _, name = key.partition(".")
+            else:
+                pgraph, name = parent, key
             elt = ET.SubElement(pv, "parameter")
-            elt.set("parent", parent)
+            elt.set("parent", pgraph)
             elt.set("name", name)
             elt.set("value", str(value))
             elt.set("type", "PARAMETER")
-            logger.info("Scenario override: %s.%s = %s", parent, name, value)
+            logger.info("Scenario override: %s.%s = %s", pgraph, name, value)
 
     if data_type_sizes:
         dts = root.find(".//dataTypes")
