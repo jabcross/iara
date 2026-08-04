@@ -186,6 +186,7 @@ experiment_sets:
       alloc_mode: [data-triggered]
     include:
       - {scheduler: omp-task}
+      - {scheduler: omp-for}
 
 
   # Full comparison
@@ -310,7 +311,7 @@ experiment_sets:
 # Execution configuration
 execution:
   # Number of times to run each configuration
-  repetitions: 1
+  repetitions: 3
 
   # Number of warmup runs (not included in measurements)
   warmup: 1
