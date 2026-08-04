@@ -170,22 +170,22 @@ experiment_sets:
       scheduler: [sequential, omp-task, vf-omp]
 
 
-  # RO-borrow battery: baseline vs vf-enkits with/without RO-borrow.
-  # NUM_BLOCKS = the SDF block decomposition (the parallel dimension, the
-  # "core-count" x-axis for cholesky). Fixed 10080 matrix. Three arms:
-  # vf-sequential + copy-all-but-one (baseline), vf-enkits + join-owns-buffer
-  # (RO zero-copy borrow), vf-enkits + copy-all-but-one (no borrow).
+  # RO-borrow battery: vanilla OpenMP baseline vs vf-enkits with/without
+  # RO-borrow. NUM_BLOCKS = the SDF block decomposition (the parallel dimension,
+  # the "core-count" x-axis for cholesky). Fixed 10080 matrix. Three arms:
+  # omp-task (vanilla OpenMP baseline), vf-enkits + join-owns-buffer (RO
+  # zero-copy borrow), vf-enkits + copy-all-but-one (no borrow).
   - name: ro-battery
-    description: "RO-borrow battery: vf-sequential baseline vs vf-enkits with/without RO-borrow; blocks 1/2/4/8/16"
+    description: "RO-borrow battery: OpenMP omp-task baseline vs vf-enkits with/without RO-borrow; blocks 1/2/4/8/16"
     parameters:
       MATRIX_SIZE: [10080]
       NUM_BLOCKS: [1, 2, 4, 8, 16]
     matrix:
-      scheduler: [vf-sequential, vf-enkits]
+      scheduler: [vf-enkits]
       broadcast_ownership: [copy-all-but-one, join-owns-buffer]
       alloc_mode: [data-triggered]
-    exclude:
-      - {scheduler: vf-sequential, broadcast_ownership: join-owns-buffer}
+    include:
+      - {scheduler: omp-task}
 
 
   # Full comparison

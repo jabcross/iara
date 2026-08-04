@@ -366,24 +366,24 @@ experiment_sets:
     include:
       - {scheduler: preesm}
 
-  # ---- RO-borrow battery: baseline vs vf-enkits with/without RO-borrow ----
-  # Small, chunk=1, cores 1/4/8. Three arms: vf-sequential + copy-all-but-one
-  # (baseline), vf-enkits + join-owns-buffer (RO zero-copy borrow), vf-enkits +
+  # ---- RO-borrow battery: Preesm baseline vs vf-enkits with/without RO-borrow ----
+  # Small, chunk=1, cores 1/4/8. Three arms: preesm (dataflow compiler
+  # baseline), vf-enkits + join-owns-buffer (RO zero-copy borrow), vf-enkits +
   # copy-all-but-one (no borrow, physical copies). data-triggered alloc (borrow
   # requires it).
   - name: ro-battery
-    description: "RO-borrow battery: vf-sequential baseline vs vf-enkits with/without RO-borrow; small, chunk=1, cores 1/4/8"
+    description: "RO-borrow battery: Preesm baseline vs vf-enkits with/without RO-borrow; small, chunk=1, cores 1/4/8"
     parameters:
       SIZE: [small]
       NUM_CORES: [1, 4, 8]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
     matrix:
-      scheduler: [vf-sequential, vf-enkits]
+      scheduler: [vf-enkits]
       broadcast_ownership: [copy-all-but-one, join-owns-buffer]
       alloc_mode: [data-triggered]
-    exclude:
-      - {scheduler: vf-sequential, broadcast_ownership: join-owns-buffer}
+    include:
+      - {scheduler: preesm}
 
 
 # Execution configuration
