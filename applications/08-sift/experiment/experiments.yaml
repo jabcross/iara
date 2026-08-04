@@ -149,6 +149,21 @@ experiment_sets:
     include:
       - {scheduler: preesm}
 
+  # ---- RO-borrow battery: baseline vs vf-enkits with/without RO-borrow ----
+  # Paper core sweep (1/2/4/5/10). Three arms: vf-sequential + copy-all-but-one
+  # (baseline), vf-enkits + join-owns-buffer (RO zero-copy borrow), vf-enkits +
+  # copy-all-but-one (no borrow, physical copies). data-triggered alloc.
+  - name: ro-battery
+    description: "RO-borrow battery: vf-sequential baseline vs vf-enkits with/without RO-borrow; cores 1/2/4/5/10"
+    parameters:
+      NUM_CORES: [1, 2, 4, 5, 10]
+    matrix:
+      scheduler: [vf-sequential, vf-enkits]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+      alloc_mode: [data-triggered]
+    exclude:
+      - {scheduler: vf-sequential, broadcast_ownership: join-owns-buffer}
+
   # Cross-scheduler × cross-semaphore comparison.
   # Tests the matrix/include plumbing and the CODEGEN_OPTIONS→IARA_SEMAPHORE
   # forwarding.  Small core sweep (1,4), quick image, for fast iteration.

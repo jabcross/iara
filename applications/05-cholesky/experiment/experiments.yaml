@@ -55,6 +55,12 @@ parameters:
     label: "Alloc mode"
     description: "VirtualFIFO alloc mode (data-triggered or priming)"
 
+  # IaRa broadcast ownership (iara-opt codegen dim, forwarded as IARA_BROADCAST_OWNERSHIP)
+  - name: broadcast_ownership
+    type: str
+    label: "Broadcast ownership"
+    description: "Fan-out strategy: copy-all-but-one (default) or join-owns-buffer (zero-copy RO borrow)"
+
 # Computed parameters (derived from other parameters)
 computed_parameters:
   - name: BLOCK_SIZE
@@ -162,6 +168,24 @@ experiment_sets:
       MATRIX_SIZE: [20160]  # Fixed size, vary blocks
       NUM_BLOCKS: [4, 6, 8, 10, 12, 14, 16, 18, 20]
       scheduler: [sequential, omp-task, vf-omp]
+
+
+  # RO-borrow battery: baseline vs vf-enkits with/without RO-borrow.
+  # NUM_BLOCKS = the SDF block decomposition (the parallel dimension, the
+  # "core-count" x-axis for cholesky). Fixed 10080 matrix. Three arms:
+  # vf-sequential + copy-all-but-one (baseline), vf-enkits + join-owns-buffer
+  # (RO zero-copy borrow), vf-enkits + copy-all-but-one (no borrow).
+  - name: ro-battery
+    description: "RO-borrow battery: vf-sequential baseline vs vf-enkits with/without RO-borrow; blocks 1/2/4/8/16"
+    parameters:
+      MATRIX_SIZE: [10080]
+      NUM_BLOCKS: [1, 2, 4, 8, 16]
+    matrix:
+      scheduler: [vf-sequential, vf-enkits]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+      alloc_mode: [data-triggered]
+    exclude:
+      - {scheduler: vf-sequential, broadcast_ownership: join-owns-buffer}
 
 
   # Full comparison

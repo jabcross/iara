@@ -81,6 +81,22 @@ experiment_sets:
       VIDEO_FRAMES: [1]
       broadcast_ownership: [copy-all-but-one, join-owns-buffer]
 
+  # ---- RO-borrow battery: baseline vs vf-enkits with/without RO-borrow ----
+  # 4K photo, cores 1/4/8/12/16/20. Three arms: vf-sequential + copy-all-but-one
+  # (baseline), vf-enkits + join-owns-buffer (RO zero-copy borrow), vf-enkits +
+  # copy-all-but-one (no borrow, physical copies). data-triggered alloc.
+  - name: ro-battery
+    description: "RO-borrow battery: vf-sequential baseline vs vf-enkits with/without RO-borrow; 4K, cores 1/4/8/12/16/20"
+    parameters:
+      NUM_CORES: [1, 4, 8, 12, 16, 20]
+      VIDEO_FRAMES: [1]
+    matrix:
+      scheduler: [vf-sequential, vf-enkits]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+      alloc_mode: [data-triggered]
+    exclude:
+      - {scheduler: vf-sequential, broadcast_ownership: join-owns-buffer}
+
   - name: photo
     description: "4K photo, all valid parallelism levels, single frame"
     parameters:
