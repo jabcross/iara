@@ -323,6 +323,37 @@ experiment_sets:
       NUM_KERNEL_SUPPORT: [8]
       scheduler: [vf-omp]
 
+  # Wide core-count scaling curve: IaRa (vf-omp/vf-enkits) vs Preesm.
+  # large, chunk == cores (1:1 parallel decomposition: each core owns exactly
+  # one chunk), cores 1/4/8/16/32. Report degrid_kernel_time (the parallelizable
+  # span); end-to-end wall is I/O-bound (Amdahl ~1.25x ceiling) and hides kernel
+  # scaling. Each include row is self-contained; list-valued `scheduler`
+  # expands to the 3 schedulers per core count.
+  - name: wide-scaling
+    description: "Wide degrid kernel scaling curve (large, chunk==cores, cores 1/4/8/16/32): vf-omp/vf-enkits/preesm"
+    matrix:
+      include:
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 1, NUM_CHUNK: 1}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 4, NUM_CHUNK: 4}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 8, NUM_CHUNK: 8}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 16, NUM_CHUNK: 16}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 32, NUM_CHUNK: 32}
+
+  # Login-node fallback of wide-scaling: same but skip 32 cores (bigmem down,
+  # cpu nodes busy). Run instances one at a time to keep the login node quiet.
+  # chunk == cores (1:1 parallel decomposition): each core owns exactly one
+  # chunk, so the degrid kernel's task-level parallelism matches the thread
+  # count. Each include row is self-contained; list-valued `scheduler` expands
+  # to the 3 schedulers per core count.
+  - name: wide-scaling-login
+    description: "Wide degrid kernel scaling, login-node fallback (large, chunk==cores, cores 1/4/8/16): vf-omp/vf-enkits/preesm"
+    matrix:
+      include:
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 1, NUM_CHUNK: 1}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 4, NUM_CHUNK: 4}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 8, NUM_CHUNK: 8}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 16, NUM_CHUNK: 16}
+
 
   # IaRa vs Preesm head-to-head comparison
   - name: vs-preesm
