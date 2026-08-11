@@ -1,4 +1,5 @@
 #include <IaraRuntime/common/Scheduler.h>
+#include <IaraRuntime/common/WorkStealingBackend.h>
 #include <chrono>
 #include <omp.h>
 #include <stdio.h>
@@ -22,12 +23,28 @@ extern "C" void b(size_t val[1]) {
 }
 
 extern "C" void c(size_t a[1], size_t b[1]) {
-  if (a[0] != b[0]) {
-    printf("Ran in different threads.\n");
+  int nthreads = iara_get_num_threads();
+  if (nthreads > 1) {
+    if (a[0] != b[0]) {
+      printf("Ran in different threads.\n");
+    } else {
+      printf("Ran in same thread.\n");
+      fprintf(stderr,
+              "ERROR: Expected nodes to run in different threads (%d threads)\n",
+              nthreads);
+      exit(1);
+    }
   } else {
-    printf("Ran in same thread.\n");
-    fprintf(stderr, "ERROR: Expected nodes to run in different threads\n");
-    exit(1);
+    if (a[0] == b[0]) {
+      printf("Ran in same thread (single-threaded).\n");
+    } else {
+      printf("Ran in different threads.\n");
+      fprintf(stderr,
+              "ERROR: Expected nodes to run in the same thread "
+              "(%d thread)\n",
+              nthreads);
+      exit(1);
+    }
   }
 }
 

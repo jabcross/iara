@@ -7,3 +7,4 @@ iara.actor @run  {
 }
 
 // CHECK: Ran in different threads
+// CHECK: Ran in same thread (single-threaded).
