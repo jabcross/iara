@@ -1138,6 +1138,69 @@ def _resolve_single_node(partition: Optional[str] = None) -> Optional[str]:
     return BENCHMARK_NODES[0]
 
 
+def _ran_out_of_time(exec_result: dict) -> bool:
+    """True if an execution result failed purely because a run hit its timeout
+    (all runs timed out and no run succeeded)."""
+    runs = exec_result.get('runs', [])
+    failures = exec_result.get('failures', [])
+    if any(r.get('success') for r in runs):
+        return False
+    timed_out = [
+        r for r in runs
+        if not r.get('success') and str(r.get('error', '')).startswith('Timeout')
+    ]
+    fail_timed_out = [
+        r for r in failures
+        if str(r.get('error', '')).startswith('Timeout')
+    ]
+    # Timeout only counts if no run actually finished (a hang, not a crash).
+    return (len(timed_out) + len(fail_timed_out)) > 0 and not any(
+        r.get('success') for r in runs)
+
+
+def _instance_core_count(instance_name: str) -> Optional[int]:
+    """Extract the cpu-cores_<N> value from an instance name, if present."""
+    m = re.search(r'cpu-cores_(\d+)', instance_name)
+    return int(m.group(1)) if m else None
+
+
+def _skip_larger_preesm_instances(successful_instances, timed_out_name,
+                                  current_name, skipped_instances):
+    """Mark all NOT-YET-RUN Preesm instances with a larger core count than
+    *timed_out_name* as skipped (cancelled), so their timeouts aren't burned
+    one by one. A timed-out Preesm core count is treated as the ceiling: the
+    multi-core Preesm runtime hangs, and every larger core count hangs the same
+    way. Returns the names of the cancelled instances."""
+    timed_out_cores = _instance_core_count(timed_out_name)
+    current_cores = _instance_core_count(current_name)
+    if timed_out_cores is None or current_cores is None:
+        return []
+    # Only the first occurrence of each core count should trigger the cascade:
+    # the loop iterates instances in build order, so a later larger-core
+    # instance is only reachable if no smaller core count timed out already.
+    cancelled = []
+    for other in successful_instances:
+        other_name = other.get('instance_name') or other.get('name')
+        if not other_name or 'preesm' not in other_name:
+            continue
+        other_cores = _instance_core_count(other_name)
+        if other_cores is None or other_cores <= timed_out_cores:
+            continue
+        # Don't re-cancel an instance already skipped by an earlier cascade.
+        if any(s.get('instance_name') == other_name
+               for s in skipped_instances):
+            continue
+        cancelled.append(other_name)
+        skipped_instances.append({
+            "instance_name": other_name,
+            "reason": (f"cancelled: larger-core Preesm instance ({other_cores} "
+                       f"cores) superseded by timeout of {timed_out_name} "
+                       f"({timed_out_cores} cores)")
+        })
+    return cancelled
+
+
+
 def collect_all_measurements(
     build_results: Dict[str, Any],
     config: Dict[str, Any],
@@ -1307,6 +1370,20 @@ def collect_all_measurements(
 
             execution_results.append(exec_result)
             logger.info(f"Executed {instance_name}: {len(exec_result['runs'])} successful runs")
+
+            # A timed-out Preesm instance usually means the multi-core Preesm
+            # runtime deadlocks (barrier hang) — and the same fault hits every
+            # LARGER core count too. Skip the remaining larger-core Preesm
+            # instances instead of burning their run timeouts one by one.
+            if "preesm" in instance_name and _ran_out_of_time(exec_result):
+                cancelled = _skip_larger_preesm_instances(
+                    successful_instances, instance_name, instance_name,
+                    skipped_instances)
+                if cancelled:
+                    logger.warning(
+                        "Preesm %s timed out; cancelling %d larger-core Preesm "
+                        "instance(s): %s",
+                        instance_name, len(cancelled), ", ".join(cancelled))
 
         except Exception as e:
             logger.error(f"Execution failed for {instance_name}: {e}", exc_info=True)
