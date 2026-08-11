@@ -82,18 +82,12 @@ extern "C" void load_visibilities_from_ms(const char *ms_path_c,
   int nchan = shape[0];
   int npol = shape[1];
 
-  double maxW = -std::numeric_limits<double>::infinity();
-
   for (int i = 0; i < num_vis; ++i) {
     casacore::Vector<casacore::Double> uvw;
     uvwCol.get(i, uvw);
     double u = uvw[0];
     double v = uvw[1];
     double w = uvw[2];
-
-    if (w > maxW) {
-      maxW = w;
-    }
 
     if (config->right_ascension) {
       u *= -1.0;
@@ -114,36 +108,4 @@ extern "C" void load_visibilities_from_ms(const char *ms_path_c,
   // MeasurementSet.\n"; std::cout << "nchan:" << nchan << " npol:" << npol << "
   // num_vis: " << num_vis << " -> number of visibilities samples: " <<
   // nchan*npol*num_vis << "\n";
-
-  config->max_w = maxW;
-  // printf("config->w_scale avant :%f\n", config->w_scale);
-  config->w_scale = pow(NUM_KERNELS - 1, 2.0) / config->max_w;
-  // printf("config->w_scale après :%f\n", config->w_scale);
-
-  casacore::MSSpectralWindow spwTable = ms.spectralWindow();
-  casacore::ArrayColumn<casacore::Double> chanFreqCol(spwTable, "CHAN_FREQ");
-
-  // Get central frequency (first value of the array)
-  casacore::Array<casacore::Double> freqs;
-  chanFreqCol.get(0, freqs);
-  double freq_hz = freqs(casacore::IPosition(1, 0));
-  config->frequency_hz = freq_hz;
-
-  // ANTENNA subtable
-  casacore::MSAntenna antTable = ms.antenna();
-  casacore::ScalarColumn<casacore::Double> dishDiameterCol(antTable,
-                                                           "DISH_DIAMETER");
-
-  // Get the diameter of the first antenna
-  double D = dishDiameterCol(0); // in meters
-
-  // Compute wavelength
-  double wavelength = SPEED_OF_LIGHT / freq_hz;
-
-  // Compute field of view (in radians then degrees)
-  double fov_rad = 1.22 * wavelength / D;
-  double fov_deg = fov_rad * 180.0 / M_PI;
-  // std::cout << "📡 FoV ≈ " << fov_deg << " degrees" << std::endl;
-  config->cell_size = (fov_deg * PI) / (180.0 * GRID_SIZE);
-  config->uv_scale = config->cell_size * GRID_SIZE;
 }

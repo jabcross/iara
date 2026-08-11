@@ -262,6 +262,21 @@ public:
       // Works uniformly for single-rate and multi-rate combinations.
       if (edge_delay)
         next_edge->setAttr("delay", edge_delay);
+      // Preserve the erased edge's multi-rate out sizes on the survivor. The
+      // two edges chain because next_edge.in == edge.out, and edge.out is the
+      // merged edge's out, so edge's declared sizes (out_dynamic_sizes /
+      // out_static_sizes) describe exactly the survivor's out. Without this,
+      // a scatter edge (in = per-chunk, out = full array) collapses to its
+      // `in` type and the graph becomes inadmissible (degridder chunk>1).
+      if (next_edge.getOutStaticSizes().empty() &&
+          next_edge.getOutDynamicSizes().empty() &&
+          (!edge.getOutStaticSizes().empty() ||
+           !edge.getOutDynamicSizes().empty())) {
+        next_edge->setAttr("out_static_sizes",
+                           edge->getAttr("out_static_sizes"));
+        next_edge->insertOperands(
+            1, llvm::SmallVector<Value>(edge.getOutDynamicSizes()));
+      }
       next_edge->setOperand(0, edge.getIn());
       to_erase.insert(edge);
       return fixDoubleEdge(next_edge, to_erase);
