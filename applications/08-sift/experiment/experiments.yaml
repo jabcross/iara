@@ -100,6 +100,13 @@ experiment_sets:
       NUM_CORES: [1]
       scheduler: [vf-omp, vf-sequential, preesm]
 
+  # Temporary: vf-enkits vs vf-omp scaling diagnostic. Delete when done.
+  - name: enkits-diag
+    description: "vf-enkits vs vf-omp scaling diagnostic (cores 1/8)"
+    parameters:
+      NUM_CORES: [1, 4]
+      scheduler: [vf-enkits, vf-omp]
+
   # IaRa vs Preesm across core counts (original repo: 1-core and 4-core scenarios)
   - name: compare
     description: "IaRa vf-omp vs Preesm on 1 and 4 cores"
@@ -164,6 +171,22 @@ experiment_sets:
     include:
       - {scheduler: preesm}
 
+  # ---- Paper: RO-broadcast ownership A/B x both backends + Preesm (800x640) ----
+  # Missing graph data: before/after of the RO-copy optimization on the
+  # Preesm-comparable image. Cores follow the recent "paper" set {1,2,4,5,10}.
+  # Preesm >=4 cores times out at build (skip-larger policy records it as data).
+  - name: paper-ownership
+    description: "Paper: ownership A/B x {vf-omp,vf-enkits} + Preesm; 800x640, cores 1/2/4/5/10"
+    parameters:
+      NUM_CORES: [1, 2, 4, 5, 10]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+      alloc_mode: [data-triggered]
+      semaphore: [atomic-ring]
+    include:
+      - {scheduler: preesm}
+
   # Cross-scheduler × cross-semaphore comparison.
   # Tests the matrix/include plumbing and the CODEGEN_OPTIONS→IARA_SEMAPHORE
   # forwarding.  Small core sweep (1,4), quick image, for fast iteration.
@@ -199,12 +222,27 @@ experiment_sets:
         - scheduler: preesm
           NUM_CORES: [1, 2, 4, 5, 10, 20, 25]
 
+  # Preesm skip-larger core sweep: every count 1..10, all three schedulers.
+  # IaRa-invalid counts fail fast (admissibility) = data points. Preesm build
+  # timeout/OOM at a count → larger preesm counts skipped (recorded, mode=skipped).
+  - name: cores
+    description: "Core sweep 1..10, preesm/vf-omp/vf-enkits, 5 runs, preesm skip-larger"
+    parameters:
+      NUM_CORES: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      scheduler: [preesm, vf-omp, vf-enkits]
+
 # Execution configuration
 execution:
   build_retries: 0
-  repetitions: 3
+  repetitions: 5
   warmup: 0
   timeout: 600
+  # Preesm build timeout/OOM at a core count → skip larger preesm core counts
+  # (recorded as failure_mode=skipped data points). Well-behaved build errors
+  # (e.g. SDF admissibility) are recorded and processing continues.
+  skip_larger:
+    schedulers: [preesm]
+    modes: [build-timeout, build-oom]
   environment:
     # {NUM_CORES} is substituted per-instance by the experiment framework.
     # Preesm binaries use pthreads (not OMP); this only affects IaRa vf-omp.

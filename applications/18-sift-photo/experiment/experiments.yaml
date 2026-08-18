@@ -7,6 +7,9 @@ application:
     project_name: "SIFTapp"
     workflow: "Codegen.workflow"
     pi_basename: "Hextract"
+    # Parallelism must track NUM_CORES (graph workers >= cores), else the
+    # baseline stays at the .pi default parallelism and does not scale.
+    parallelism_level_param: "parallelismLevel"
     # 4K image: override the .pi's 800x640 + nKeypointsMaxUser=1400 defaults
     # (injected into the generated scenario's <parameterValues>).
     parameter_values:
@@ -211,6 +214,24 @@ experiment_sets:
       VIDEO_FRAMES: [1]
       broadcast_ownership: [join-owns-buffer]
       malloc: [glibc, jemalloc]
+    include:
+      - {scheduler: preesm, VIDEO_FRAMES: 1}
+
+  # ---- Paper: RO-broadcast ownership A/B x both backends + Preesm (4K, latest git) ----
+  # Missing graph data (Fig 4/5/7/9 + ownership ablation): copy-all-but-one (before)
+  # vs join-owns-buffer (after) for BOTH backends across cores, plus Preesm baseline.
+  # 4K single frame, data-triggered, atomic-ring. Core counts follow the recent
+  # ro-battery/battery runs {1,4,8,12,16,20}.
+  - name: paper-ownership
+    description: "Paper: ownership A/B x {vf-omp,vf-enkits} + Preesm; 4K, cores 1/4/8/12/16/20"
+    parameters:
+      NUM_CORES: [1, 4, 8, 12, 16, 20]
+    matrix:
+      scheduler: [vf-omp, vf-enkits]
+      broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+      alloc_mode: [data-triggered]
+      semaphore: [atomic-ring]
+      VIDEO_FRAMES: [1]
     include:
       - {scheduler: preesm, VIDEO_FRAMES: 1}
 
