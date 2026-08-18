@@ -33,7 +33,8 @@ VALID_MARK_TYPES = [
 
 VALID_ENCODING_CHANNELS = [
     "x", "y", "color", "size", "shape", "opacity",
-    "row", "column", "detail", "xOffset", "yOffset", "tooltip"
+    "row", "column", "detail", "xOffset", "yOffset", "tooltip",
+    "xError", "yError"
 ]
 
 PLOTLY_MARK_TYPES = [
@@ -138,6 +139,16 @@ def _default_plot_specs(app_name: str) -> Dict[str, Dict[str, Any]]:
             "stack_by": "section",
             "exclude_bss": True,
             "description": "Binary size split by on-disk sections only (BSS/LBSS excluded)",
+        },
+        # Automatic failure-mode figure: one tile per instance colored by
+        # outcome (success / build-* / runtime-* / not-run).  Never needs a
+        # yaml entry — merged into every run by generate_vegalite_json.
+        "feasibility": {
+            "title": f"{title_prefix} — Feasibility Matrix (outcome per instance)",
+            "type": "feasibility",
+            "y_axis": {},
+            "x_axis": {},
+            "description": "Per-instance outcome: success, build-timeout/oom/error, runtime-oom/timeout, not-run",
         },
     }
 
@@ -327,10 +338,58 @@ def translate_plotly_to_vegalite(
             vl_spec, metric, x_axis, scheduler_order
         )
 
+    # Layered error bars (mean + std from execution.statistics) when the
+    # plot spec declares error_bars (e.g. "std_dev").
+    if plotly_spec.get("error_bars"):
+        _add_error_bars(vl_spec, metric)
+
     # Validate before returning
     validate_vegalite_spec(vl_spec)
 
     return vl_spec
+
+
+def _add_error_bars(vl_spec: Dict[str, Any], metric: str) -> None:
+    """Restructure a single-mark spec into a layered mean + error-bar spec.
+
+    Reads mean/std from execution.statistics.<metric>.{mean,std} (the yaml
+    declares error_bars: std_dev).  Only applies when the metric lives in
+    execution.statistics; binary/compilation metrics have no per-run std.
+    The metric channel (x for grouped bars, y for line plots) becomes a rule
+    layer with {x|y}Error = std around the mean.
+    """
+    field = _get_metric_field(metric)
+    if not field.startswith("execution.statistics."):
+        return  # no per-run std available for this metric
+
+    encoding = vl_spec.pop("encoding")
+    mark = vl_spec.pop("mark", "bar")
+    # The scroll-zoom param binds to scales, which Vega-Lite forbids inside
+    # a layered child of a concat spec (the parameter-table wrap).  Drop it.
+    vl_spec.pop("params", None)
+
+    # Find which channel carries the metric (x for grouped bars, y for lines).
+    channel = "x" if encoding.get("x", {}).get("field") == field else "y"
+    metric_enc = encoding.get(channel)
+    if not metric_enc:
+        vl_spec["encoding"] = encoding
+        vl_spec["mark"] = mark
+        return
+
+    shared = {k: v for k, v in encoding.items() if k != channel}
+    std_field = f"execution.statistics.{metric}.std"
+    vl_spec["layer"] = [
+        {"mark": mark, "encoding": {channel: metric_enc}},
+        {
+            "mark": {"type": "rule"},
+            "encoding": {
+                channel: metric_enc,
+                f"{channel}Error": {"field": std_field},
+            },
+        },
+    ]
+    if shared:
+        vl_spec["encoding"] = shared
 
 
 def _build_grouped_bars_encoding(
@@ -685,6 +744,226 @@ def _format_title(field_name: str) -> str:
     return field_name.replace("_", " ").title()
 
 
+def _is_memory_metric(metric: str) -> bool:
+    """True when the metric measures process/static memory (MB in results)."""
+    if metric.startswith("binary_"):
+        return False
+    m = metric.lower()
+    return "rss" in m or "memory" in m or "ram" in m
+
+
+def _node_ram_gb(yaml_config: Dict[str, Any]) -> float:
+    """Node RAM limit for the threshold line: yaml override, then env var,
+    then the 92 GiB default (sorgan bigmem nodes).
+
+    Precedence: ``execution.visualization.node_ram_gb`` in experiments.yaml
+    > ``IARA_NODE_RAM_GB`` env var > 92.0.
+    """
+    val = yaml_config.get("execution", {}).get("visualization", {}).get("node_ram_gb")
+    if val is None:
+        val = os.environ.get("IARA_NODE_RAM_GB")
+    if val is None:
+        return 92.0
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid node_ram_gb {val!r}, using default 92.0")
+        return 92.0
+
+
+def _metric_value(row: Dict[str, Any], metric_field: str) -> Optional[float]:
+    """Numeric value of a dotted metric path in a row, else None."""
+    val: Any = row
+    for part in metric_field.split("."):
+        if not isinstance(val, dict):
+            return None
+        val = val.get(part)
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ensure_layers(vl_spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert a single-mark spec into a layered spec; no-op when already
+    layered.  A categorical (ordinal) Y encoding moves to the shared top-level
+    encoding so overlay layers align with bar rows and the parameter-table
+    wrap keeps working; every other channel stays with the base mark.
+    """
+    if "layer" in vl_spec:
+        return vl_spec["layer"]
+    encoding = vl_spec.pop("encoding", {})
+    mark = vl_spec.pop("mark", "bar")
+    y = encoding.get("y")
+    if y and y.get("type") == "ordinal":
+        vl_spec["encoding"] = {"y": y}
+        layer_encoding = {k: v for k, v in encoding.items() if k != "y"}
+    else:
+        vl_spec["encoding"] = {}
+        layer_encoding = encoding
+    layers = [{"mark": mark, "encoding": layer_encoding}]
+    vl_spec["layer"] = layers
+    return layers
+
+
+def _metric_channel(vl_spec: Dict[str, Any], metric_field: str) -> Optional[str]:
+    """Which encoding channel ('x' or 'y') carries the metric field."""
+    containers = [vl_spec.get("encoding", {})]
+    containers.extend(l.get("encoding", {}) for l in vl_spec.get("layer", []))
+    for container in containers:
+        for channel in ("x", "y"):
+            if container.get(channel, {}).get("field") == metric_field:
+                return channel
+    return None
+
+
+def _move_shared_channels_to_layers(vl_spec: Dict[str, Any], channels: List[str]) -> None:
+    """Pull shared top-level channels down into every layer.  Needed when an
+    overlay layer must NOT inherit them (e.g. a full-width threshold rule must
+    not inherit a line chart's x/color channels).
+    """
+    shared = vl_spec.get("encoding", {})
+    moved = {c: shared.pop(c) for c in channels if c in shared}
+    if not moved:
+        return
+    for layer in vl_spec.get("layer", []):
+        layer.setdefault("encoding", {}).update(
+            {c: copy.deepcopy(v) for c, v in moved.items()}
+        )
+
+
+def _add_failure_markers(vl_spec: Dict[str, Any], plot_rows: List[Dict[str, Any]],
+                         metric: str) -> None:
+    """Overlay failure markers on a grouped-bar chart: for every non-success
+    row, a dashed 'censored' tail from the axis to a glyph at the right edge
+    of the metric scale (✗ = OOM, ▲ = timeout, ■ = build error, · = not run),
+    colored by outcome with its own legend.  Line plots are skipped (no
+    categorical row band to anchor the glyph on).
+    """
+    metric_field = _get_metric_field(metric)
+    y_enc = vl_spec.get("encoding", {}).get("y", {})
+    if not y_enc or y_enc.get("type") != "ordinal":
+        return
+
+    max_val = 0.0
+    for row in plot_rows:
+        v = _metric_value(row, metric_field)
+        if v is not None:
+            max_val = max(max_val, v)
+    marker_x = max_val * 1.02 if max_val > 0 else 1.0
+
+    layers = _ensure_layers(vl_spec)
+    if "transform" not in vl_spec:
+        vl_spec["transform"] = []
+    vl_spec["transform"].append({"calculate": str(marker_x), "as": "marker_x"})
+
+    from .failure import OUTCOMES, OUTCOME_COLORS
+    scale = {
+        "domain": OUTCOMES,
+        "range": [OUTCOME_COLORS[o] for o in OUTCOMES],
+    }
+    # Dashed censored tail: 0 → marker_x at the row band.
+    layers.append({
+        "mark": {"type": "rule", "strokeDash": [4, 3], "opacity": 0.6},
+        "transform": [{"filter": "datum.failure_outcome != 'success'"}],
+        "encoding": {
+            "x": {"value": 0},
+            "x2": {"field": "marker_x", "type": "quantitative"},
+            "color": {"value": "#888888"},
+        },
+    })
+    # Failure glyph at the right edge, colored by outcome (own legend).
+    layers.append({
+        "mark": {"type": "text", "fontSize": 15, "fontWeight": "bold", "dx": 5},
+        "transform": [{"filter": "datum.failure_outcome != 'success'"}],
+        "encoding": {
+            "x": {"field": "marker_x", "type": "quantitative"},
+            "text": {"field": "failure_glyph", "type": "nominal"},
+            "color": {"field": "failure_outcome", "type": "nominal",
+                      "title": "Failure", "scale": scale},
+            "tooltip": [
+                {"field": "short_name", "type": "nominal", "title": "Instance"},
+                {"field": "failure_outcome", "type": "nominal", "title": "Outcome"},
+                {"field": "failure_detail", "type": "nominal", "title": "Detail"},
+            ],
+        },
+    })
+
+
+def _add_memory_threshold(vl_spec: Dict[str, Any], metric: str, ram_mb: float) -> None:
+    """Draw a dashed vertical (bar charts) or horizontal (line charts) rule at
+    the node RAM limit so OOM failures read as crossings of a measured limit.
+    """
+    metric_field = _get_metric_field(metric)
+    channel = _metric_channel(vl_spec, metric_field)
+    if channel is None:
+        return
+    layers = _ensure_layers(vl_spec)
+    if channel == "y":
+        # Full-width horizontal rule must not inherit the line chart's
+        # shared x/color/tooltip channels.
+        _move_shared_channels_to_layers(vl_spec, ["x", "color", "tooltip"])
+    layers.append({
+        "mark": {"type": "rule", "strokeDash": [6, 3], "strokeWidth": 2},
+        "encoding": {
+            channel: {"value": ram_mb, "type": "quantitative"},
+            "color": {"value": "#333333"},
+            "tooltip": [
+                {"value": f"Node RAM limit: {ram_mb / 1024:.0f} GiB"},
+            ],
+        },
+    })
+
+
+def _build_feasibility_spec(plotly_spec: Dict[str, Any],
+                            chart_data_path: Path,
+                            plot_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Tile plot: one rect per instance, x = scheduler, y = the numeric
+    parameter with the most distinct values (cores for SIFT, chunks for
+    degridder), color = outcome bucket.
+    """
+    from .failure import OUTCOMES, OUTCOME_COLORS
+    distinct: Dict[str, set] = {}
+    for row in plot_rows:
+        for key, value in row.get("parameters", {}).items():
+            if isinstance(value, (int, float)):
+                distinct.setdefault(key, set()).add(value)
+    y_param = max(distinct, key=lambda k: len(distinct[k])) if distinct else "cpu-cores"
+
+    spec: Dict[str, Any] = {
+        "$schema": VEGALITE_SCHEMA,
+        "title": plotly_spec.get("title", "Feasibility Matrix"),
+        "width": {"step": 90},
+        "height": {"step": 26},
+        "data": {"url": "PLACEHOLDER",
+                  "format": {"type": "json", "property": "instances"}},
+        "mark": {"type": "rect"},
+        "encoding": {
+            "x": {"field": "parameters.scheduler", "type": "nominal",
+                   "title": "Scheduler"},
+            "y": {"field": f"parameters.{y_param}", "type": "ordinal",
+                   "title": _format_title(y_param)},
+            "color": {
+                "field": "failure_outcome", "type": "nominal",
+                "title": "Outcome",
+                "scale": {
+                    "domain": OUTCOMES,
+                    "range": [OUTCOME_COLORS[o] for o in OUTCOMES],
+                },
+            },
+            "tooltip": [
+                {"field": "name", "type": "nominal", "title": "Instance"},
+                {"field": "parameters.scheduler", "type": "nominal", "title": "Scheduler"},
+                {"field": f"parameters.{y_param}", "type": "nominal",
+                 "title": _format_title(y_param)},
+                {"field": "failure_outcome", "type": "nominal", "title": "Outcome"},
+                {"field": "failure_detail", "type": "nominal", "title": "Detail"},
+            ],
+        },
+    }
+    return inject_data_url(spec, chart_data_path)
+
+
 def _get_metric_field(metric: str) -> str:
     """
     Get the correct field path for a metric.
@@ -783,40 +1062,52 @@ def validate_vegalite_spec(spec: Dict[str, Any]) -> bool:
     if "url" not in data:
         raise ValidationError("data must have a 'url' field")
 
-    # Check mark
-    if "mark" not in spec:
-        raise ValidationError("Missing required field: mark")
+    # Check mark or layer (layered specs use "layer" with per-layer encodings)
+    if "layer" in spec:
+        layers = spec["layer"]
+        if not isinstance(layers, list) or not layers:
+            raise ValidationError("layer must be a non-empty list of layer specs")
+        for layer in layers:
+            if not isinstance(layer, dict) or "encoding" not in layer:
+                raise ValidationError("each layer must be a dict with an 'encoding'")
+            enc = layer["encoding"]
+            if not isinstance(enc, dict) or not enc:
+                raise ValidationError("layer encoding must be a non-empty dict")
+    elif "mark" not in spec:
+        raise ValidationError("Missing required field: mark or layer")
 
-    mark = spec["mark"]
-    mark_type = mark if isinstance(mark, str) else mark.get("type")
+    # Check mark (skip when layered; layer marks are validated per-layer)
+    if "mark" in spec and "layer" not in spec:
+        mark = spec["mark"]
+        mark_type = mark if isinstance(mark, str) else mark.get("type")
 
-    if not mark_type:
-        raise ValidationError("mark must be a string or dict with 'type' field")
+        if not mark_type:
+            raise ValidationError("mark must be a string or dict with 'type' field")
 
-    if mark_type not in VALID_MARK_TYPES:
-        raise ValidationError(
-            f"Invalid mark type: '{mark_type}'. "
-            f"Valid types: {', '.join(VALID_MARK_TYPES)}"
-        )
-
-    # Check encoding
-    if "encoding" not in spec:
-        raise ValidationError("Missing required field: encoding")
-
-    encoding = spec["encoding"]
-    if not isinstance(encoding, dict):
-        raise ValidationError("encoding must be a dictionary")
-
-    if not encoding:
-        raise ValidationError("encoding must have at least one channel")
-
-    # Validate encoding channels (warn on unknown, don't fail)
-    for channel in encoding.keys():
-        if channel not in VALID_ENCODING_CHANNELS:
-            logger.warning(
-                f"Unknown encoding channel: '{channel}'. "
-                f"Valid channels: {', '.join(VALID_ENCODING_CHANNELS)}"
+        if mark_type not in VALID_MARK_TYPES:
+            raise ValidationError(
+                f"Invalid mark type: '{mark_type}'. "
+                f"Valid types: {', '.join(VALID_MARK_TYPES)}"
             )
+
+    # Check encoding (top-level encoding is optional for layered specs)
+    if "encoding" in spec:
+        encoding = spec["encoding"]
+        if not isinstance(encoding, dict):
+            raise ValidationError("encoding must be a dictionary")
+
+        if not encoding and "layer" not in spec:
+            raise ValidationError("encoding must have at least one channel")
+
+        # Validate encoding channels (warn on unknown, don't fail)
+        for channel in encoding.keys():
+            if channel not in VALID_ENCODING_CHANNELS:
+                logger.warning(
+                    f"Unknown encoding channel: '{channel}'. "
+                    f"Valid channels: {', '.join(VALID_ENCODING_CHANNELS)}"
+                )
+    elif "layer" not in spec:
+        raise ValidationError("Missing required field: encoding")
 
     return True
 
@@ -1036,26 +1327,29 @@ def add_unit_conversion_transform(
     # Append transform
     spec["transform"].append(transform)
 
-    # Update encoding to use converted field
-    for channel, encoding in spec.get("encoding", {}).items():
-        if isinstance(encoding, dict) and "field" in encoding:
-            # Check if this encoding uses our measurement
-            if encoding["field"] == full_field:
-                # Update to use display field
-                encoding["field"] = display_field
+    # Update encoding to use converted field (top level and per-layer)
+    encoding_containers = [spec.get("encoding", {})]
+    encoding_containers.extend(l.get("encoding", {}) for l in spec.get("layer", []))
+    for encoding in encoding_containers:
+        for channel, enc in encoding.items():
+            if isinstance(enc, dict) and "field" in enc:
+                # Check if this encoding uses our measurement
+                if enc["field"] == full_field:
+                    # Update to use display field
+                    enc["field"] = display_field
 
-                # Update title to include unit
-                if "title" in encoding:
-                    original_title = encoding["title"]
-                    if display_unit:
-                        encoding["title"] = f"{original_title} ({display_unit})"
-                else:
-                    # Generate title from field name
-                    title = _format_title(measurement)
-                    if display_unit:
-                        encoding["title"] = f"{title} ({display_unit})"
+                    # Update title to include unit
+                    if "title" in enc:
+                        original_title = enc["title"]
+                        if display_unit:
+                            enc["title"] = f"{original_title} ({display_unit})"
                     else:
-                        encoding["title"] = title
+                        # Generate title from field name
+                        title = _format_title(measurement)
+                        if display_unit:
+                            enc["title"] = f"{title} ({display_unit})"
+                        else:
+                            enc["title"] = title
 
     logger.debug(
         f"Added unit conversion for {measurement}: "
@@ -1091,13 +1385,17 @@ def apply_unit_conversions(
         - No data available: Use base units, log WARNING
         - Missing measurement in data: Skip conversion, log WARNING
     """
-    # Extract measurement fields from encoding
+    # Extract measurement fields from encoding (top level and per-layer; the
+    # failure-marker/threshold overlays restructure specs into layered form).
     measurement_fields = set()
+    encoding_containers = [spec.get("encoding", {})]
+    encoding_containers.extend(l.get("encoding", {}) for l in spec.get("layer", []))
 
-    for channel, encoding in spec.get("encoding", {}).items():
-        if isinstance(encoding, dict) and "field" in encoding:
-            field = encoding["field"]
-            # Extract measurement name from field path
+    for encoding in encoding_containers:
+        for channel, enc in encoding.items():
+            if not isinstance(enc, dict) or "field" not in enc:
+                continue
+            field = enc["field"]
             # Fields are like: "execution.statistics.{measurement}.mean"
             if field.startswith("execution.statistics.") and field.endswith(".mean"):
                 measurement = field.replace("execution.statistics.", "").replace(".mean", "")
@@ -1211,6 +1509,13 @@ def _wrap_with_parameter_table(
     for step-width estimation — if omitted the header widths are used.
     """
     param_fields = [f"parameters.{k}" for k in param_keys]
+
+    # The parameter table mirrors the chart's categorical Y axis (bar rows).
+    # Layered specs (error bars) keep shared channels at the top level;
+    # grouped bars carry y there.  Line plots have no categorical Y (the
+    # metric is the y layer) — skip the wrap for them.
+    if not bar_spec.get("encoding", {}).get("y"):
+        return bar_spec
 
     # Carry over every transform except fold ones (those belong to the bar mark).
     shared_transforms = [t for t in bar_spec.get("transform", []) if "fold" not in t]
@@ -1393,13 +1698,55 @@ def generate_vegalite_json(
         with open(results_json_path, 'w') as f:
             json.dump(results, f, indent=2)
 
+    # Step 6b: Build the plot dataset — successful + failed instances merged,
+    # every row classified into exactly one outcome bucket.  Written to a
+    # sidecar JSON (the original results file stays untouched) so charts can
+    # place failed rows on the same axes as successful ones.
+    chart_data_path = results_json_path
+    plot_rows = []
+    if results.get("instances") or results.get("failed_instances"):
+        try:
+            from .failure import build_outcome_rows
+            plot_rows = build_outcome_rows(results, Path.cwd())
+        except Exception as e:
+            logger.warning(f"Failure-outcome classification failed: {e}; "
+                           "failure figures will be skipped.")
+        if plot_rows:
+            outcomes_path = output_dir / f"outcomes_{timestamp}.json"
+            with open(outcomes_path, 'w') as f:
+                json.dump({"instances": plot_rows}, f, indent=2)
+            chart_data_path = outcomes_path
+            logger.info(f"Wrote plot dataset with {len(plot_rows)} rows: {outcomes_path}")
+
     # Step 7: Process each plot
     for plot_name, plotly_spec in specs.items():
         try:
             logger.info(f"Generating Vega-Lite spec for plot: {plot_name}")
 
+            # Feasibility matrix: built directly from the classified rows, no
+            # measurement encodings, no parameter-table wrap.
+            if plot_name == "feasibility":
+                if not plot_rows:
+                    logger.info("No instance data; skipping feasibility plot")
+                    continue
+                vl_spec = _build_feasibility_spec(plotly_spec, chart_data_path, plot_rows)
+                validate_vegalite_spec(vl_spec)
+                output_file = output_dir / f"plot_feasibility_{timestamp}.vl.json"
+                with open(output_file, 'w') as f:
+                    json.dump(vl_spec, f, indent=2, sort_keys=True)
+                generated_files.append(output_file)
+                logger.info(f"Generated Vega-Lite spec: {output_file}")
+                continue
+
             # Translate Plotly spec to Vega-Lite
             vl_spec = translate_plotly_to_vegalite(plot_name, plotly_spec)
+
+            # Automatic failure-mode overlays on the universal plots.
+            metric = plotly_spec.get("y_axis", {}).get("metric", "")
+            if plot_rows and any(r.get("failure_outcome") != "success" for r in plot_rows):
+                _add_failure_markers(vl_spec, plot_rows, metric)
+            if metric and _is_memory_metric(metric):
+                _add_memory_threshold(vl_spec, metric, _node_ram_gb(yaml_config) * 1024)
 
             # For binary-size section plots, compute the subset of section_*
             # fields to fold over (all data is pre-flattened above).
@@ -1531,7 +1878,7 @@ def generate_vegalite_json(
                     validate_vegalite_spec(facet_spec)
 
                     # Inject data URL
-                    facet_spec = inject_data_url(facet_spec, results_json_path)
+                    facet_spec = inject_data_url(facet_spec, chart_data_path)
 
                     # Apply unit conversions (if results data available)
                     if results:
@@ -1560,7 +1907,7 @@ def generate_vegalite_json(
                 validate_vegalite_spec(vl_spec)
 
                 # Inject data URL
-                vl_spec = inject_data_url(vl_spec, results_json_path)
+                vl_spec = inject_data_url(vl_spec, chart_data_path)
 
                 # Apply unit conversions (if results data available)
                 if results:
