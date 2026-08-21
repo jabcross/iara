@@ -316,6 +316,7 @@ def generate_cmake_instance(
             # computed, e.g. ${NUM_CHUNK}, ${GRID_SIZE}) so each instance's
             # scenario gets its own size parameters.
             for k, v in preesm["parameter_values"].items():
+                v = str(v)
                 for pname, pval in params.items():
                     v = v.replace(f"${{{pname}}}", str(pval))
                 lines.append(f'    PREESM_PARAMETER "{k}={v}"')

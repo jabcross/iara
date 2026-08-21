@@ -257,6 +257,93 @@ class TestBuildResults:
         assert results.total_instances == 3
 
 
+class TestBuildAllInstancesSkipLarger:
+    """Tests for the preesm skip-larger-on-timeout/oom build policy."""
+
+    SIFT_NAMES = [
+        '08-sift_cores_preesm_cpu-cores_4',
+        '08-sift_cores_preesm_cpu-cores_8',
+        '08-sift_cores_preesm_cpu-cores_10',
+        '08-sift_cores_vf-omp_cpu-cores_4',
+        '08-sift_cores_vf-omp_cpu-cores_8',
+    ]
+
+    def _run(self, mock_build, results, skip_larger=None):
+        mock_build.side_effect = results
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            cmake_source = base_dir / 'cmake'
+            cmake_source.mkdir()
+            return build_all_instances(
+                instances=list(self.SIFT_NAMES),
+                base_build_dir=base_dir,
+                cmake_source=cmake_source,
+                max_retries=0,
+                skip_larger=skip_larger,
+            )
+
+    @patch('builder.build_instance')
+    def test_preesm_timeout_skips_larger_cores(self, mock_build):
+        """Timeout at preesm 4 skips preesm 8/10; vf-omp unaffected."""
+        def _ok(name):
+            return BuildResult(success=True, instance_name=name, attempt=1,
+                               timestamp='2025-01-14T15:00:00Z')
+        results = self._run(
+            mock_build,
+            [
+                BuildResult(success=False, instance_name=self.SIFT_NAMES[0], attempt=1,
+                            timestamp='2025-01-14T15:00:00Z',
+                            errors=['Build timed out: phase lower']),
+                _ok(self.SIFT_NAMES[3]),   # vf-omp 4
+                _ok(self.SIFT_NAMES[4]),   # vf-omp 8
+            ],
+            skip_larger={'schedulers': ['preesm'], 'modes': ['build-timeout', 'build-oom']},
+        )
+        assert results.successful_count == 2
+        assert results.failed_count == 3
+        modes = {f.instance_name: f.failure_mode for f in results.failed_instances}
+        assert modes[self.SIFT_NAMES[0]] == 'build-timeout'
+        assert modes[self.SIFT_NAMES[1]] == 'skipped'
+        assert modes[self.SIFT_NAMES[2]] == 'skipped'
+        # vf-omp 4 and 8 built; preesm 8/10 never attempted
+        assert mock_build.call_count == 3
+
+    @patch('builder.build_instance')
+    def test_wellbehaved_error_does_not_skip(self, mock_build):
+        """Admissibility (well-behaved) build error is a data point, no skip."""
+        def _ok(name):
+            return BuildResult(success=True, instance_name=name, attempt=1,
+                               timestamp='2025-01-14T15:00:00Z')
+        results = self._run(
+            mock_build,
+            [
+                BuildResult(success=False, instance_name=self.SIFT_NAMES[0], attempt=1,
+                            timestamp='2025-01-14T15:00:00Z',
+                            errors=['Graph is not admissible']),
+                _ok(self.SIFT_NAMES[1]),   # preesm 8
+                _ok(self.SIFT_NAMES[2]),   # preesm 10
+                _ok(self.SIFT_NAMES[3]),   # vf-omp 4
+                _ok(self.SIFT_NAMES[4]),   # vf-omp 8
+            ],
+            skip_larger={'schedulers': ['preesm'], 'modes': ['build-timeout', 'build-oom']},
+        )
+        assert results.successful_count == 4
+        assert results.failed_count == 1
+        assert results.failed_instances[0].failure_mode == 'build-error'
+        assert mock_build.call_count == 5
+
+    @patch('builder.build_instance')
+    def test_no_skip_larger_config_preserves_old_behavior(self, mock_build):
+        """Without skip_larger config, all instances are attempted."""
+        def _fail(name):
+            return BuildResult(success=False, instance_name=name, attempt=1,
+                               timestamp='2025-01-14T15:00:00Z',
+                               errors=['Build timed out: phase lower'])
+        results = self._run(mock_build, [_fail(n) for n in self.SIFT_NAMES])
+        assert results.failed_count == 5
+        assert mock_build.call_count == 5
+
+
 class TestBuildAllInstancesRetryLogic:
     """Tests for build_all_instances retry logic and error tracking."""
 

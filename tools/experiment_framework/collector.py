@@ -19,11 +19,11 @@ from typing import Dict, List, Any, Optional, Union
 # Support both relative and absolute imports
 try:
     from .common import (parse_time_output, convert_time_to_seconds,
-                           convert_memory_to_bytes, run_and_log, log_subprocess_call)
+                           convert_memory_to_bytes, run_and_log)
     from .progress import ProgressBar
 except ImportError:
     from common import (parse_time_output, convert_time_to_seconds,
-                          convert_memory_to_bytes, run_and_log, log_subprocess_call)
+                          convert_memory_to_bytes, run_and_log)
     from progress import ProgressBar
 
 
@@ -116,10 +116,6 @@ def execute_single_run(
             "error": f"Executable not found: {executable}"
         }
 
-    # Merge environment variables
-    env_dict = os.environ.copy()
-    env_dict.update(env_vars)
-
     try:
         # Create temporary file for GNU time output
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as time_file:
@@ -132,17 +128,11 @@ def execute_single_run(
             cmd = ['/usr/bin/time', '-v', '-o', str(time_file_path), str(executable)]
 
             logger.info(f"Executing run {run_number}/{timeout}s timeout")
-            log_subprocess_call(cmd, cwd=Path.cwd(), env=env_vars if env_vars else None)
 
             # Run subprocess
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=env_dict,
-                cwd=executable.parent
-            )
+            result = run_and_log(cmd, cwd=executable.parent,
+                                 env=env_vars if env_vars else None,
+                                 timeout=timeout)
 
             # stdout/stderr are now clean program output; GNU time goes to time_file_path
             stdout = result.stdout
@@ -1123,8 +1113,7 @@ def _resolve_single_node(partition: Optional[str] = None) -> Optional[str]:
     override.
     """
     try:
-        out = subprocess.run(['sinfo', '-h', '-N', '-o', '%n %t'],
-                             capture_output=True, text=True, timeout=15)
+        out = run_and_log(['sinfo', '-h', '-N', '-o', '%n %t'], timeout=15)
         state = {}
         for ln in out.stdout.splitlines():
             f = ln.split()

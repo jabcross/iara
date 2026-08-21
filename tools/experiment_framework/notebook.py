@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+from .common import run_and_log
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -795,16 +797,10 @@ source {env_cached}
         logger.debug(f"Fallback: No cached Spack environment at {env_cached}")
 
     logger.info(f"Notebook execution timeout: {timeout}s")
-    logger.debug(f"Execution command: {' '.join(cmd)}")
 
     try:
         # Execute with timeout + 10s buffer for nbconvert overhead
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout + 10
-        )
+        result = run_and_log(cmd, timeout=timeout + 10)
 
         if result.returncode != 0:
             logger.error(f"Notebook execution failed with exit code {result.returncode}")

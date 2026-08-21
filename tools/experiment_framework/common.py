@@ -11,8 +11,13 @@ import logging
 import os
 import re
 import subprocess
+from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
+
+from rich.console import Console
+from rich.text import Text
+from rich.tree import Tree
 
 from .config import ConfigError
 
@@ -64,15 +69,50 @@ def log_subprocess_call(
     cwd: Optional[Path] = None,
     env: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Log a subprocess invocation at DEBUG level (verbose mode only).
+    """Log a subprocess invocation at INFO (command line + cwd).
 
-    Kept at DEBUG to avoid I/O during measurement-sensitive runs.
+    The command line is the minimum needed to debug the framework, so it
+    shows at INFO.  Environment deltas can be large and stay at DEBUG.
+    Accepts a shell string as well as an argv list.
     """
-    logger.debug(f"[exec] {' '.join(cmd)}")
+    cmd_str = cmd if isinstance(cmd, str) else ' '.join(cmd)
+    logger.info(f"[exec] {cmd_str}")
     if cwd:
-        logger.debug(f"  cwd: {cwd}")
+        logger.info(f"  cwd: {cwd}")
     if env and env != os.environ:
         logger.debug(f"  env delta: {json.dumps(env, indent=2)}")
+
+
+def log_command_output(
+    label: Optional[str],
+    captures: List[Tuple[str, str]],
+    limit: int = 200_000,
+) -> None:
+    """Log captured subprocess output at DEBUG as a rich tree.
+
+    ``label`` names the tree root (e.g. a command line); pass None for a
+    rootless tree when the command was already logged at INFO.  Each
+    (stream_name, text) pair becomes a tree branch and every output line
+    gets a tree connector, so stdout vs stderr is distinguishable line by
+    line.  Output is truncated past ``limit`` characters per stream.
+    """
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    tree = Tree(Text(label or ""))
+    for stream, text in captures:
+        if not text:
+            continue
+        text = text.rstrip('\n')
+        truncated = len(text) > limit
+        node = tree.add(
+            f"{stream} ({len(text)} B)" + (" [truncated]" if truncated else "")
+        )
+        node.add(Text(text[:limit] if truncated else text))
+    out = StringIO()
+    # soft_wrap: never break long lines mid-word; the terminal handler
+    # decides wrapping, not this pre-render.
+    Console(file=out, color_system=None, soft_wrap=True).print(tree)
+    logger.debug(out.getvalue().lstrip('\n').rstrip())
 
 
 def run_and_log(
@@ -82,12 +122,13 @@ def run_and_log(
     timeout: Optional[int] = None,
     capture: bool = True,
     label: str = "",
+    check: bool = False,
 ) -> subprocess.CompletedProcess:
-    """Run a subprocess and log full stdout/stderr at DEBUG level.
+    """Run a subprocess and log its full output at DEBUG level.
 
-    The command line is always logged at INFO.  Captured output goes to
-    the framework log at DEBUG so ``--verbose`` shows everything without
-    spamming the console.
+    The command line is logged at INFO; captured stdout/stderr go to the
+    framework log at DEBUG (rich tree, stream-prefixed).  check=True
+    raises subprocess.CalledProcessError on nonzero exit.
     """
     log_subprocess_call(cmd, cwd=cwd, env=env)
 
@@ -103,14 +144,16 @@ def run_and_log(
     if env:
         final_env.update(env)
     kwargs['env'] = final_env
+    if check:
+        kwargs['check'] = True
 
     result = subprocess.run(cmd, **kwargs)
 
     if capture:
-        if result.stdout:
-            logger.debug(f"  stdout ({len(result.stdout)} B):\n{result.stdout}")
-        if result.stderr:
-            logger.debug(f"  stderr ({len(result.stderr)} B):\n{result.stderr}")
+        log_command_output(
+            None,
+            [("stdout", result.stdout), ("stderr", result.stderr)],
+        )
     logger.debug(f"  returncode={result.returncode}")
 
     return result

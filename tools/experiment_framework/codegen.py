@@ -28,6 +28,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from .common import run_and_log, log_subprocess_call
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,8 +46,7 @@ def _run_eclipse(eclipsec, workspace, application, *args, timeout=600):
         application,
         *args,
     ]
-    logger.info("Running: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    result = run_and_log(cmd, timeout=timeout)
     if result.returncode != 0:
         tail = result.stderr[-3000:] if len(result.stderr) > 3000 else result.stderr
         raise RuntimeError(
@@ -199,15 +200,33 @@ def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
                         overrides, parent=pi_name,
                         data_type_sizes=data_type_sizes)
 
-        # 4. Run Preesm workflow
+        # 4. Run Preesm workflow.
+        logger.info("Preesm codegen: workflow=%s scenario=%s", workflow, scenario_name)
+        # The Preesm CodegenTask always writes Code/generated/ (project-relative,
+        # shared across instances). Clean it first so the workflow starts from a
+        # clean slate and a stale file from a previous instance can never be
+        # copied below (wrong schedule/core count).
+        generated = Path(preesm_project) / "Code" / "generated"
+        if generated.exists():
+            for f in generated.iterdir():
+                if f.is_file():
+                    f.unlink()
+                elif f.is_dir():
+                    shutil.rmtree(f)
         _run_eclipse(
             eclipsec, ws_path,
             "org.preesm.cli.workflowCli",
             preesm_name, "-w", workflow, "-s", scenario_name,
         )
 
-    # 5. Copy generated C code to build dir
-    generated = Path(preesm_project) / "Code" / "generated"
+    # 5. Copy generated C code to build dir. The workflow must have produced
+    # fresh output — fail loudly if it left Code/generated empty (a silent
+    # workflow failure would otherwise leave the build without a schedule).
+    if not any(generated.glob("*")):
+        raise RuntimeError(
+            "Preesm workflow produced no output in "
+            f"{generated} (silent workflow failure?)"
+        )
     for pattern in ["*.c", "*.h"]:
         for f in generated.glob(pattern):
             shutil.copy2(f, dest)
@@ -224,7 +243,7 @@ def codegen_preesm(output_dir, preesm_dist, preesm_project, preesm_name,
     # 7. Run extra setup commands (app-specific post-processing)
     if extra_setup:
         for cmd in extra_setup:
-            logger.info("Extra setup: %s", cmd)
+            log_subprocess_call(cmd, cwd=str(Path(output_dir).parent))
             subprocess.run(cmd, shell=True, check=True,
                            cwd=str(Path(output_dir).parent))
 

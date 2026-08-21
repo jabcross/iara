@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from .common import run_and_log
+
 logger = logging.getLogger(__name__)
 
 # Global tracking of active slurm jobs, so cancellation handlers can scancel them.
@@ -35,7 +37,7 @@ def cancel_all_jobs():
     """Cancel all tracked slurm jobs (called on graceful shutdown)."""
     for job_id in list(_active_jobs):
         try:
-            subprocess.run(['scancel', str(job_id)], capture_output=True, timeout=10)
+            run_and_log(['scancel', str(job_id)], timeout=10)
             logger.info("Cancelled slurm job %d", job_id)
         except Exception as e:
             logger.warning("Failed to cancel slurm job %d: %s", job_id, e)
@@ -45,7 +47,7 @@ def cancel_all_jobs():
 def check_slurm_available() -> bool:
     """Return True if sbatch/squeue/scancel are available."""
     return all(
-        subprocess.run(['which', c], capture_output=True).returncode == 0
+        run_and_log(['which', c]).returncode == 0
         for c in ('sbatch', 'squeue', 'scancel')
     )
 
@@ -140,7 +142,7 @@ def submit_job(
         cmd += [script_path]
 
         logger.info(f'Submitting Slurm job: {" ".join(cmd)}')
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = run_and_log(cmd, timeout=30)
 
         if result.returncode != 0:
             return {
@@ -159,9 +161,9 @@ def submit_job(
         # Query which node the job was assigned to
         node = 'unknown'
         try:
-            node_result = subprocess.run(
+            node_result = run_and_log(
                 ['squeue', '-j', str(job_id), '-h', '-o', '%N'],
-                capture_output=True, text=True, timeout=10
+                timeout=10
             )
             node = node_result.stdout.strip() or 'unknown'
         except Exception:
@@ -174,7 +176,7 @@ def submit_job(
         while True:
             elapsed = time.time() - start
             if elapsed > timeout + 120:  # grace period
-                subprocess.run(['scancel', str(job_id)], capture_output=True)
+                run_and_log(['scancel', str(job_id)], timeout=10)
                 return {
                     'job_id': job_id,
                     'success': False,
@@ -184,6 +186,8 @@ def submit_job(
                     'returncode': -1,
                 }
 
+            # ponytail: poll loop (every 5s) — log at DEBUG only, INFO would
+            # spam the console for the whole job duration.
             status_result = subprocess.run(
                 ['squeue', '-j', str(job_id), '-h', '-o', '%T'],
                 capture_output=True, text=True, timeout=10
@@ -205,10 +209,10 @@ def submit_job(
         logger.info(f'Job {job_id} completed (stdout={len(stdout)} bytes, stderr={len(stderr)} bytes)')
 
         # Check sacct for exit code
-        sacct_result = subprocess.run(
+        sacct_result = run_and_log(
             ['sacct', '-j', str(job_id), '--format=ExitCode', '--noheader', '-P',
              '-n', '--delimiter=,'],
-            capture_output=True, text=True, timeout=10
+            timeout=10
         )
         returncode = 0
         for line in sacct_result.stdout.strip().split('\n'):

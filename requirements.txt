@@ -1,4 +1,5 @@
 setuptools
+rich
 ipykernel
 ipython
 jupyter-client

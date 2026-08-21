@@ -37,6 +37,11 @@ from typing import Optional
 from datetime import datetime, timezone
 import yaml
 
+from rich.console import Console
+from rich.logging import RichHandler
+
+from .common import run_and_log
+
 # ---------------------------------------------------------------------------
 # Graceful cancellation support
 # ---------------------------------------------------------------------------
@@ -141,18 +146,24 @@ def setup_logging(
     root_logger.setLevel(logging.DEBUG)
 
     # Create formatters
-    console_format = logging.Formatter(
-        "[%(levelname)s] %(name)s - %(message)s"
-    )
     file_format = logging.Formatter(
         "%(asctime)s [%(levelname)8s] %(name)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # Add stderr handler
-    stderr_handler = logging.StreamHandler(sys.stderr)
+    # Add stderr handler.  Rich colors level chips and wraps at terminal
+    # width only on a real terminal; redirected output (pipes, sbatch)
+    # uses a plain handler so long command lines stay whole and greppable.
+    if sys.stderr.isatty():
+        stderr_handler = RichHandler(
+            console=Console(stderr=True),
+            show_time=False,
+            show_path=False,
+        )
+    else:
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     stderr_handler.setLevel(console_level)
-    stderr_handler.setFormatter(console_format)
     root_logger.addHandler(stderr_handler)
 
     # Add file handler if log file specified
@@ -294,6 +305,7 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
     codegen_timeout = config.get('execution', {}).get('codegen_timeout', 300)
     bt = build_timeout if build_timeout is not None else config.get('execution', {}).get('build_timeout', 300)
     build_retries = config.get('execution', {}).get('build_retries', 1)
+    skip_larger = config.get('execution', {}).get('skip_larger')
     build_results = None
     try:
         build_results = build_all_instances(
@@ -303,6 +315,7 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
             codegen_timeout=codegen_timeout,
             build_timeout=bt,
             cancellation_flag=lambda: _cancellation_requested,
+            skip_larger=skip_larger,
         )
     except Exception as e:
         print(f"ERROR: Build failed: {e}", file=sys.stderr)
@@ -324,7 +337,9 @@ def run_build(app: str, exp_set: str, app_dir: Path, yaml_path: Path,
     print(f"  ✓ Built {successful}/{total} instances")
 
     if build_results.failed_instances:
-        print(f"  ⚠ Warning: {len(build_results.failed_instances)} instance(s) failed to build", file=sys.stderr)
+        skipped = [f for f in build_results.failed_instances if f.failure_mode == 'skipped']
+        print(f"  ⚠ Warning: {len(build_results.failed_instances)} instance(s) failed to build"
+              f" ({len(skipped)} skipped by skip-larger policy)", file=sys.stderr)
         logger.warning(f"{len(build_results.failed_instances)} instances failed")
         return 2 if fail_fast else 1
 
@@ -794,7 +809,7 @@ def _run_pipeline(app: str, exp_set: str, app_dir: Path, yaml_path: Path, args) 
     onetime_script = Path("applications") / app / "onetime.sh"
     if onetime_script.exists():
         try:
-            subprocess.run(["sh", str(onetime_script)], check=True)
+            run_and_log(["sh", str(onetime_script)], capture=False, check=True)
         except subprocess.CalledProcessError as e:
             logging.getLogger(__name__).error(f"One-time setup script failed: {e}")
             return 2
@@ -924,9 +939,7 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None, partiti
     """
     import os
     import shlex
-    import subprocess
     import tempfile
-    import time
 
     # Use nodelist from arg, env var, or None
     if not nodelist:
@@ -998,7 +1011,7 @@ source {shlex.quote(iara_dir)}/sorgan_env.sh
         cmd += [script_path]
 
         print(f"Submitting to Slurm: {' '.join(cmd)}", file=sys.stderr)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = run_and_log(cmd, timeout=30)
 
         if result.returncode != 0:
             print(f"ERROR: sbatch failed: {result.stderr}", file=sys.stderr)

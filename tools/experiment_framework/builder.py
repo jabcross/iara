@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 
-from .common import (log_subprocess_call, run_and_log,
+from .common import (log_subprocess_call, log_command_output, run_and_log,
                        parse_time_output, convert_time_to_seconds,
                        convert_memory_to_bytes)
 from .config import ConfigError
@@ -49,6 +49,7 @@ class FailedBuildResult:
     errors: List[Dict[str, Any]]  # Per-attempt error info
     timestamp: str  # ISO format
     last_error: str  # Most recent error message
+    failure_mode: str = "build-error"  # build-error | build-timeout | build-oom | skipped
 
 
 @dataclass
@@ -199,16 +200,9 @@ def get_binary_size(executable: Path) -> int:
 
     logger.debug(f"Getting binary size for {executable}")
     size_cmd = ['size', '-A', str(executable)]
-    log_subprocess_call(size_cmd, cwd=Path.cwd())
 
     try:
-        result = subprocess.run(
-            size_cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30
-        )
+        result = run_and_log(size_cmd, cwd=Path.cwd(), timeout=30, check=True)
     except subprocess.CalledProcessError as e:
         logger.error(f"size command failed with return code {e.returncode}")
         logger.error(f"Stderr: {e.stderr}")
@@ -261,6 +255,7 @@ def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int,
     ]
     if time_output is not None:
         cmd = ['/usr/bin/time', '-v', '-o', str(time_output)] + cmd
+    log_subprocess_call(cmd, cwd=build_dir)
     try:
         with open(log_path, 'w') as log_file:
             result = subprocess.run(
@@ -270,11 +265,37 @@ def _run_ctest_phase(build_dir: Path, test_name: str, timeout: int,
                 timeout=timeout,
                 env=os.environ.copy(),
             )
-        return result.returncode == 0, log_path
     except subprocess.TimeoutExpired:
         with open(log_path, 'a') as log_file:
             log_file.write(f'\n[TIMEOUT] Phase {test_name} exceeded {timeout}s\n')
+        _dump_phase_log(build_dir, test_name, log_path)
         return False, log_path
+    _dump_phase_log(build_dir, test_name, log_path)
+    return result.returncode == 0, log_path
+
+
+def _dump_phase_log(build_dir: Path, test_name: str, log_path: Path) -> None:
+    """Log a ctest phase log at DEBUG so -vvv shows every CMake/ctest command.
+
+    The phase log carries ctest -V output: exact test command, cwd, env and
+    all stdout/stderr (ctest merges both into one stream).  setup-* phases
+    also get the generated setup cmake script, which lists the env vars
+    passed to the codegen shell script.
+    """
+    captures = []
+    try:
+        if log_path.exists():
+            captures.append(("phase log", log_path.read_text()))
+    except OSError as e:
+        logger.debug(f"Could not read phase log {log_path}: {e}")
+    setup_cmake = build_dir / f'{test_name}.cmake'
+    try:
+        if setup_cmake.exists():
+            captures.append(("setup cmake", setup_cmake.read_text()))
+    except OSError as e:
+        logger.debug(f"Could not read {setup_cmake}: {e}")
+    if captures:
+        log_command_output(f"ctest phase {test_name}", captures)
 
 
 def build_instance(
@@ -321,12 +342,7 @@ def build_instance(
         # Step 1: Force clean build directory
         logger.info(f"Cleaning build directory: {build_dir}")
         try:
-            subprocess.run(
-                ['rm', '-rf', str(build_dir)],
-                check=True,
-                capture_output=True,
-                timeout=30
-            )
+            run_and_log(['rm', '-rf', str(build_dir)], timeout=30, check=True)
         except Exception as e:
             error_msg = f"Failed to clean build directory: {e}"
             logger.error(error_msg)
@@ -360,21 +376,7 @@ def build_instance(
             # We'll set it when running cmake via subprocess env
             pass  # Handled below in subprocess.run call
 
-        log_subprocess_call(cmake_config_cmd, cwd=Path.cwd())
-
-        # Prepare environment for CMake - preserve existing environment and add PKG_CONFIG_PATH
-        cmake_env = os.environ.copy()
-        if 'PKG_CONFIG_PATH' in os.environ:
-            # PKG_CONFIG_PATH should already be set in the environment
-            pass
-
-        result = subprocess.run(
-            cmake_config_cmd,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            env=cmake_env
-        )
+        result = run_and_log(cmake_config_cmd, timeout=120)
 
         if result.returncode != 0:
             logger.error(f"CMake configuration failed with return code {result.returncode}")
@@ -634,6 +636,7 @@ def build_all_instances(
     codegen_timeout: int = 300,
     build_timeout: int = 300,
     cancellation_flag = None,
+    skip_larger: Optional[Dict[str, Any]] = None,
 ) -> BuildResults:
     """
     Build all instances sequentially with retry logic and error tracking.
@@ -682,9 +685,47 @@ def build_all_instances(
 
     logger.info(f"Starting build of {len(instances)} instances with max_retries={max_retries}")
 
+    # skip_larger policy (user-defined): when a build of a listed scheduler
+    # (default/only: preesm) fails with a listed mode (timeout/oom), skip the
+    # remaining instances with a larger core count. Skipped instances are still
+    # recorded as failed_instances with failure_mode="skipped" (a data point).
+    skip_schedulers = set((skip_larger or {}).get('schedulers', []))
+    skip_modes = set((skip_larger or {}).get('modes', []))
+    skip_after_core: Optional[int] = None
+    skip_after_mode = ''
+
+    # Build in ascending core-count order so the skip-larger policy cuts at the
+    # right point. Unparseable instances keep their generated relative order.
+    ordered = sorted(
+        enumerate(instances),
+        key=lambda t: (_scheduler_and_cores(t[1])[1] if _scheduler_and_cores(t[1])[1] is not None else -1,
+                       t[1].split('_')[2] if len(t[1].split('_')) > 2 else '',
+                       t[0]),
+    )
+
     progress = ProgressBar(len(instances), "Building")
-    for instance_name in instances:
+    for _orig_idx, instance_name in ordered:
         logger.info(f"Building instance: {instance_name}")
+
+        sched, cores = _scheduler_and_cores(instance_name)
+        if (skip_schedulers and sched in skip_schedulers and skip_modes
+                and skip_after_core is not None and cores is not None
+                and cores > skip_after_core):
+            skip_reason = (f'SKIPPED: {sched} build {skip_after_mode} at '
+                           f'cpu-cores {skip_after_core}; larger cores skipped by policy')
+            logger.warning(skip_reason)
+            failed_instances.append(FailedBuildResult(
+                instance_name=instance_name,
+                attempts=0,
+                errors=[{'attempt': 0, 'phase': 'build', 'step': 'skipped',
+                         'message': skip_reason, 'context': [],
+                         'timestamp': datetime.now(timezone.utc).isoformat()}],
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                last_error=skip_reason,
+                failure_mode='skipped',
+            ))
+            progress.update()
+            continue
 
         max_attempts = max_retries + 1
         attempt = 1
@@ -748,17 +789,26 @@ def build_all_instances(
 
         if result and not result.success:
             # All retries exhausted, add to failed list
+            mode = _classify_build_mode(errors_list, last_error or '', build_dir)
             failed_result = FailedBuildResult(
                 instance_name=instance_name,
                 attempts=attempt,
                 errors=errors_list,
                 timestamp=datetime.now(timezone.utc).isoformat(),
-                last_error=last_error or 'Unknown error'
+                last_error=last_error or 'Unknown error',
+                failure_mode=mode,
             )
             failed_instances.append(failed_result)
             logger.error(
-                f"Failed to build {instance_name} after {attempt} attempts: {last_error}"
+                f"Failed to build {instance_name} after {attempt} attempts ({mode}): {last_error}"
             )
+            if (skip_schedulers and sched in skip_schedulers and mode in skip_modes
+                    and cores is not None):
+                skip_after_core = cores
+                skip_after_mode = mode
+                logger.warning(
+                    f"{sched} build {mode} at cpu-cores {cores}: skipping larger core counts"
+                )
         # Continue processing next instance regardless
         progress.update()
 
@@ -801,13 +851,7 @@ def get_git_commit() -> str:
         - If not in a git repository, return "unknown"
     """
     try:
-        result = subprocess.run(
-            ['git', 'rev-parse', 'HEAD'],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=10
-        )
+        result = run_and_log(['git', 'rev-parse', 'HEAD'], timeout=10, check=True)
         # Return first 8 characters (short form)
         commit_hash = result.stdout.strip()
         return commit_hash[:8] if len(commit_hash) >= 8 else commit_hash
@@ -875,12 +919,7 @@ def extract_binary_sections(build_result: BuildResult) -> Dict[str, Any]:
         if executable.exists():
             try:
                 # Use size -A to get section sizes (simpler and more reliable than readelf)
-                result = subprocess.run(
-                    ["size", "-A", str(executable)],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                result = run_and_log(["size", "-A", str(executable)], timeout=5)
 
                 if result.returncode == 0:
                     # Parse size -A output: .section_name   size   addr
@@ -964,6 +1003,58 @@ def _parse_instance_name(instance_name: str) -> Dict[str, Any]:
                 params[key] = val_str
 
     return params
+
+
+def _scheduler_and_cores(instance_name: str):
+    """Return (scheduler, cores) parsed from an instance name, or (None, None).
+
+    Instance names carry the NUM_CORES parameter under its label "cpu-cores"
+    (e.g. 08-sift_cores_vf-omp_cpu-cores_4_semaphore_atomic-ring).
+    """
+    params = _parse_instance_name(instance_name)
+    sched = params.get('scheduler')
+    cores = params.get('cpu-cores')
+    if not isinstance(cores, int):
+        cores = None
+    return sched, cores
+
+
+def _classify_build_mode(errors_list: List[Dict[str, Any]], last_error: str,
+                         build_dir: Path) -> str:
+    """Classify a failed build as build-timeout, build-oom, or build-error.
+
+    Timeout: error text mentions timeout/exceeded (builder stamps [TIMEOUT] and
+    "Build exceeded total timeout" / "Build timed out" messages). OOM: phase
+    log (referenced from "Full output: <path>") contains a killer/OOM marker
+    (Killed, out of memory, Cannot allocate memory, bad_alloc, ...).
+    Anything else is a well-behaved build error.
+    """
+    texts = [last_error or '']
+    for e in errors_list:
+        msg = e.get('message', '') if isinstance(e, dict) else str(e)
+        texts.append(msg)
+        m = re.search(r'Full output: (\S+\.log)', msg)
+        if m:
+            p = Path(m.group(1))
+            if p.exists():
+                try:
+                    with open(p, 'r', errors='replace') as f:
+                        texts.append(f.read()[-8000:])
+                except OSError:
+                    pass
+    joined = '\n'.join(texts).lower()
+    has_timeout = ('timed out' in joined or 'timeout' in joined or 'exceeded' in joined)
+    has_oom = ('killed' in joined or 'out of memory' in joined
+               or 'cannot allocate memory' in joined
+               or 'memory exhausted' in joined or 'bad_alloc' in joined
+               or 'memory allocation' in joined)
+    if has_timeout and not has_oom:
+        return 'build-timeout'
+    if has_oom:
+        return 'build-oom'
+    if has_timeout:
+        return 'build-timeout'
+    return 'build-error'
 
 
 def write_build_results(
@@ -1060,6 +1151,7 @@ def write_build_results(
             "parameters": parameters,  # Keep nested for notebook extraction
             **flattened,  # Add flattened fields for Vega-Lite
             "attempts": failed_result.attempts,
+            "failure_mode": failed_result.failure_mode,
             "errors": errors_list
         }
         failed_instances_section.append(failed_instance_obj)
@@ -1192,7 +1284,8 @@ def read_build_results(json_file: Path) -> BuildResults:
                 attempts=failed_obj.get('attempts', 1),
                 errors=failed_obj.get('errors', []),
                 timestamp=failed_obj.get('timestamp', ''),
-                last_error=failed_obj.get('last_error', '')
+                last_error=failed_obj.get('last_error', ''),
+                failure_mode=failed_obj.get('failure_mode', 'build-error'),
             )
             failed_instances.append(failed)
         except KeyError as e:
