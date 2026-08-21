@@ -88,3 +88,10 @@ external/jemalloc/
 
 # Misc
 preesm_run_large.log
+
+# Symlink to Claude Code auto-memory (outside repo)
+.claude-memory
+results.db
+
+# Paper sources (jsps/qual/sips/wamca) — local only
+latex/
