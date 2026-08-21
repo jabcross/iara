@@ -1,0 +1,797 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spirit:design xmlns:spirit="http://www.spiritconsortium.org/XMLSchema/SPIRIT/1.4">
+    <spirit:vendor>ietr</spirit:vendor>
+    <spirit:library>preesm</spirit:library>
+    <spirit:name>4CoreX86</spirit:name>
+    <spirit:version>1</spirit:version>
+    <spirit:componentInstances>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core0</spirit:instanceName>
+            <spirit:hardwareId>0</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core1</spirit:instanceName>
+            <spirit:hardwareId>1</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core3</spirit:instanceName>
+            <spirit:hardwareId>3</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core2</spirit:instanceName>
+            <spirit:hardwareId>2</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>shared_mem</spirit:instanceName>
+            <spirit:hardwareId>0</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="SHARED_MEM" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core4</spirit:instanceName>
+            <spirit:hardwareId>4</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core5</spirit:instanceName>
+            <spirit:hardwareId>5</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core6</spirit:instanceName>
+            <spirit:hardwareId>6</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core7</spirit:instanceName>
+            <spirit:hardwareId>7</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core8</spirit:instanceName>
+            <spirit:hardwareId>8</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core9</spirit:instanceName>
+            <spirit:hardwareId>9</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core10</spirit:instanceName>
+            <spirit:hardwareId>10</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core11</spirit:instanceName>
+            <spirit:hardwareId>11</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core12</spirit:instanceName>
+            <spirit:hardwareId>12</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core13</spirit:instanceName>
+            <spirit:hardwareId>13</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core14</spirit:instanceName>
+            <spirit:hardwareId>14</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core15</spirit:instanceName>
+            <spirit:hardwareId>15</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core16</spirit:instanceName>
+            <spirit:hardwareId>16</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core17</spirit:instanceName>
+            <spirit:hardwareId>17</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core18</spirit:instanceName>
+            <spirit:hardwareId>18</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core19</spirit:instanceName>
+            <spirit:hardwareId>19</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core20</spirit:instanceName>
+            <spirit:hardwareId>20</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core21</spirit:instanceName>
+            <spirit:hardwareId>21</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core22</spirit:instanceName>
+            <spirit:hardwareId>22</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core23</spirit:instanceName>
+            <spirit:hardwareId>23</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core24</spirit:instanceName>
+            <spirit:hardwareId>24</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core25</spirit:instanceName>
+            <spirit:hardwareId>25</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core26</spirit:instanceName>
+            <spirit:hardwareId>26</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core28</spirit:instanceName>
+            <spirit:hardwareId>28</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core27</spirit:instanceName>
+            <spirit:hardwareId>27</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core29</spirit:instanceName>
+            <spirit:hardwareId>29</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core30</spirit:instanceName>
+            <spirit:hardwareId>30</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core31</spirit:instanceName>
+            <spirit:hardwareId>31</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core32</spirit:instanceName>
+            <spirit:hardwareId>32</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core33</spirit:instanceName>
+            <spirit:hardwareId>33</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core34</spirit:instanceName>
+            <spirit:hardwareId>34</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core35</spirit:instanceName>
+            <spirit:hardwareId>35</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core36</spirit:instanceName>
+            <spirit:hardwareId>36</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core37</spirit:instanceName>
+            <spirit:hardwareId>37</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core38</spirit:instanceName>
+            <spirit:hardwareId>38</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core39</spirit:instanceName>
+            <spirit:hardwareId>39</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core40</spirit:instanceName>
+            <spirit:hardwareId>40</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core41</spirit:instanceName>
+            <spirit:hardwareId>41</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core42</spirit:instanceName>
+            <spirit:hardwareId>42</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core43</spirit:instanceName>
+            <spirit:hardwareId>43</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core44</spirit:instanceName>
+            <spirit:hardwareId>44</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core45</spirit:instanceName>
+            <spirit:hardwareId>45</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core46</spirit:instanceName>
+            <spirit:hardwareId>46</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core47</spirit:instanceName>
+            <spirit:hardwareId>47</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core48</spirit:instanceName>
+            <spirit:hardwareId>48</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core49</spirit:instanceName>
+            <spirit:hardwareId>49</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core50</spirit:instanceName>
+            <spirit:hardwareId>50</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core51</spirit:instanceName>
+            <spirit:hardwareId>51</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core52</spirit:instanceName>
+            <spirit:hardwareId>52</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core53</spirit:instanceName>
+            <spirit:hardwareId>53</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core54</spirit:instanceName>
+            <spirit:hardwareId>54</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core55</spirit:instanceName>
+            <spirit:hardwareId>55</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core56</spirit:instanceName>
+            <spirit:hardwareId>56</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core57</spirit:instanceName>
+            <spirit:hardwareId>57</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core58</spirit:instanceName>
+            <spirit:hardwareId>58</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core59</spirit:instanceName>
+            <spirit:hardwareId>59</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core60</spirit:instanceName>
+            <spirit:hardwareId>60</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core61</spirit:instanceName>
+            <spirit:hardwareId>61</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core62</spirit:instanceName>
+            <spirit:hardwareId>62</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+        <spirit:componentInstance>
+            <spirit:instanceName>Core63</spirit:instanceName>
+            <spirit:hardwareId>63</spirit:hardwareId>
+            <spirit:componentRef spirit:library="" spirit:name="x86" spirit:vendor="" spirit:version=""/>
+            <spirit:configurableElementValues/>
+        </spirit:componentInstance>
+    </spirit:componentInstances>
+    <spirit:interconnections>
+        <spirit:interconnection>
+            <spirit:name>2</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core1"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>4</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core3"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>3</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core2"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>1</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core0"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core7|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core7"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>shared_mem|shared_mem|Core4|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core4"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core6|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core6"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core5|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core5"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core17|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core17"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core19|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core19"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core9|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core9"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core22|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core22"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core21|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core21"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core15|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core15"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core27|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core27"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core26|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core26"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core28|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core28"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core24|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core24"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core25|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core25"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core29|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core29"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core20|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core20"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core30|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core30"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core23|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core23"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core14|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core14"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core12|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core12"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core10|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core10"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core16|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core16"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core31|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core31"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core13|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core13"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core11|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core11"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core18|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core18"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core8|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core8"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core40|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core40"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core38|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core38"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core56|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core56"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core52|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core52"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core46|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core46"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core42|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core42"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core57|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core57"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core50|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core50"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core60|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core60"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core59|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core59"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core39|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core39"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core45|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core45"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core54|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core54"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core49|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core49"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core36|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core36"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core43|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core43"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core47|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core47"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core37|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core37"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core44|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core44"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core41|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core41"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core53|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core53"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core51|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core51"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core58|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core58"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core35|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core35"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core34|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core34"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core55|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core55"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core33|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core33"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core48|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core48"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core32|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core32"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core61|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core61"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core63|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core63"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+        <spirit:interconnection>
+            <spirit:name>Core62|shared_mem|shared_mem|shared_mem</spirit:name>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="Core62"/>
+            <spirit:activeInterface spirit:busRef="shared_mem" spirit:componentRef="shared_mem"/>
+        </spirit:interconnection>
+    </spirit:interconnections>
+    <spirit:hierConnections/>
+    <spirit:vendorExtensions>
+        <slam:componentDescriptions xmlns:slam="http://sourceforge.net/projects/dftools/slam">
+            <slam:componentDescription slam:componentRef="x86" slam:componentType="CPU" slam:refinement=""/>
+            <slam:componentDescription slam:componentRef="SHARED_MEM" slam:componentType="parallelComNode" slam:refinement="" slam:speed="1000000000"/>
+        </slam:componentDescriptions>
+        <slam:linkDescriptions xmlns:slam="http://sourceforge.net/projects/dftools/slam">
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="2"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="4"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="3"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="1"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core7|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="shared_mem|shared_mem|Core4|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core6|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core5|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core17|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core19|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core9|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core22|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core21|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core15|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core27|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core26|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core28|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core24|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core25|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core29|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core20|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core30|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core23|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core14|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core12|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core10|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core16|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core31|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core13|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core11|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core18|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core8|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core40|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core38|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core56|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core52|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core46|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core42|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core57|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core50|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core60|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core59|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core39|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core45|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core54|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core49|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core36|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core43|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core47|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core37|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core44|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core41|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core53|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core51|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core58|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core35|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core34|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core55|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core33|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core48|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core32|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core61|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core63|shared_mem|shared_mem|shared_mem"/>
+            <slam:linkDescription slam:directedLink="undirected" slam:linkType="DataLink" slam:referenceId="Core62|shared_mem|shared_mem|shared_mem"/>
+        </slam:linkDescriptions>
+        <slam:designDescription xmlns:slam="http://sourceforge.net/projects/dftools/slam">
+            <slam:parameters/>
+        </slam:designDescription>
+    </spirit:vendorExtensions>
+</spirit:design>

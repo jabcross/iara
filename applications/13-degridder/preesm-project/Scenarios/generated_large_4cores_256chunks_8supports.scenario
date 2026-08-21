@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scenario>
+    <flags>
+        <sizesAreInBit/>
+    </flags>
+    <files>
+        <algorithm url="/degridder/Algo/top_parallel_degridder.pi"/>
+        <architecture url="/degridder/Archi/generated_4cores.slam"/>
+        <codegenDirectory url="/degridder/Code/generated/"/>
+    </files>
+    <constraints excelUrl="">
+        <constraintGroup>
+            <operator name="Core0"/>
+            <task name="top_degridder/config_struct_set_up"/>
+            <task name="top_degridder/visibility_host_set_up"/>
+            <task name="top_degridder/convert_vis_to_csv"/>
+            <task name="top_degridder/CUFFT_EXECUTE_FORWARD_C2C_actor"/>
+            <task name="top_degridder/fft_shift_complex_to_complex_actor"/>
+            <task name="top_degridder/fft_shift_real_to_complex_actor"/>
+            <task name="top_degridder/load_image_from_file"/>
+            <task name="top_degridder/generate_kernels"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+            <task name="top_degridder"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core1"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core2"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core3"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+    </constraints>
+    <timings excelUrl="">
+        <memcpyspeed opname="x86" setuptime="1" timeperunit="1.0E-10"/>
+    </timings>
+    <simuParams>
+        <mainCore>Core0</mainCore>
+        <mainComNode>shared_mem</mainComNode>
+        <averageDataSize>1000</averageDataSize>
+        <dataTypes>
+            <dataType name="PRECISION2" size="128"/>
+            <dataType name="PRECISION" size="64"/>
+            <dataType name="int2" size="64"/>
+            <dataType name="PRECISION3" size="192"/>
+            <dataType name="Config" size="2432"/>
+            <dataType name="double" size="64"/>
+            <dataType name="int" size="32"/>
+            <dataType name="float2" size="64"/>
+            <dataType name="float3" size="96"/>
+        </dataTypes>
+        <specialVertexOperators>
+            <specialVertexOperator path="Core0"/>
+        </specialVertexOperators>
+    </simuParams>
+    <parameterValues>
+        <parameter name="NUM_CHUNK" parent="degridder_parallel" value="256"/>
+        <parameter name="NUM_KERNEL_SUPPORT" parent="top_degridder" value="8"/>
+        <parameter name="GRID_SIZE" parent="top_degridder" value="5120"/>
+        <parameter name="NUM_VISIBILITIES" parent="top_degridder" value="7848960"/>
+        <parameter name="NUM_SCENARIO" parent="top_degridder" value="3"/>
+    </parameterValues>
+    <papifyConfigs xmlUrl=""/>
+    <energyConfigs xmlUrl="">
+        <performanceObjective objectiveEPS="0.0"/>
+        <pePower opName="Base" pePower="10.0"/>
+        <pePower opName="x86" pePower="10.0"/>
+        <peActorsEnergy/>
+    </energyConfigs>
+</scenario>

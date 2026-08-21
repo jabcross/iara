@@ -14,8 +14,8 @@ echo "=== Preesm codegen ==="
 : "${PATH_TO_TEST_BUILD_DIR:?Must set PATH_TO_TEST_BUILD_DIR}"
 : "${IARA_DIR:?Must set IARA_DIR}"
 
-# --- Locate Preesm repository (sibling to IaRa) ---
-PREESM_REPO="${PREESM_DEGRIDDER_REPO:-${IARA_DIR}/../degridder}"
+# --- Locate Preesm repository (iara-local, single source of truth) ---
+PREESM_REPO="${PREESM_DEGRIDDER_REPO:-${IARA_DIR}/applications/13-degridder/preesm-project}"
 if [ ! -d "$PREESM_REPO" ]; then
   echo "ERROR: Preesm degridder repo not found at $PREESM_REPO" >&2
   echo "Set PREESM_DEGRIDDER_REPO to override." >&2

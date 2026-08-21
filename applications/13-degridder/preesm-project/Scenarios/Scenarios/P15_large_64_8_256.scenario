@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scenario>
+    <flags>
+        <sizesAreInBit/>
+    </flags>
+    <files>
+        <algorithm url="/degridder/Algo/top_parallel_degridder.pi"/>
+        <architecture url="/degridder/Archi/64CoresX86.slam"/>
+        <codegenDirectory url="/degridder/Code/generated/"/>
+    </files>
+    <constraints excelUrl="">
+        <constraintGroup>
+            <operator name="Core0"/>
+            <task name="top_degridder/config_struct_set_up"/>
+            <task name="top_degridder/visibility_host_set_up"/>
+            <task name="top_degridder/convert_vis_to_csv"/>
+            <task name="top_degridder/CUFFT_EXECUTE_FORWARD_C2C_actor"/>
+            <task name="top_degridder/fft_shift_complex_to_complex_actor"/>
+            <task name="top_degridder/fft_shift_real_to_complex_actor"/>
+            <task name="top_degridder/load_image_from_file"/>
+            <task name="top_degridder/generate_kernels"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+            <task name="top_degridder"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core1"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core2"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core3"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core4"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core5"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core6"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core7"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core8"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core9"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core10"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core11"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core12"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core13"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core14"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core15"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core16"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core17"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core18"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core19"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core20"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core21"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core22"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core23"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core24"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core25"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core26"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core27"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core28"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core29"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core30"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core31"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core32"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core33"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core34"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core35"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core36"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core37"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core38"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core39"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core40"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core41"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core42"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core43"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core44"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core45"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core46"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core47"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core48"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core49"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core50"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core51"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core52"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core53"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core54"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core55"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core56"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core57"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core58"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core59"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core60"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core61"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core62"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+        <constraintGroup>
+            <operator name="Core63"/>
+            <task name="top_degridder/degridder_parallel/Degridder"/>
+            <task name="top_degridder/degridder_parallel/iterator"/>
+            <task name="top_degridder/degridder_parallel"/>
+        </constraintGroup>
+    </constraints>
+    <timings excelUrl="">
+        <memcpyspeed opname="x86" setuptime="1" timeperunit="1.0E-10"/>
+    </timings>
+    <simuParams>
+        <mainCore>Core0</mainCore>
+        <mainComNode>shared_mem</mainComNode>
+        <averageDataSize>1000</averageDataSize>
+        <dataTypes>
+            <dataType name="PRECISION2" size="128"/>
+            <dataType name="PRECISION" size="64"/>
+            <dataType name="int2" size="64"/>
+            <dataType name="PRECISION3" size="192"/>
+            <dataType name="Config" size="2432"/>
+            <dataType name="double" size="64"/>
+            <dataType name="int" size="32"/>
+            <dataType name="float2" size="64"/>
+            <dataType name="float3" size="96"/>
+        </dataTypes>
+        <specialVertexOperators>
+            <specialVertexOperator path="Core0"/>
+        </specialVertexOperators>
+    </simuParams>
+    <parameterValues>
+        <parameter name="NUM_CHUNK" parent="degridder_parallel" value="256"/>
+        <parameter name="NUM_KERNEL_SUPPORT" parent="top_degridder" value="8"/>
+        <parameter name="GRID_SIZE" parent="top_degridder" value="5120"/>
+        <parameter name="NUM_VISIBILITIES" parent="top_degridder" value="7848960"/>
+        <parameter name="NUM_SCENARIO" parent="top_degridder" value="3"/>
+    </parameterValues>
+    <papifyConfigs xmlUrl=""/>
+    <energyConfigs xmlUrl="">
+        <performanceObjective objectiveEPS="0.0"/>
+        <pePower opName="Base" pePower="10.0"/>
+        <pePower opName="x86" pePower="10.0"/>
+        <peActorsEnergy/>
+    </energyConfigs>
+</scenario>

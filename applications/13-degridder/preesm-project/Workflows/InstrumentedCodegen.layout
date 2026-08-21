@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<layout>
+   <vertices>
+      <vertex id="scenario" x="57" y="226"/>
+      <vertex id="Display Gantt" x="585" y="112"/>
+      <vertex id="MEG Builder" x="585" y="256"/>
+      <vertex id="Memory Allocation" x="1162" y="359"/>
+      <vertex id="Code Generation" x="1424" y="70"/>
+      <vertex id="Gantt Exporter" x="585" y="463"/>
+      <vertex id="PiMM2SrDAG" x="219" y="249"/>
+      <vertex id="PiSDF Scheduling" x="389" y="348"/>
+      <vertex id="PiSDF Export" x="389" y="227"/>
+      <vertex id="Memory Bound Estimator" x="775" y="217"/>
+      <vertex id="MEG Updater" x="775" y="359"/>
+      <vertex id="Scripts" x="1026" y="430"/>
+      <vertex id="Memory Bound Estimator 2" x="1162" y="480"/>
+   </vertices>
+</layout>

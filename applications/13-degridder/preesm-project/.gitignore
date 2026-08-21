@@ -1,0 +1,43 @@
+# === Eclipse / Preesm ===
+.project
+.settings/
+Algo/generated/
+
+# === IntelliJ / CLion (.idea) ===
+.idea/
+*.iml
+
+# === CMake / Ninja / Make ===
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+Makefile
+build.ninja
+*.ninja_deps
+*.ninja_log
+*.cmake
+*.bin
+*.o
+*.o.d
+*.log
+
+# === Debug/Release binaries ===
+Code/degridder_pipeline
+Code/cmake_install.cmake
+
+# === Lock files ===
+*.lock
+~$*
+.*.swp
+.*.swo
+
+# === CSV temporaire ===
+Code/*.csv
+Code/.~lock.*.csv#
+
+# === Preesm Outputs ===
+Code/generated/
+
+Code/output/
+Code/fits/
+Code/data/
