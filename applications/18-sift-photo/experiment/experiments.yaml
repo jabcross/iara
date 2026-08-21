@@ -265,6 +265,12 @@ execution:
   repetitions: 3
   warmup: 0
   timeout: 3600
+  # Preesm build timeout at a core count → skip larger preesm core counts
+  # (recorded as failure_mode=skipped data points). Timeout only: fast
+  # build-errors/OOMs are kept as informative failures.
+  skip_larger:
+    schedulers: [preesm]
+    modes: [build-timeout]
   environment:
     OMP_NUM_THREADS: "{NUM_CORES}"
     OMP_PROC_BIND: "close"

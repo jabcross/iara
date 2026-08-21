@@ -94,4 +94,6 @@ preesm_run_large.log
 results.db
 
 # Paper sources (jsps/qual/sips/wamca) — local only
-latex/
+latex
+
+latex

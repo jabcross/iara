@@ -29,6 +29,13 @@ parameters:
     description: "Number of blocks to divide matrix into"
     unit: ""
 
+  # Number of CPU cores (threads via OMP_NUM_THREADS)
+  - name: NUM_CORES
+    type: int
+    label: "CPU Cores"
+    description: "Number of CPU cores for OpenMP parallelization"
+    unit: ""
+
   # Scheduler selection
   - name: scheduler
     type: str
@@ -197,6 +204,15 @@ experiment_sets:
       NUM_BLOCKS: [4]
       scheduler: [sequential, omp-for, omp-task, enkits-task, vf-omp, vf-enkits]
 
+  # Core sweep: fixed 20160 matrix, 16x16 blocks, schedulers up to 48 cores
+  - name: cores
+    description: "Core sweep 1..48 (degridder-matching counts): omp-task/omp-for/vf-omp/vf-enkits, 5 runs"
+    parameters:
+      MATRIX_SIZE: [20160]
+      NUM_BLOCKS: [16]
+      NUM_CORES: [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 40, 48]
+      scheduler: [omp-task, omp-for, vf-omp, vf-enkits]
+
 
   # Compact comparison with small values
   - name: compact_schedulers
@@ -214,6 +230,14 @@ experiment_sets:
       MATRIX_SIZE: [2048]
       NUM_BLOCKS: [2]
       scheduler: [vf-omp]
+
+  # Temporary: vf-enkits vs vf-omp scaling diagnostic. Delete when done.
+  - name: enkits-diag
+    description: "vf-enkits vs vf-omp scaling diagnostic (blocks 1/8)"
+    parameters:
+      MATRIX_SIZE: [2048]
+      NUM_BLOCKS: [1, 8]
+      scheduler: [vf-enkits, vf-omp]
 
   # Medium validation test — all schedulers
   - name: medium
@@ -311,17 +335,17 @@ experiment_sets:
 # Execution configuration
 execution:
   # Number of times to run each configuration
-  repetitions: 3
+  repetitions: 5
 
   # Number of warmup runs (not included in measurements)
-  warmup: 1
+  warmup: 0
 
   # Timeout for each run (seconds)
   timeout: 1800
 
   # Environment variables to set for all runs
   environment:
-    OMP_NUM_THREADS: "8"
+    OMP_NUM_THREADS: "{NUM_CORES}"
     OMP_PROC_BIND: "spread"
     OMP_PLACES: "threads"
 

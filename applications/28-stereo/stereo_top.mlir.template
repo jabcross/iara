@@ -1,0 +1,79 @@
+// Generated from preesm-apps/stereo/.../Algo/stereo_top.pi via pi-to-iara.py,
+// then hand-edited: Read_PPM0/Read_PPM1 share the Preesm loop name "readPPM"
+// (same C function, different baked `id`), which pi-to-iara.py collapses into
+// one @p2iaw_readPPM symbol. The second occurrence (right image, id=1) below
+// is renamed to @p2iaw_readPPM1 so preesm2iara.c.template can give it a
+// distinct wrapper. See applications/28-stereo/preesm2iara.c.template.
+//
+// Parameters (cfg_in_iface — primary, from experiments.yaml `parameters`):
+// Computed parameters (param — from experiments.yaml `computed_parameters`):
+//   height = 380
+//   width = 434
+//   maxDisparity = 60
+//   minDisparity = 0
+//   nbIterations = 5
+//   nbSlice = 20
+//   scale = 4
+//   truncValue = 12
+//   size = height*width
+//   overlap = 1
+//   sliceHeight = height/nbSlice+2*overlap
+
+module {
+
+iara.actor @stereo_top {
+
+
+
+  %e1_s = iara.node @p2iaw_readPPM out ( tensor<«height*width*3»xi8> )
+  %e1_d = iara.edge %e1_s : tensor<«height*width*3»xi8> -> tensor<«3*size»xi8>
+
+  %e4_s = iara.node @p2iaw_readPPM1 out ( tensor<«3*height*width»xi8> )
+  %e4_d = iara.edge %e4_s : tensor<«3*height*width»xi8> -> tensor<«3*size»xi8>
+
+  %e3_s, %e2_s = iara.node @iara_broadcast in ( %e1_d:tensor<«3*size»xi8> ) out ( tensor<«3*size»xi8>, tensor<«3*size»xi8> )
+  %e3_d = iara.edge %e3_s : tensor<«3*size»xi8> -> tensor<«height*width*3»xi8>
+  %e2_d = iara.edge %e2_s : tensor<«3*size»xi8> -> tensor<«size*3»xi8>
+
+  %e9_s = iara.node @p2iaw_rgb2Gray in ( %e4_d:tensor<«3*size»xi8> ) out ( tensor<«size»xf32> )
+  %e9_d = iara.edge %e9_s : tensor<«size»xf32> -> tensor<«size»xf32>
+
+  %e5_s = iara.node @p2iaw_rgb2Gray in ( %e2_d:tensor<«size*3»xi8> ) out ( tensor<«size»xf32> )
+  %e5_d = iara.edge %e5_s : tensor<«size»xf32> -> tensor<«size»xf32>
+
+  %e10_s, %e12_s = iara.node @iara_broadcast in ( %e9_d:tensor<«size»xf32> ) out ( tensor<«size»xf32>, tensor<«size»xf32> )
+  %e10_d = iara.edge %e10_s : tensor<«size»xf32> -> tensor<«height*width»xf32>
+  %e12_d = iara.edge %e12_s : tensor<«size»xf32> -> tensor<«height*width»xf32>
+
+  %e6_s, %e7_s = iara.node @iara_broadcast in ( %e5_d:tensor<«size»xf32> ) out ( tensor<«size»xf32>, tensor<«size»xf32> )
+  %e6_d = iara.edge %e6_s : tensor<«size»xf32> -> tensor<«height*width»xf32>
+  %e7_d = iara.edge %e7_s : tensor<«size»xf32> -> tensor<«height*width»xf32>
+
+  %e11_s = iara.node @p2iaw_census in ( %e10_d:tensor<«height*width»xf32> ) out ( tensor<«height*width»xi8> )
+  %e11_d = iara.edge %e11_s : tensor<«height*width»xi8> -> tensor<«height*width»xi8>
+
+  %e8_s = iara.node @p2iaw_census in ( %e6_d:tensor<«height*width»xf32> ) out ( tensor<«height*width»xi8> )
+  %e8_d = iara.edge %e8_s : tensor<«height*width»xi8> -> tensor<«height*width»xi8>
+
+  %e13_s = iara.node @cost_parallel_work in ( %e8_d:tensor<«height*width»xi8>, %e7_d:tensor<«height*width»xf32>, %e3_d:tensor<«height*width*3»xi8>, %e11_d:tensor<«height*width»xi8>, %e12_d:tensor<«height*width»xf32> ) out ( tensor<«height*width»xi8> )
+  %e13_d = iara.edge %e13_s : tensor<«height*width»xi8> -> tensor<«height*width»xi8>
+
+  %e14_s = iara.node @p2iaw_split in ( %e13_d:tensor<«height*width»xi8> ) out ( tensor<«nbSlice*(height*width/nbSlice+2*overlap*width)»xi8> )
+  %e14_d = iara.edge %e14_s : tensor<«nbSlice*(height*width/nbSlice+2*overlap*width)»xi8> -> tensor<«sliceHeight*width»xi8>
+
+  // Median_Filter's own cfg ports "height"/"topDownBorderSize" are bound to
+  // sliceHeight/overlap (not the global height), per stereo_top.pi's
+  // dependency edges — pi-to-iara.py has no local-scope resolution, so this
+  // per-firing rate is spelled out explicitly rather than left as the
+  // (wrong, globally-shadowed) raw port expr. Rate mismatch vs HashDisparity's
+  // full-height*width input is expected and runtime-resolved (same pattern as
+  // SIFT's parallelismLevel-rate edges).
+  %e15_s = iara.node @p2iaw_medianFilter in ( %e14_d:tensor<«sliceHeight*width»xi8> ) out ( tensor<«sliceHeight*width-2*overlap*width»xi8> )
+  %e15_d = iara.edge %e15_s : tensor<«sliceHeight*width-2*overlap*width»xi8> -> tensor<«height*width»xi8>
+
+  iara.node @p2iaw_hashDisparity in ( %e15_d:tensor<«height*width»xi8> )
+
+
+} // iara.actor @stereo_top
+
+} // module

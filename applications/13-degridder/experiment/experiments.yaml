@@ -10,10 +10,10 @@ application:
   # Preesm baseline config. The generator requires this section for
   # scheduler=preesm instances; the actual degridder preesm codegen runs
   # preesm-codegen.sh (which resolves the repo from PREESM_DEGRIDDER_REPO,
-  # default ${IARA_DIR}/../degridder), so these values are the parity/fallback
-  # for the framework validation.
+  # default ${IARA_DIR}/applications/13-degridder/preesm-project), so these
+  # values are the parity/fallback for the framework validation.
   preesm:
-    project_path: "${IARA_DIR}/../degridder"
+    project_path: "${IARA_DIR}/applications/13-degridder/preesm-project"
     project_name: "degridder"
     workflow: "Codegen.workflow"
     pi_basename: "top_parallel_degridder"
@@ -201,19 +201,19 @@ measurements:
 experiment_sets:
   # Quick test
   - name: quick
-    description: "Quick test for debugging (SIZE=small: uses cycle_0_deconvolved_2560.csv which exists)"
+    description: "Quick test for debugging (SIZE=large: WAMCA comparison dataset)"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
-      scheduler: [vf-omp, preesm]
+      scheduler: [preesm]
 
   # Medium validation test — all schedulers, two core counts
   - name: medium
     description: "Medium validation test for framework integration and baseline comparison"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1, 8]
       NUM_CHUNK: [8]
       NUM_KERNEL_SUPPORT: [8]
@@ -223,7 +223,7 @@ experiment_sets:
   - name: debug-sequential
     description: "Sequential execution for debugging"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
@@ -232,9 +232,9 @@ experiment_sets:
 
   # Small scale testing
   - name: small
-    description: "Small-scale experiments with quick execution"
+    description: "Small-core-count experiments with quick execution"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1, 4, 8]
       NUM_CHUNK: [1, 8, 32]
       NUM_KERNEL_SUPPORT: [8]
@@ -246,9 +246,9 @@ experiment_sets:
   # matrix; preesm (no IaRa semaphore) added via include and swept over the same
   # grid by the common-parameters cross.
   - name: small-sub-sched
-    description: "small workload (cores 1/4/8 × chunks 1/8/32): 4 IaRa versions + preesm"
+    description: "sub-scheduler workload (cores 1/4/8 × chunks 1/8/32): 4 IaRa versions + preesm"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1, 4, 8]
       NUM_CHUNK: [1, 8, 32]
       NUM_KERNEL_SUPPORT: [8]
@@ -330,7 +330,7 @@ experiment_sets:
   # scaling. Each include row is self-contained; list-valued `scheduler`
   # expands to the 3 schedulers per core count.
   - name: wide-scaling
-    description: "Wide degrid kernel scaling curve (large, chunk==cores, cores 1/4/8/16/32): vf-omp/vf-enkits/preesm"
+    description: "Wide degrid kernel scaling curve (large, chunk==cores 1..512, parallelism == NUM_CHUNK): vf-omp/vf-enkits/preesm — chunk counts 64+ hit the preesm codegen scheduling cliff"
     matrix:
       include:
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 1, NUM_CHUNK: 1}
@@ -338,6 +338,16 @@ experiment_sets:
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 8, NUM_CHUNK: 8}
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 16, NUM_CHUNK: 16}
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 32, NUM_CHUNK: 32}
+        # parallelism == NUM_CHUNK: the preesm codegen expands the graph to one
+        # Degridder instance per chunk (each with a full grid+uvw buffer copy), so
+        # the chunk count IS the parallelism space. Chunks > physical cores
+        # oversubscribe at runtime, and chunks 256/512 cross the codegen cliff
+        # (scheduling super-linear in instance count) — recorded as build-timeout
+        # data points via the skip_larger policy (preesm, timeout only).
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 64, NUM_CHUNK: 64}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 128, NUM_CHUNK: 128}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 256, NUM_CHUNK: 256}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 512, NUM_CHUNK: 512}
 
   # Login-node fallback of wide-scaling: same but skip 32 cores (bigmem down,
   # cpu nodes busy). Run instances one at a time to keep the login node quiet.
@@ -354,6 +364,53 @@ experiment_sets:
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 8, NUM_CHUNK: 8}
         - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits, preesm], NUM_CORES: 16, NUM_CHUNK: 16}
 
+
+  # Temporary: wide kernel-scaling sweep with error bars (5 reps): chunk=64 fixed,
+  # cores 1..48, preesm + vf-omp + vf-enkits, large. Delete when done.
+  - name: parallel-test
+    description: "Wide kernel-scaling sweep (large, chunk=64, cores 1..48, 5 reps): preesm/vf-omp/vf-enkits"
+    matrix:
+      include:
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 1}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 2}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 3}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 4}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 6}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 8}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 12}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 16}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 24}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 32}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 40}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [64], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 48}
+
+
+
+  # Temporary: grid-2560 scaling sweep (Anaelle comparison: 32c / 8 supports /
+  # 64 chunks / grid 2560 gave her 27x on Preesm). 5 reps. parallelism ==
+  # NUM_CHUNK: chunk count is the parallel space (one Degridder instance per
+  # chunk), so cores follow chunks 1:1.
+  - name: small-scaling
+    description: "Grid-2560 scaling sweep (small, chunk==cores 1..48): preesm/vf-omp/vf-enkits"
+    matrix:
+      include:
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [1], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 1}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [2], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 2}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [4], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 4}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [8], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 8}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [16], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 16}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [24], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 24}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [32], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 32}
+        - {SIZE: [small], NUM_KERNEL_SUPPORT: [8], NUM_CHUNK: [48], scheduler: [preesm, vf-omp, vf-enkits], NUM_CORES: 48}
+
+
+  # IaRa vs Preesm head-to-head comparison
+  # Sanity check for the mychanges checkout: single 1-core preesm instance
+  - name: mychanges-1core
+    description: "1-core preesm sanity check (large, chunk 1) against mychanges degridder repo"
+    matrix:
+      include:
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [preesm], NUM_CORES: 1, NUM_CHUNK: 1}
 
   # IaRa vs Preesm head-to-head comparison
   - name: vs-preesm
@@ -403,9 +460,9 @@ experiment_sets:
   # copy-all-but-one (no borrow, physical copies). data-triggered alloc (borrow
   # requires it).
   - name: ro-battery
-    description: "RO-borrow battery: Preesm baseline vs vf-enkits with/without RO-borrow; small, chunk=1, cores 1/4/8"
+    description: "RO-borrow battery: Preesm baseline vs vf-enkits with/without RO-borrow; large, chunk=1, cores 1/4/8"
     parameters:
-      SIZE: [small]
+      SIZE: [large]
       NUM_CORES: [1, 4, 8]
       NUM_CHUNK: [1]
       NUM_KERNEL_SUPPORT: [8]
@@ -417,10 +474,39 @@ experiment_sets:
       - {scheduler: preesm}
 
 
+  # ---- Paper: RO-broadcast ownership A/B x both backends, wide scaling ----
+  # Missing graph data (Fig 4/5/7/9 + degridder story): before/after of the
+  # RO-copy optimization with chunk==cores wide scaling (large dataset),
+  # plus Preesm 1-core reference (Preesm multi-core hangs - documented scenario bug).
+  - name: paper-wide-ownership
+    description: "Paper: ownership A/B x {vf-omp,vf-enkits}, wide scaling (large, chunk==cores, 1/4/8/16/32) + Preesm 1-core"
+    matrix:
+      include:
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits], broadcast_ownership: [copy-all-but-one, join-owns-buffer], NUM_CORES: 1, NUM_CHUNK: 1}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits], broadcast_ownership: [copy-all-but-one, join-owns-buffer], NUM_CORES: 4, NUM_CHUNK: 4}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits], broadcast_ownership: [copy-all-but-one, join-owns-buffer], NUM_CORES: 8, NUM_CHUNK: 8}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits], broadcast_ownership: [copy-all-but-one, join-owns-buffer], NUM_CORES: 16, NUM_CHUNK: 16}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [vf-omp, vf-enkits], broadcast_ownership: [copy-all-but-one, join-owns-buffer], NUM_CORES: 32, NUM_CHUNK: 32}
+        - {SIZE: [large], NUM_KERNEL_SUPPORT: [8], scheduler: [preesm], NUM_CORES: 1, NUM_CHUNK: 1}
+
+  # ---- Paper Fig 1/Table 1: compilation scaling vs granularity ----
+  # Missing graph data: compilation wall time, compiler RSS, binary size vs
+  # chunk count (large, 1 core). Preesm build-timeout/OOM at high chunks is a
+  # first-class data point. vf-omp with join-owns-buffer (borrow, default).
+  - name: paper-compile-scaling
+    description: "Paper: compile time/compiler RSS/binary size vs chunks (large); preesm vs vf-omp borrow, 1 core"
+    parameters:
+      SIZE: [large]
+      NUM_CORES: [1]
+      NUM_CHUNK: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+      NUM_KERNEL_SUPPORT: [8]
+      scheduler: [preesm, vf-omp]
+      broadcast_ownership: [join-owns-buffer]
+
 # Execution configuration
 execution:
   # Number of times to run each configuration
-  repetitions: 1
+  repetitions: 5
 
   # Number of warmup runs (not included in measurements)
   warmup: 0
@@ -429,11 +515,22 @@ execution:
   # Paper experiments showed execution times up to ~100s; 300s provides headroom
   timeout: 1800
 
+  # Preesm codegen build timeout at a core count -> skip larger preesm core
+  # counts (recorded as failure_mode=skipped data points). Timeout only, preesm
+  # builds only: fast build-errors/OOMs stay as informative failures.
+  skip_larger:
+    schedulers: [preesm]
+    modes: [build-timeout]
+
   # Environment variables to set for all runs
   environment:
+    # NOTE: OMP_PROC_BIND/OMP_PLACES removed — with these set, libgomp (initialized
+    # by the degridder's FFTW/casacore use) pins the whole process to a single
+    # thread place, collapsing every thread's affinity to CPU 0.  The EnkiTS
+    # backend then runs its workers on one core (spin-starvation) and the degrid
+    # kernel executes sequentially at all core counts.  OMP_NUM_THREADS alone is
+    # honored by both libomp and the EnkiTS backend (iara_enkits_num_threads).
     OMP_NUM_THREADS: "{NUM_CORES}"
-    OMP_PROC_BIND: "spread"
-    OMP_PLACES: "threads"
 
 # Visualization configuration
 visualization:
@@ -470,6 +567,19 @@ visualization:
       scheduler: ordered_within_group
       error_bars: std_dev
       description: "Peak memory usage by chunk size and core count"
+
+    # Kernel-only scaling curve (parallelizable span): line plot over cores,
+    # error bars = std across repetitions.
+    kernel_scaling:
+      title: "Degrid Kernel Time vs Cores"
+      type: line_plot
+      y_axis:
+        metric: degrid_kernel_time
+      x_axis:
+        NUM_CORES: x_axis
+      scheduler: separate
+      error_bars: std_dev
+      description: "Degrid kernel span by core count (mean ± std over repetitions)"
 
 # Output configuration
 output:

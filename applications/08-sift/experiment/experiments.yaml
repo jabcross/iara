@@ -242,7 +242,7 @@ execution:
   # (e.g. SDF admissibility) are recorded and processing continues.
   skip_larger:
     schedulers: [preesm]
-    modes: [build-timeout, build-oom]
+    modes: [build-timeout]
   environment:
     # {NUM_CORES} is substituted per-instance by the experiment framework.
     # Preesm binaries use pthreads (not OMP); this only affects IaRa vf-omp.
