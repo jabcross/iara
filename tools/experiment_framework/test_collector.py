@@ -4,6 +4,7 @@ Unit tests for collector.py - Testing measurement parsing functions.
 
 import unittest
 import json
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from . import collector
@@ -705,3 +706,76 @@ class TestMeasurementIntegration(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestExecuteInstanceWarmup(unittest.TestCase):
+    """Warmup repetitions are executed but excluded from statistics."""
+
+    def _make_exe(self) -> "Path":
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp()
+        os.close(fd)
+        os.chmod(path, 0o755)
+        self.addCleanup(os.unlink, path)
+        return Path(path)
+
+    @staticmethod
+    def _fake_run(wall: float) -> dict:
+        return {
+            "success": True,
+            "returncode": 0,
+            "stdout": f"GNU Wall time: {wall:.6f}\n",
+            "stderr": "",
+            "gnu_time": {"wall_time_s": wall},
+        }
+
+    @patch.object(collector, "execute_single_run")
+    def test_warmup_excluded_from_statistics(self, mock_run):
+        # 2 warmup (slow, cache-cold) + 3 measured runs
+        walls = [10.0, 9.0, 3.0, 3.1, 2.9]
+        mock_run.side_effect = [self._fake_run(w) for w in walls]
+        wall_spec = {"name": "wall_time", "type": "float",
+                     "parser": {"type": "regex",
+                                "pattern": r"GNU Wall time:\s+(\d+\.?\d*)",
+                                "group": 1},
+                     "required": True}
+
+        res = collector.execute_instance(
+            self._make_exe(), repetitions=3, timeout=60,
+            env_vars={}, measurements=[wall_spec], warmup=2,
+            instance_name="test_inst")
+
+        self.assertEqual(mock_run.call_count, 5)
+        self.assertEqual(len(res["runs"]), 3)
+        self.assertEqual(len(res["warmup_runs"]), 2)
+        self.assertEqual(res["warmup_total"], 2)
+        self.assertTrue(all(r["warmup"] is False for r in res["runs"]))
+        self.assertTrue(all(r["warmup"] is True for r in res["warmup_runs"]))
+        self.assertEqual([r["run_number"] for r in res["runs"]], [1, 2, 3])
+        # statistics over measured runs only (3.0/3.1/2.9)
+        stats = res["statistics"]["wall_time"]
+        self.assertEqual(stats["count"], 3)
+        self.assertAlmostEqual(stats["mean"], 3.0)
+        self.assertEqual(res["successful_runs"], 3)
+        self.assertEqual(res["total_runs"], 3)
+
+    @patch.object(collector, "execute_single_run")
+    def test_no_warmup_backward_compatible(self, mock_run):
+        mock_run.side_effect = [self._fake_run(w) for w in [2.5, 2.6]]
+        wall_spec = {"name": "wall_time", "type": "float",
+                     "parser": {"type": "regex",
+                                "pattern": r"GNU Wall time:\s+(\d+\.?\d*)",
+                                "group": 1},
+                     "required": True}
+
+        res = collector.execute_instance(
+            self._make_exe(), repetitions=2, timeout=60,
+            env_vars={}, measurements=[wall_spec], instance_name="t")
+
+        self.assertEqual(mock_run.call_count, 2)
+        self.assertEqual(len(res["runs"]), 2)
+        self.assertEqual(len(res["warmup_runs"]), 0)
+        self.assertEqual(res["warmup_total"], 0)
+        self.assertEqual(res["statistics"]["wall_time"]["count"], 2)
+

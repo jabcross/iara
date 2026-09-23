@@ -218,12 +218,39 @@ def execute_single_run(
         }
 
 
+def _collect_run_data(result: dict, measurements: list, run_number: int,
+                      warmup: bool) -> dict:
+    """Build the run dict for a successful single run (shared local/slurm)."""
+    combined_output = result["stdout"] + "\n" + result["stderr"]
+    parsed_measurements = {}
+    for measurement_spec in measurements:
+        measurement_name = measurement_spec.get('name', 'unknown')
+        try:
+            value = parse_measurement(combined_output, measurement_spec)
+            if value is not None:
+                parsed_measurements[measurement_name] = value
+        except Exception as e:
+            is_required = measurement_spec.get('required', True)
+            if is_required:
+                logger.warning(f"Failed to parse required measurement '{measurement_name}': {e}")
+            else:
+                logger.debug(f"Failed to parse optional measurement '{measurement_name}': {e}")
+    return {
+        "run_number": run_number,
+        "returncode": result["returncode"],
+        "gnu_time": result["gnu_time"],
+        "measurements": parsed_measurements,
+        "warmup": warmup,
+    }
+
+
 def execute_instance(
     executable: Path,
     repetitions: int,
     timeout: int,
     env_vars: Dict[str, str],
     measurements: List[Dict[str, Any]],
+    warmup: int = 0,
     instance_name: str = None
 ) -> Dict[str, Any]:
     """
@@ -231,20 +258,28 @@ def execute_instance(
 
     Process:
         1. Validate executable exists and is executable
-        2. Initialize: runs = [], failures = []
-        3. For each repetition i from 1 to N:
+        2. Initialize: runs = [], failures = [], warmup_runs = [], warmup_failures = []
+        3. For each warmup repetition i from 1 to W:
+           - Call execute_single_run(executable, i, timeout, env_vars)
+           - If success: append run data (flagged warmup=True)
+           - If failure: append to warmup_failures list
+        4. For each measured repetition i from 1 to N:
            - Call execute_single_run(executable, i, timeout, env_vars)
            - If success: append run data with raw stdout
            - If failure: append to failures list
-        4. Return ExecutionResult with runs and failures
+        5. Return ExecutionResult with runs (measured), warmup_runs and failures
+
+    Warmup runs are executed but EXCLUDED from statistics and successful/failed
+    run counts (only measured runs count).
 
     Args:
         executable: Path to the compiled executable
-        repetitions: Number of times to execute
+        repetitions: Number of times to execute (measured)
         timeout: Timeout in seconds
         env_vars: Environment variables to set
         measurements: List of measurement specifications from YAML
                       (reserved for future Task 3.2 measurement parsing)
+        warmup: Number of warmup executions before the measured ones (default 0)
         instance_name: Optional instance name (defaults to executable stem if not provided)
 
     Returns:
@@ -284,10 +319,31 @@ def execute_instance(
 
     runs = []
     failures = []
+    warmup_runs = []
+    warmup_failures = []
 
-    logger.info(f"Executing {executable.stem} with {repetitions} repetitions (timeout={timeout}s)")
+    logger.info(f"Executing {executable.stem} with {warmup} warmup + "
+                f"{repetitions} measured repetitions (timeout={timeout}s)")
 
-    # Execute each repetition
+    # Execute warmup repetitions (measured but excluded from statistics)
+    for run_number in range(1, warmup + 1):
+        logger.debug(f"Running warmup repetition {run_number}/{warmup}")
+
+        result = execute_single_run(
+            executable=executable,
+            run_number=run_number,
+            timeout=timeout,
+            env_vars=env_vars
+        )
+
+        if result["success"]:
+            warmup_runs.append(_collect_run_data(result, measurements, run_number, warmup=True))
+            logger.debug(f"Warmup run {run_number} succeeded")
+        else:
+            warmup_failures.append({"run_number": run_number, "error": result["error"]})
+            logger.warning(f"Warmup run {run_number} failed: {result['error']}")
+
+    # Execute each measured repetition
     for run_number in range(1, repetitions + 1):
         logger.debug(f"Running repetition {run_number}/{repetitions}")
 
@@ -299,32 +355,10 @@ def execute_instance(
         )
 
         if result["success"]:
-            # Parse measurements from stdout and stderr
-            combined_output = result["stdout"] + "\n" + result["stderr"]
-            parsed_measurements = {}
-
-            for measurement_spec in measurements:
-                measurement_name = measurement_spec.get('name', 'unknown')
-                try:
-                    value = parse_measurement(combined_output, measurement_spec)
-                    if value is not None:
-                        parsed_measurements[measurement_name] = value
-                except Exception as e:
-                    is_required = measurement_spec.get('required', True)
-                    if is_required:
-                        logger.warning(f"Failed to parse required measurement '{measurement_name}': {e}")
-                    else:
-                        logger.debug(f"Failed to parse optional measurement '{measurement_name}': {e}")
-
             # Successful run - store with parsed measurements
-            run_data = {
-                "run_number": run_number,
-                "returncode": result["returncode"],
-                "gnu_time": result["gnu_time"],
-                "measurements": parsed_measurements
-            }
+            run_data = _collect_run_data(result, measurements, run_number, warmup=False)
             runs.append(run_data)
-            logger.debug(f"Run {run_number} succeeded with {len(parsed_measurements)} measurements")
+            logger.debug(f"Run {run_number} succeeded with {len(run_data['measurements'])} measurements")
         else:
             # Failed run - track error
             failure_data = {
@@ -342,11 +376,14 @@ def execute_instance(
         f"{successful_runs} successful, {failed_runs} failed out of {repetitions} total"
     )
 
-    # Compute statistics for all measurements
+    # Compute statistics for all measurements (measured runs only)
     execution_result = {
         "instance_name": instance_name,
         "runs": runs,
         "failures": failures,
+        "warmup_runs": warmup_runs,
+        "warmup_failures": warmup_failures,
+        "warmup_total": warmup,
         "total_runs": repetitions,
         "successful_runs": successful_runs,
         "failed_runs": failed_runs
@@ -1001,12 +1038,14 @@ def execute_instance_slurm(
     nodelist: Optional[str] = None,
     partition: Optional[str] = None,
     cpus: int = 48,
+    warmup: int = 0,
     instance_name: str = None
 ) -> Dict[str, Any]:
     """Execute an instance via Slurm sbatch and collect measurements.
 
-    Submits a single sbatch job per repetition, then parses output using
-    the same measurement pipeline as local execution.
+    Submits a single sbatch job per repetition (warmup first, then measured),
+    then parses output using the same measurement pipeline as local execution.
+    Warmup runs are flagged warmup=True and excluded from statistics.
     """
     from .builder import parse_time_output
     from .slurm import submit_job
@@ -1026,10 +1065,14 @@ def execute_instance_slurm(
 
     runs = []
     failures = []
+    warmup_runs = []
+    warmup_failures = []
     slurm_output_dir = Path("slurm_output") / instance_name
 
-    for run_number in range(1, repetitions + 1):
-        logger.info(f"Slurm run {run_number}/{repetitions} for {instance_name}")
+    def run_one(run_number: int, is_warmup: bool):
+        """Submit one sbatch job; return (runs, dict) or (failures, dict)."""
+        tag = " (warmup)" if is_warmup else ""
+        logger.info(f"Slurm run {run_number}/{repetitions} for {instance_name}{tag}")
 
         result = submit_job(
             executable=executable,
@@ -1045,6 +1088,7 @@ def execute_instance_slurm(
         if result["success"]:
             stdout = result["stdout"]
             stderr = result["stderr"]
+            gnu_time = {}
 
             # Parse GNU time output (same as local execute_single_run does)
             time_file = slurm_output_dir / f"{instance_name}_run{run_number}.time"
@@ -1068,22 +1112,35 @@ def execute_instance_slurm(
                     if measurement_spec.get('required', True):
                         logger.warning(f"Slurm: failed to parse {measurement_name}: {e}")
 
-            runs.append({
+            return runs if not is_warmup else warmup_runs, {
                 "run_number": run_number,
                 "returncode": result["returncode"],
-                "gnu_time": gnu_time if 'gnu_time' in dir() else {},
-                "measurements": parsed_measurements
-            })
+                "gnu_time": gnu_time,
+                "measurements": parsed_measurements,
+                "warmup": is_warmup,
+            }
         else:
-            failures.append({
+            return (failures if not is_warmup else warmup_failures), {
                 "run_number": run_number,
-                "error": result.get("error", "Slurm job failed")
-            })
+                "error": result.get("error", "Slurm job failed"),
+                "warmup": is_warmup,
+            }
+
+    for run_number in range(1, warmup + 1):
+        target, data = run_one(run_number, True)
+        target.append(data)
+
+    for run_number in range(1, repetitions + 1):
+        target, data = run_one(run_number, False)
+        target.append(data)
 
     execution_result = {
         "instance_name": instance_name,
         "runs": runs,
         "failures": failures,
+        "warmup_runs": warmup_runs,
+        "warmup_failures": warmup_failures,
+        "warmup_total": warmup,
         "total_runs": repetitions,
         "successful_runs": len(runs),
         "failed_runs": len(failures)
@@ -1238,6 +1295,7 @@ def collect_all_measurements(
     exec_config = config.get('execution', {})
     final_repetitions = repetitions or exec_config.get('repetitions', 5)
     final_timeout = timeout or exec_config.get('timeout', 300)
+    final_warmup = exec_config.get('warmup', 0)
     # Base env, then per-set environment override (execution flags pinned to a
     # set), then CLI --env overrides (highest precedence).
     base_env_vars = dict(exec_config.get('environment', {}))
@@ -1256,7 +1314,8 @@ def collect_all_measurements(
     ]
     measurements = STANDARD_MEASUREMENTS + app_measurements
 
-    logger.info(f"Execution config: repetitions={final_repetitions}, timeout={final_timeout}s")
+    logger.info(f"Execution config: repetitions={final_repetitions}, "
+                f"warmup={final_warmup}, timeout={final_timeout}s")
 
     # Same-node enforcement: each instance is a separate --exclusive sbatch job,
     # so without a fixed nodelist Slurm scatters them across heterogeneous nodes
@@ -1344,6 +1403,7 @@ def collect_all_measurements(
                     nodelist=nodelist,
                     partition=partition,
                     cpus=cpus,
+                    warmup=final_warmup,
                     instance_name=instance_name
                 )
             else:
@@ -1354,6 +1414,7 @@ def collect_all_measurements(
                     final_timeout,
                     env_vars,
                     measurements,
+                    warmup=final_warmup,
                     instance_name=instance_name
                 )
 

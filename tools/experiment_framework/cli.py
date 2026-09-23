@@ -29,6 +29,7 @@ except ImportError:
     _ARGCOMPLETE = False
 import argparse
 import logging
+import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,6 +37,11 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
 import yaml
+
+# Pipeline sbatch wall time (default 48h). Override via IARA_PIPELINE_TIME:
+# jobs longer than the time left before a MAINT reservation start pend with
+# reason "Reserved for maintenance" (see 2026-08-27 reservation).
+PIPELINE_JOB_TIME = os.environ.get('IARA_PIPELINE_TIME', '48:00:00')
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -984,7 +990,7 @@ def _submit_command_to_slurm(argv: list, nodelist: Optional[str] = None, partiti
 #SBATCH --job-name=iara-framework
 #SBATCH --output=iara-slurm-%j.out
 #SBATCH --error=iara-slurm-%j.err
-#SBATCH --time=48:00:00
+#SBATCH --time={PIPELINE_JOB_TIME}
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task={cpus}
 #SBATCH --exclusive

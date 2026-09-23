@@ -7,9 +7,9 @@ echo -n 'Loading modules... '
 # resolves to the OpenHPC default (cmake/4.3.2), whose binary NEEDs libjsoncpp.so.25.
 # That system lib exists on the login node but is ABSENT on the Slurm compute nodes,
 # so every compute-node build died with "libjsoncpp.so.25: cannot open shared object
-# file". The spack cmake/3.31.4 has no such dependency and works on both. (This is the
+# file". The spack cmake/3.31.11 has no such dependency and works on both. (This is the
 # same cmake .env.cached captured; pinning keeps sorgan_env.sh in sync with it.)
-module load casacore cmake/3.31.4 ccache cuda gdb/15.2 openblas python/3.13 mold gcc/14.2 abseil-cpp valgrind
+module load casacore cmake/3.31.11 ccache cuda gdb/17.1 openblas python/3.13 mold gcc/14.3.0 abseil-cpp valgrind
 
 echo -n 'sourcing spack... '
 # Override global spack (v0.24.0 from /etc/profile.d) with local version
@@ -17,10 +17,10 @@ source "$IARA_DIR/spack/share/spack/setup-env.sh"
 spack env activate iara_env
 
 echo -n 'Loading more modules... '
-module load casacore cmake/3.31.4 ccache cuda gdb/15.2 openblas python/3.13 mold gcc/14.2 abseil-cpp valgrind
+module load casacore cmake/3.31.11 ccache cuda gdb/17.1 openblas python/3.13 mold gcc/14.3.0 abseil-cpp valgrind
 
-# cmake/3.31.4 pin (see note above): the bare `cmake` default is ohpc 4.3.2, broken on compute nodes.
-for i in gdb gcc ninja cmake/3.31.4 ccache casacore abseil-cpp mold valgrind python/3.13.1 openblas; do
+# cmake/3.31.11 pin (see note above): the bare `cmake` default is ohpc 4.3.1, broken on compute nodes.
+for i in gdb gcc ninja cmake/3.31.11 ccache casacore abseil-cpp mold valgrind python/3.13 openblas; do
   module load $i
 done
 
@@ -39,6 +39,18 @@ if [ ! -d "$VENV_DIR" ]; then
   pip install --upgrade pip
   pip install -r "$IARA_DIR/requirements.txt"
 else
+  # Self-heal: the venv python3 symlink breaks when the spack python module
+  # moves (e.g. spack reinstall bumps the build hash). Repoint it at the
+  # currently loaded module python and refresh pyvenv.cfg accordingly.
+  if ! "$VENV_DIR/bin/python3" -c 'import sys' >/dev/null 2>&1; then
+    VENV_PY="$(command -v python3)"
+    echo -n "venv python3 stale, repointing at $VENV_PY... "
+    ln -sfn "$VENV_PY" "$VENV_DIR/bin/python3"
+    sed -i -e "s|^home = .*|home = $(dirname "$VENV_PY")|" \
+           -e "s|^executable = .*|executable = $VENV_PY|" \
+           "$VENV_DIR/pyvenv.cfg"
+    echo 'done'
+  fi
   source "$VENV_DIR/bin/activate"
 fi
 
