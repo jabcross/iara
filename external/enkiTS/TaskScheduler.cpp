@@ -20,6 +20,7 @@
 #include "LockLessMultiReadPipe.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 #if defined __i386__ || defined __x86_64__
 #include "x86intrin.h"
@@ -74,6 +75,26 @@ namespace enki
     static constexpr uint32_t gc_PipeSizeLog2            = 8;
     static constexpr uint32_t gc_SpinCount               = 10;
     static constexpr uint32_t gc_SpinBackOffMultiplier   = 100;
+
+    // IaRa experiment hook: the spin budget a thread burns before it blocks on a
+    // semaphore is tunable at runtime, so the sleep/wake syscall cost can be
+    // measured without rebuilding. Unset -> the upstream constants above.
+    static uint32_t SpinCountLimit()
+    {
+        static const uint32_t v = [] {
+            const char* e = std::getenv( "IARA_ENKITS_SPIN_COUNT" );
+            return ( e && *e ) ? (uint32_t)std::atoi( e ) : gc_SpinCount;
+        }();
+        return v;
+    }
+    static uint32_t SpinBackOff()
+    {
+        static const uint32_t v = [] {
+            const char* e = std::getenv( "IARA_ENKITS_SPIN_BACKOFF" );
+            return ( e && *e ) ? (uint32_t)std::atoi( e ) : gc_SpinBackOffMultiplier;
+        }();
+        return v;
+    }
     static constexpr uint32_t gc_MaxNumInitialPartitions = 8;
     static constexpr uint32_t gc_MaxStolenPartitions     = 1 << gc_PipeSizeLog2;
     static constexpr uint32_t gc_CacheLineSize           = 64;
@@ -295,13 +316,13 @@ void TaskScheduler::TaskingThreadFunction( const ThreadArgs& args_ )
         {
             // no tasks, will spin then wait
             ++spinCount;
-            if( spinCount > gc_SpinCount )
+            if( spinCount > SpinCountLimit() )
             {
                 pTS->WaitForNewTasks( threadNum );
             }
             else
             {
-                uint32_t spinBackoffCount = spinCount * gc_SpinBackOffMultiplier;
+                uint32_t spinBackoffCount = spinCount * SpinBackOff();
                 SpinWait( spinBackoffCount );
             }
         }
@@ -998,14 +1019,14 @@ void    TaskScheduler::WaitforTask( const ICompletable* pCompletable_, enki::Tas
                     break;
                 }
             }
-            if( spinCount > gc_SpinCount )
+            if( spinCount > SpinCountLimit() )
             {
                 WaitForTaskCompletion( pCompletable_, threadNum );
                 spinCount = 0;
             }
             else
             {
-                uint32_t spinBackoffCount = spinCount * gc_SpinBackOffMultiplier;
+                uint32_t spinBackoffCount = spinCount * SpinBackOff();
                 SpinWait( spinBackoffCount );
             }
         }
@@ -1054,7 +1075,7 @@ void TaskScheduler::WaitforAll()
         {
             spinCount = 0; // reset spin as ran a task
         }
-        if( spinCount > gc_SpinCount )
+        if( spinCount > SpinCountLimit() )
         {
             // find a running thread and add a dummy wait task
             int32_t countThreadsToCheck = m_NumThreads - 1;
@@ -1087,7 +1108,7 @@ void TaskScheduler::WaitforAll()
         }
         else
         {
-            uint32_t spinBackoffCount = spinCount * gc_SpinBackOffMultiplier;
+            uint32_t spinBackoffCount = spinCount * SpinBackOff();
             SpinWait( spinBackoffCount );
         }
 
