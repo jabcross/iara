@@ -51,7 +51,12 @@ void VirtualFIFO_Edge::push(VirtualFIFO_Chunk chunk) {
 void VirtualFIFO_Edge::propagate_delays(VirtualFIFO_Chunk chunk) {
   if (runtime_info.delay_size > 0) {
     auto this_delay = chunk.take_back(runtime_info.delay_size);
-#ifdef IARA_DELAYS_ZERO_INIT
+#ifdef IARA_DELAYS_NO_INIT
+    // TEST ONLY: leave the delay bytes as the allocator returned them (no
+    // memcpy from the static blob, no memset). Used to measure the cost of the
+    // delay seed write without replacing it with another write.
+    (void)this_delay;
+#elif defined(IARA_DELAYS_ZERO_INIT)
     // Codegen confirmed delay values are all-zero; memset is cheaper.
     memset(this_delay.data, 0, runtime_info.delay_size);
 #else
