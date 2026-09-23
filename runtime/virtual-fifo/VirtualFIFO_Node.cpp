@@ -107,25 +107,6 @@ static VirtualFIFO_Chunk makeAllocChunkForFiring(VirtualFIFO_Edge *e, i64 seq) {
   return view;
 }
 
-// Bump-pointer arena for one-time startup allocations (seed delays, borrow
-// seeds) whose lifetime equals the program. Never frees individual allocs.
-namespace {
-struct StartupArena {
-  static constexpr i64 cap = 1 << 20; // 1 MB
-  i8 buf[cap];
-  i64 used = 0;
-
-  VirtualFIFO_Chunk allocate_chunk(i64 size) {
-    assert(used + size <= cap && "startup arena overflow");
-    i8 *p = buf + used;
-    used += size;
-    return VirtualFIFO_Chunk{.allocated = p, .data = p, .data_size = size,
-                             .virtual_offset = 0};
-  }
-};
-StartupArena g_startup_arena;
-} // namespace
-
 void VirtualFIFO_Node::seedFeedbackDelays() {
   if (!runtime_info.isAlloc())
     return;
@@ -167,7 +148,12 @@ void VirtualFIFO_Node::seedBorrowDelays() {
     i64 D = be->runtime_info.delay_size;
     if (D <= 0)
       continue;
-    auto chunk = g_startup_arena.allocate_chunk(D);
+    // Heap allocation via iara_malloc (so IARA_MOCK_ALLOC still applies). The
+    // seed is a one-time owned allocation with no dealloc node, so it outlives
+    // firing 0 (a small one-shot leak, << the GBs of copies eliminated). A
+    // fixed-size arena is NOT usable here: D is a whole delayed tensor (2 MB+ at
+    // 4K), and any cap plus an assert-only guard silently overflows under NDEBUG.
+    auto chunk = VirtualFIFO_Chunk::allocate(D, 0);
     auto delays = chunk.take_front(D);
     be->propagate_delays(delays);
   }
