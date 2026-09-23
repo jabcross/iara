@@ -66,7 +66,13 @@ parameters:
   - name: malloc
     type: str
     label: "Malloc impl"
-    description: "malloc/free backend: glibc (default) or jemalloc (drop-in replacement)"
+    description: "malloc/free backend: jemalloc (default) or glibc (opt-out, IARA_MALLOC=glibc)"
+
+  # Delayed-feedback zero-copy (iara-opt codegen dim, forwarded as IARA_DELAY_PINGPONG)
+  - name: delay_pingpong
+    type: str
+    label: "Delay ping-pong"
+    description: "Delayed-feedback zero-copy: 0 (copy, default) or 1 (alias prev instance)"
 
 constraints:
   - expression: "VIDEO_FRAMES == 1 or scheduler in ('vf-omp', 'vf-enkits')"
@@ -83,6 +89,79 @@ experiment_sets:
       scheduler: [vf-omp]
       VIDEO_FRAMES: [1]
       broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+
+  # Delay-pingpong A/B on 4K photo. Correctness gate = keypoints (18575 at 8c).
+  - name: delay-pp
+    description: "Delayed-feedback zero-copy A/B on vf-enkits: pingpong 0 vs 1"
+    parameters:
+      NUM_CORES: [1, 8]
+      scheduler: [vf-enkits]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0", "1"]
+
+  # Backend comparison on the same workload/params: libomp tasks vs EnkiTS
+  # tasks (+ our global TaskSet vector/mutex behind iara_submit_task).
+  - name: backend-cmp
+    description: "vf-omp vs vf-enkits backend comparison: 1/8 cores, copy path"
+    parameters:
+      NUM_CORES: [1, 8]
+      scheduler: [vf-omp, vf-enkits]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0"]
+
+  # Timing-only control: IARA_MOCK_ALLOC reserves one arena and aliases >1MB
+  # buffers, so per-firing mmap/munmap + first-touch faults disappear. Data is
+  # garbage -> keypoints are meaningless here; only wall/sys/faults are read.
+  # Timing-only control: IARA_MOCK_ALLOC reserves one arena and aliases >1MB
+  # buffers, so per-firing mmap/munmap + first-touch faults disappear. Data is
+  # garbage -> keypoints are meaningless here; only wall/sys/faults are read.
+  - name: mockcmp
+    description: "vf-enkits with IARA_MOCK_ALLOC (timing-only): allocation cost A/B"
+    defines:
+      - "IARA_MOCK_ALLOC"
+    parameters:
+      NUM_CORES: [8]
+      scheduler: [vf-enkits]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0"]
+
+  # Theory test: the delay seed memcpy reads the 178 MB static blob. Zero it
+  # instead (IARA_DELAYS_ZERO_INIT) -> no read of the blob, FIFO semantics kept
+  # (tokens are still pushed, just zero). Timing-only: keypoints are expected to
+  # change, since SIFT delays carry real init values.
+  - name: zerodelay
+    description: "vf-enkits with IARA_DELAYS_ZERO_INIT: delay-seed copy cost A/B"
+    defines:
+      - "IARA_DELAYS_ZERO_INIT"
+    parameters:
+      NUM_CORES: [8]
+      scheduler: [vf-enkits]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0"]
+
+  # Strongest form of the same test: no memcpy AND no memset. The delay bytes
+  # stay whatever the allocator returned. Dataflow still runs on garbage;
+  # timing-only (keypoints meaningless).
+  - name: noinit
+    description: "vf-enkits with IARA_DELAYS_NO_INIT: no delay seed write at all"
+    defines:
+      - "IARA_DELAYS_NO_INIT"
+    parameters:
+      NUM_CORES: [8]
+      scheduler: [vf-enkits]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0"]
+
+  # Single-threaded reference: same P=8 topology as the parallel arms, executed
+  # serially with no task scheduler. Isolates the runtime's own cost (alloc, FIFO,
+  # purge) from scheduling/concurrency.
+  - name: seq
+    description: "vf-sequential, P=8 topology executed serially"
+    parameters:
+      NUM_CORES: [8]
+      scheduler: [vf-sequential]
+      VIDEO_FRAMES: [1]
+      delay_pingpong: ["0"]
 
   # ---- RO-borrow battery: Preesm baseline vs vf-enkits with/without RO-borrow ----
   # 4K photo, cores 1/4/8/12/16/20. Three arms: preesm (dataflow compiler
@@ -199,6 +278,60 @@ experiment_sets:
           VIDEO_FRAMES: 1
           NUM_CORES: [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30]
 
+  # ---- RERUN-SWEEP: paper-config sweep, single node, cores 1/2/4/8, 5 runs ----
+  # Same arms as `sweep` (vf-enkits RO-borrow vs preesm) but only counts that
+  # build today (preesm OOMs/timeouts >= 9 cores) and 5 measured runs each.
+  # Run all instances on ONE Slurm node to control node variance.
+  - name: rerun-sweep
+    description: "Core sweep (valid counts): vf-enkits + Preesm, 5 runs, single node"
+    matrix:
+      include:
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          VIDEO_FRAMES: 1
+          NUM_CORES: [1, 2, 4, 8]
+        - scheduler: preesm
+          VIDEO_FRAMES: 1
+          NUM_CORES: [1, 2, 4, 8]
+
+  # ---- PROFILE8: minimal pair for perf diff (preesm vs vf-enkits borrow, 8 cores) ----
+  - name: profile8
+    description: "Profile pair: preesm vs vf-enkits (RO borrow), 8 cores, 1 frame"
+    matrix:
+      include:
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          alloc_mode: data-triggered
+          semaphore: atomic-ring
+          VIDEO_FRAMES: 1
+          NUM_CORES: 8
+        - scheduler: preesm
+          VIDEO_FRAMES: 1
+          NUM_CORES: 8
+
+  # ---- PROFILE8-MALLOC: vf-enkits malloc A/B (glibc vs jemalloc) + preesm ----
+  - name: profile8-malloc
+    description: "Profile pair: preesm vs vf-enkits (RO borrow), 8 cores, jemalloc on/off"
+    matrix:
+      include:
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          alloc_mode: data-triggered
+          semaphore: atomic-ring
+          malloc: glibc
+          VIDEO_FRAMES: 1
+          NUM_CORES: 8
+        - scheduler: vf-enkits
+          broadcast_ownership: join-owns-buffer
+          alloc_mode: data-triggered
+          semaphore: atomic-ring
+          malloc: jemalloc
+          VIDEO_FRAMES: 1
+          NUM_CORES: 8
+        - scheduler: preesm
+          VIDEO_FRAMES: 1
+          NUM_CORES: 8
+
   # ---- BATTERY: comprehensive backend/baseline comparison (4K, 1 frame) ----
   # IaRa vf-omp + vf-enkits (join-owns-buffer borrow, data-triggered, atomic-ring)
   # vs Preesm, across cores. All IaRa runs use the new zero-copy RO-broadcast
@@ -262,8 +395,8 @@ measurements:
     required: false
 
 execution:
-  repetitions: 3
-  warmup: 0
+  repetitions: 5
+  warmup: 2
   timeout: 3600
   # Preesm build timeout at a core count → skip larger preesm core counts
   # (recorded as failure_mode=skipped data points). Timeout only: fast

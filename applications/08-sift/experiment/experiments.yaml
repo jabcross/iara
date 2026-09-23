@@ -64,6 +64,12 @@ parameters:
     label: "Broadcast ownership"
     description: "Fan-out strategy: copy-all-but-one (default) or join-owns-buffer (zero-copy RO borrow)"
 
+  # Delayed-feedback zero-copy (iara-opt codegen dim, forwarded as IARA_DELAY_PINGPONG)
+  - name: delay_pingpong
+    type: str
+    label: "Delay ping-pong"
+    description: "Delayed-feedback zero-copy: 0 (copy, default) or 1 (alias prev instance)"
+
 computed_parameters: []
 
 constraints:
@@ -92,6 +98,16 @@ experiment_sets:
       NUM_CORES: [1, 4]
       scheduler: [vf-omp]
       broadcast_ownership: [copy-all-but-one, join-owns-buffer]
+
+  # Delay-pingpong A/B (Phase 0 ground truth). kp is P-dependent:
+  # 1343 @ P=1, 1071 @ P=4 (matches Preesm). Compare each against the same
+  # P with delay_pingpong=0 (copy path = oracle).
+  - name: delay-pp
+    description: "Delayed-feedback zero-copy A/B on vf-enkits: pingpong 0 vs 1"
+    parameters:
+      NUM_CORES: [1, 4]
+      scheduler: [vf-enkits]
+      delay_pingpong: ["0", "1"]
 
   # Single core, both schedulers — fast sanity check
   - name: quick

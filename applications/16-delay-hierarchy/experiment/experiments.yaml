@@ -25,6 +25,14 @@ parameters:
       - vf-omp
       - vf-enkits
 
+  - name: delay_pingpong
+    type: str
+    label: "Delay ping-pong"
+    description: "Delayed-feedback zero-copy: 0 (copy) or 1 (alias prev instance)"
+    choices:
+      - "0"
+      - "1"
+
 constraints: []
 
 
@@ -37,6 +45,17 @@ experiment_sets:
         - vf-sequential
         - vf-omp
         - vf-enkits
+
+  - name: delay-pp
+    description: "Delayed-feedback zero-copy A/B: pingpong 0 (copy) vs 1 (alias)"
+    parameters:
+      scheduler:
+        - vf-sequential
+        - vf-omp
+        - vf-enkits
+      delay_pingpong:
+        - "0"
+        - "1"
 
 execution:
   repetitions: 1
