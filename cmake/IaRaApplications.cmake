@@ -869,8 +869,20 @@ function(iara_add_application)
     endif()
     target_link_libraries(${target_name} PRIVATE ${link_libraries})
 
-    # jemalloc: drop-in malloc replacement (IARA_MALLOC=jemalloc)
-    if(DEFINED ENV{IARA_MALLOC} AND "$ENV{IARA_MALLOC}" STREQUAL "jemalloc")
+    # jemalloc: drop-in malloc replacement. This is now the DEFAULT; set
+    # IARA_MALLOC=glibc to opt out. An unset value means "use the default", so
+    # defaulting here keeps the experiment framework from having to repeat it in
+    # every set (same pattern as the IARA_ALLOC_MODE / IARA_BROADCAST_OWNERSHIP
+    # defaults in include/Iara/Util/EnvOption.h).
+    if(NOT DEFINED ENV{IARA_MALLOC}
+       OR "$ENV{IARA_MALLOC}" STREQUAL ""
+       OR "$ENV{IARA_MALLOC}" STREQUAL "jemalloc")
+        if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/jemalloc/lib/libjemalloc.a")
+            message(FATAL_ERROR
+                "IARA_MALLOC defaults to jemalloc but "
+                "${PROJECT_SOURCE_DIR}/external/jemalloc/lib/libjemalloc.a is missing. "
+                "Build external/jemalloc (see sorgan_env.sh) or set IARA_MALLOC=glibc.")
+        endif()
         target_link_libraries(${target_name} PRIVATE
             -Wl,--whole-archive ${PROJECT_SOURCE_DIR}/external/jemalloc/lib/libjemalloc.a -Wl,--no-whole-archive)
     endif()
